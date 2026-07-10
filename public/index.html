@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Hamma App - Ultra Custom</title>
+    <!-- ربط صورة الـ Favicon في أعلى المتصفح -->
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; transition: all 0.2s ease-in-out; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0b0c10; color: #c5c6c7; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* Sidebar for Wallpapers */
+        .sidebar { width: 80px; background: #1f2833; display: flex; flex-direction: column; align-items: center; padding: 20px 0; gap: 20px; border-right: 1px solid #45f3ff33; z-index: 10; }
+        .sidebar i { font-size: 22px; color: #66fcf1; cursor: pointer; }
+        .bg-option { width: 45px; height: 45px; border-radius: 10px; cursor: pointer; border: 2px solid transparent; background-size: cover; background-position: center; }
+        .bg-option:hover { transform: scale(1.1); border-color: #66fcf1; }
+
+        /* Main Chat Container */
+        .app-container { flex: 1; display: flex; flex-direction: column; background: #121212; position: relative; width: 100%; overflow: hidden; }
+        .chat-bg-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: #1a1a1a; background-size: cover; background-position: center; opacity: 0.15; z-index: 1; pointer-events: none; }
+
+        /* Top Header */
+        .header { background: rgba(31, 40, 51, 0.9); padding: 15px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #45f3ff22; z-index: 2; backdrop-filter: blur(5px); }
+        .header h1 { font-size: 18px; color: #fff; display: flex; align-items: center; gap: 10px; text-shadow: 0 0 10px #66fcf1; }
+        .header .status { width: 12px; height: 12px; background: #3ba55d; border-radius: 50%; display: inline-block; animation: pulse 2s infinite; }
+
+        /* Messages Area */
+        #chat-box { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; z-index: 2; width: 100%; }
+        
+        /* Modern Message Cards */
+        .msg-card { background: rgba(31, 40, 51, 0.85); padding: 12px 16px; border-radius: 12px; max-width: 85%; align-self: flex-start; animation: slideIn 0.25s cubic-bezier(0.1, 0.8, 0.3, 1); border-left: 4px solid #66fcf1; backdrop-filter: blur(10px); box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .msg-card.own { align-self: flex-end; border-left: none; border-right: 4px solid #45f3ff; background: rgba(43, 58, 76, 0.85); }
+        
+        .msg-user { font-weight: bold; color: #fff; font-size: 13px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+        .msg-text { font-size: 14px; line-height: 1.5; color: #ecf0f1; word-break: break-word; }
+        
+        /* Tools for instant translation */
+        .msg-tools { margin-top: 8px; display: flex; gap: 10px; font-size: 11px; }
+        .translate-btn { cursor: pointer; color: #45f3ff; font-weight: bold; }
+        .translate-btn:hover { text-shadow: 0 0 5px #45f3ff; }
+        .translated-text { color: #faa61a; font-style: italic; margin-top: 5px; border-top: 1px dashed #45f3ff44; padding-top: 5px; display: none; }
+
+        /* Bottom Input Field */
+        .input-area { background: #1f2833; padding: 10px 15px; display: flex; gap: 10px; align-items: center; border-radius: 25px; margin: 15px; z-index: 2; border: 1px solid #45f3ff33; box-shadow: 0 0 15px rgba(102, 252, 241, 0.1); }
+        input { border: none; background: transparent; color: #fff; font-size: 15px; outline: none; }
+        #username { width: 70px; border-right: 1px solid #45f3ff33; padding-right: 5px; color: #66fcf1; font-weight: bold; }
+        #message { flex: 1; padding-left: 5px; width: 100%; }
+        
+        button { background: #45f3ff; color: #0b0c10; border: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 16px; box-shadow: 0 0 10px #45f3ff; flex-shrink: 0; }
+        button:hover { background: #66fcf1; transform: scale(1.05); }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(15px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(59, 165, 93, 0.7); }
+            70% { box-shadow: 0 0 0 8px rgba(59, 165, 93, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(59, 165, 93, 0); }
+        }
+
+        /* Mobile Screens Optimization */
+        @media (max-width: 600px) {
+            body { flex-direction: column-reverse; }
+            .sidebar { width: 100%; height: 60px; flex-direction: row; justify-content: center; padding: 0; gap: 15px; border-right: none; border-top: 1px solid #45f3ff33; }
+            .sidebar i { display: none; }
+            .bg-option { width: 35px; height: 35px; border-radius: 8px; }
+            .header h1 { font-size: 16px; }
+            .header span { display: none !important; }
+            .input-area { margin: 10px; padding: 10px; }
+            #username { width: 60px; font-size: 14px; }
+            #message { font-size: 14px; }
+            .msg-card { max-width: 90%; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <i class="fas fa-images" title="Choose Wallpaper"></i>
+        <div class="bg-option" style="background-color: #1a1a1a;" onclick="changeBg('#1a1a1a', '')"></div>
+        <div class="bg-option" style="background-image: url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500');" onclick="changeBg('', 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1000')"></div>
+        <div class="bg-option" style="background-image: url('https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?w=500');" onclick="changeBg('', 'https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?w=1000')"></div>
+        <div class="bg-option" style="background-image: url('https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=500');" onclick="changeBg('', 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1000')"></div>
+    </div>
+
+    <div class="app-container">
+        <div class="chat-bg-layer" id="bgLayer"></div>
+
+        <div class="header">
+            <h1><span class="status"></span> Hamma Server Ultra</h1>
+            <span style="color: #66fcf1; font-weight: bold; font-size: 14px;"><i class="fas fa-bolt"></i> Encrypted & Fast</span>
+        </div>
+        
+        <div id="chat-box"></div>
+        
+        <div class="input-area">
+            <input type="text" id="username" placeholder="Name">
+            <input type="text" id="message" placeholder="Type a message...">
+            <button onclick="sendMessage()"><i class="fas fa-paper-plane"></i></button>
+        </div>
+    </div>
+
+    <audio id="msg-sound" src="https://assets.mixkit.co/active_storage/sfx/2357/2357-84.wav" preload="auto"></audio>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const sound = document.getElementById('msg-sound');
+
+        // السماح بإرسال الرسالة عن طريق زر Enter من لوحة المفاتيح
+        document.getElementById('message').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') { sendMessage(); }
+        });
+
+        function changeBg(color, url) {
+            const layer = document.getElementById('bgLayer');
+            if(url) {
+                layer.style.backgroundImage = `url('${url}')`;
+                layer.style.backgroundColor = 'transparent';
+                layer.style.opacity = "0.3"; 
+            } else {
+                layer.style.backgroundImage = '';
+                layer.style.backgroundColor = color;
+                layer.style.opacity = "1";
+            }
+        }
+
+        socket.on('receive_message', (data) => {
+            const chatBox = document.getElementById('chat-box');
+            const currentUser = document.getElementById('username').value || 'Anonymous';
+            const isOwn = data.user === currentUser ? 'own' : '';
+
+            const msgCard = document.createElement('div');
+            msgCard.className = `msg-card ${isOwn}`;
+            msgCard.innerHTML = `
+                <div class="msg-user"><i class="fas fa-bolt" style="color:#66fcf1;"></i> ${data.user}</div>
+                <div class="msg-text">${data.text}</div>
+                <div class="msg-tools">
+                    <span class="translate-btn" onclick="translateText(this, '${data.text}')"><i class="fas fa-language"></i> Translate to AR</span>
+                </div>
+                <div class="translated-text">Translating...</div>
+            `;
+
+            chatBox.appendChild(msgCard);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            sound.play().catch(e => {});
+        });
+
+        function sendMessage() {
+            const user = document.getElementById('username').value || 'Anonymous';
+            const text = document.getElementById('message').value;
+            
+            if(text.trim() !== "") {
+                socket.emit('send_message', { user, text });
+                document.getElementById('message').value = '';
+            }
+        }
+
+        function translateText(btn, originalText) {
+            const parent = btn.closest('.msg-card');
+            const translationBox = parent.querySelector('.translated-text');
+            
+            translationBox.style.display = 'block';
+            translationBox.innerText = "Translating text...";
+
+            fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ar&dt=t&q=${encodeURIComponent(originalText)}`)
+                .then(res => res.json())
+                .then(result => {
+                    translationBox.innerHTML = `<strong>Translation (AR):</strong> ${result[0][0][0]}`;
+                })
+                .catch(() => { translationBox.innerText = "Translation failed."; });
+        }
+    </script>
+</body>
+</html>
