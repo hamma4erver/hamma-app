@@ -62,7 +62,8 @@
             const name = usernameInput.value.trim();
             const text = messageInput.value.trim();
             if (name && text) {
-                socket.emit('chatMessage', { name, text });
+                // تم تعديلها هنا إلى 'message' لتتوافق مع السيرفر فوراً
+                socket.emit('message', { name, text });
                 messageInput.value = '';
             }
         }
