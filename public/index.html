@@ -1,25 +1,43 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hamma Chat</title>
-    <!-- ربط ملف الـ CSS الجديد -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Hamma App - Ultra Custom</title>
+    <link rel="icon" type="image/png" href="/favicon.png?v=2">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="/css/style.css">
-    <!-- مكتبة Socket.io الفوقية الضرورية -->
-    <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
 
-    <div id="chat-container">
-        <div id="messages"></div>
-        <div id="input-container">
-            <input type="text" id="message-input" placeholder="اكتب رسالتك هنا...">
-            <button id="send-btn">إرسال</button>
+    <div class="sidebar">
+        <i class="fas fa-images" title="اختر خلفية"></i>
+        <div class="bg-option" style="background-color: #1a1a1a;" onclick="changeBg('#1a1a1a', '')"></div>
+        <div class="bg-option" style="background-image: url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500');" onclick="changeBg('', 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1000')"></div>
+        <div class="bg-option" style="background-image: url('https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?w=500');" onclick="changeBg('', 'https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?w=1000')"></div>
+        <div class="bg-option" style="background-image: url('https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=500');" onclick="changeBg('', 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1000')"></div>
+    </div>
+
+    <div class="app-container">
+        <div class="chat-bg-layer" id="bgLayer"></div>
+
+        <div class="header">
+            <h1><span class="status"></span> Hamma Server Ultra</h1>
+            <span style="color: #66fcf1; font-weight: bold; font-size: 14px;"><i class="fas fa-bolt"></i> مشفر وسريع</span>
+        </div>
+        
+        <div id="chat-box"></div>
+        
+        <div class="input-area">
+            <input type="text" id="username" placeholder="الاسم">
+            <input type="text" id="message" placeholder="اكتب رسالة...">
+            <button id="send-btn"><i class="fas fa-paper-plane"></i></button>
         </div>
     </div>
 
-    <!-- ربط ملفات الـ JS بالترتيب الصحيح لكي تقرأ من بعضها -->
+    <audio id="msg-sound" src="https://assets.mixkit.co/active_storage/sfx/2357/2357-84.wav" preload="auto"></audio>
+
+    <script src="/socket.io/socket.io.js"></script>
     <script src="/js/socket.js"></script>
     <script src="/js/auth.js"></script>
     <script src="/js/ui.js"></script>
