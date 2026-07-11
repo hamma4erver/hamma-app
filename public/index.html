@@ -2,45 +2,78 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Hamma App - Ultra Custom</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hamma Chat</title>
     <link rel="icon" type="image/png" href="/favicon.png?v=2">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/style.css?v=2">
+    <!-- أيقونات FontAwesome للشريط الجانبي وزر الإرسال -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
 
+    <!-- الشريط الجانبي لتغيير الخلفية -->
     <div class="sidebar">
-        <i class="fas fa-images" title="اختر خلفية"></i>
-        <div class="bg-option" style="background-color: #1a1a1a;" onclick="changeBg('#1a1a1a', '')"></div>
-        <div class="bg-option" style="background-image: url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500');" onclick="changeBg('', 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1000')"></div>
-        <div class="bg-option" style="background-image: url('https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?w=500');" onclick="changeBg('', 'https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?w=1000')"></div>
-        <div class="bg-option" style="background-image: url('https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=500');" onclick="changeBg('', 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1000')"></div>
+        <i class="fa-solid fa-image"></i>
+        <div class="bg-option" style="background-image: linear-gradient(135deg, #b3103e 0%, #d35639 30%, #52a1a5 70%, #1e5670 100%);"></div>
+        <div class="bg-option" style="background: linear-gradient(135deg, #1f1c2c, #928dab);"></div>
+        <div class="bg-option" style="background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);"></div>
     </div>
 
+    <!-- الحاوية الرئيسية للتطبيق -->
     <div class="app-container">
-        <div class="chat-bg-layer" id="bgLayer"></div>
+        <!-- طبقة الخلفية الملونة الممتدة -->
+        <div class="chat-bg-layer"></div>
 
+        <!-- الهيدر العلوي الشفاف -->
         <div class="header">
             <h1><span class="status"></span> Hamma Server Ultra</h1>
-            <span style="color: #66fcf1; font-weight: bold; font-size: 14px;"><i class="fas fa-bolt"></i> مشفر وسريع</span>
+            <span style="color: #2ed573;"><i class="fa-solid fa-bolt"></i> Encrypted & Fast</span>
         </div>
-        
+
+        <!-- صندوق عرض الرسائل -->
         <div id="chat-box"></div>
-        
+
+        <!-- شريط المدخلات السفلي الممتد -->
         <div class="input-area">
-            <input type="text" id="username" placeholder="الاسم">
-            <input type="text" id="message" placeholder="اكتب رسالة...">
-            <button id="send-btn"><i class="fas fa-paper-plane"></i></button>
+            <input type="text" id="username" placeholder="Name" value="Hamma">
+            <input type="text" id="message" placeholder="Type a message..." autocomplete="off">
+            <button id="send-btn"><i class="fa-solid fa-paper-plane"></i></button>
         </div>
     </div>
 
-    <audio id="msg-sound" src="https://assets.mixkit.co/active_storage/sfx/2357/2357-84.wav" preload="auto"></audio>
-
+    <!-- ربط مكتبة Socket.io والملف الخاص بك -->
     <script src="/socket.io/socket.io.js"></script>
-    <script src="/js/socket.js"></script>
-    <script src="/js/auth.js"></script>
-    <script src="/js/ui.js"></script>
-    <script src="/js/app.js"></script>
+    <script>
+        const socket = io();
+        const chatBox = document.getElementById('chat-box');
+        const usernameInput = document.getElementById('username');
+        const messageInput = document.getElementById('message');
+        const sendBtn = document.getElementById('send-btn');
+
+        // إرسال الرسالة عند الضغط على الزر
+        sendBtn.addEventListener('click', sendMessage);
+        
+        // إرسال الرسالة عند الضغط على Enter
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        function sendMessage() {
+            const name = usernameInput.value.trim();
+            const text = messageInput.value.trim();
+            if (name && text) {
+                socket.emit('chatMessage', { name, text });
+                messageInput.value = '';
+            }
+        }
+
+        // استقبال الرسائل وعرضها فوراً
+        socket.on('message', (msg) => {
+            const msgElement = document.createElement('div');
+            msgElement.innerHTML = `<strong>${msg.name}:</strong> ${msg.text}`;
+            chatBox.appendChild(msgElement);
+            chatBox.scrollTop = chatBox.scrollHeight; // النزول لآخر رسالة تلقائياً
+        });
+    </script>
 </body>
 </html>
