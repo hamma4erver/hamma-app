@@ -4,28 +4,27 @@ const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-    cors: { origin: "*" } // يسمح بالاتصال من أي مكان في العالم
-});
+const io = new Server(server);
 
-// تشغيل الملفات الواجهة (الموقع)
+// هذي تخليه يقرأ ملفات الـ CSS والـ HTML
 app.use(express.static('public'));
 
 io.on('connection', (socket) => {
-    console.log('مستخدم جديد اتصل بالسيرفر: ' + socket.id);
+    console.log('مستخدم جديد اتصل: ' + socket.id);
 
-    // استقبال الرسالة من أي صديق
-    socket.on('send_message', (data) => {
-        // إرسال الرسالة فوراً لجميع المتصلين بالتطبيق
-        io.emit('receive_message', data);
+    // هنا السيرفر يستقبل الرسالة ويبعثها للناس الكل
+    socket.on('message', (msg) => {
+        // نبعثوا الرسالة للناس الكل (المرسل والمستقبلين)
+        // ومستعملين اسم 'message' كيف ما هو موجود في index.html
+        io.emit('message', { name: "User " + socket.id.substring(0, 4), text: msg });
     });
 
     socket.on('disconnect', () => {
-        console.log('غادر أحد المستخدمين');
+        console.log('مستخدم خرج');
     });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`سيرفر Hamma يعمل الآن على المنفذ ${PORT}`);
+    console.log('السيرفر يخدم على البورت: ' + PORT);
 });
