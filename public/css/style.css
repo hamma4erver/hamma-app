@@ -105,3 +105,27 @@ input[type="text"]:focus {
 #send-btn:active {
     transform: translateY(1px);
 }
+#chat-box {
+    width: 100%;
+    max-height: 200px;
+    overflow-y: auto;
+    margin-bottom: 15px;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* تنسيق الرسائل داخل الصندوق */
+#chat-box div {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 8px 12px;
+    border-radius: 8px;
+    border-left: 3px solid #00f2fe;
+    font-size: 14px;
+    word-break: break-word;
+}
