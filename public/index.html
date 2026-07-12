@@ -1,23 +1,31 @@
 <!DOCTYPE html>
-<html>
+<html lang="ar">
 <head>
+    <meta charset="UTF-8">
     <title>Hamma Chat</title>
+    <!-- السطر السحري لتعديل مقاسات التليفون ومنع الـ Zoom الزائد -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+
+    <!-- الـ Sidebar الخاصة بتبديل الخلفيات الكاسحة -->
     <div class="sidebar">
-        <div class="bg-btn" onclick="changeBg('linear-gradient(135deg, #1f1c2c, #928dab)')"></div>
-        <div class="bg-btn" onclick="changeBg('linear-gradient(135deg, #0f2027, #203a43, #2c5364)')"></div>
-        <div class="bg-btn" onclick="changeBg('linear-gradient(135deg, #b3103e, #d35639)')"></div>
+        <div class="bg-btn" style="background: linear-gradient(135deg, #1e3c72, #2a5298);" onclick="changeBg('linear-gradient(135deg, #1e3c72, #2a5298)')"></div>
+        <div class="bg-btn" style="background: linear-gradient(135deg, #667eea, #764ba2);" onclick="changeBg('linear-gradient(135deg, #667eea, #764ba2)')"></div>
+        <div class="bg-btn" style="background: linear-gradient(135deg, #ff9a9e, #fecfef);" onclick="changeBg('linear-gradient(135deg, #ff9a9e, #fecfef)')"></div>
+        <div class="bg-btn" style="background: #050505; border: 2px solid #555;" onclick="changeBg('#050505')"></div>
     </div>
-    
-    <div class="chat-container" id="bg-box">
+
+    <!-- حاوية الشات الرئيسية -->
+    <div class="chat-container">
         <h1>Hamma Chat</h1>
         <div id="chat-box"></div>
+        
         <div class="input-area">
-            <input type="text" id="username" placeholder="Name">
-            <input type="text" id="message" placeholder="Type a message...">
-            <button id="send-btn">Send</button>
+            <input type="text" id="username" placeholder="الاسم...">
+            <input type="text" id="message" placeholder="اكتب رسالتك هنا...">
+            <button onclick="sendMessage()">إرسال</button>
         </div>
     </div>
 
@@ -25,27 +33,27 @@
     <script>
         const socket = io();
         const chatBox = document.getElementById('chat-box');
-        const username = document.getElementById('username');
-        const message = document.getElementById('message');
-        const sendBtn = document.getElementById('send-btn');
-        const bgBox = document.getElementById('bg-box');
 
-        function changeBg(gradient) { bgBox.style.background = gradient; }
-
-        sendBtn.onclick = () => {
-            if(message.value) {
-                socket.emit('chat-message', { name: username.value || 'User', text: message.value });
-                message.value = '';
+        function sendMessage() {
+            const user = document.getElementById('username').value || 'مجهول';
+            const msg = document.getElementById('message').value;
+            if(msg.trim() !== "") {
+                socket.emit('chat-message', { user, msg });
+                document.getElementById('message').value = "";
             }
-        };
+        }
 
         socket.on('chat-message', (data) => {
-            const div = document.createElement('div');
-            div.className = 'msg';
-            div.innerHTML = `<strong>${data.name}:</strong> ${data.text}`;
-            chatBox.appendChild(div);
+            const msgElement = document.createElement('div');
+            msgElement.classList.add('msg');
+            msgElement.innerHTML = `<strong>${data.user}:</strong> ${data.msg}`;
+            chatBox.appendChild(msgElement);
             chatBox.scrollTop = chatBox.scrollHeight;
         });
+
+        function changeBg(bg) {
+            document.body.style.background = bg;
+        }
     </script>
 </body>
 </html>
