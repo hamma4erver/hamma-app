@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>Hamma Chat</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="icon" type="image/png" href="favicon.png">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -21,8 +22,9 @@
         
         <div class="input-area">
             <input type="text" id="username" placeholder="Name...">
-            <input type="text" id="message" placeholder="Type a message...">
-            <button onclick="sendMessage()">Send</button>
+            <input type="text" id="message" placeholder="Type a message..." onkeydown="checkEnter(event)">
+            <!-- الزرار الجديد مكتوب عليه Enter لسهولة الإرسال -->
+            <button onclick="sendMessage()">Enter ↵</button>
         </div>
     </div>
 
@@ -40,22 +42,26 @@
             }
         }
 
+        function checkEnter(event) {
+            if (event.key === "Enter") {
+                sendMessage();
+            }
+        }
+
         socket.on('chat-message', (data) => {
             const msgElement = document.createElement('div');
             msgElement.classList.add('msg');
-            // عند النقر يتم استدعاء دالة الترجمة مجاناً وبسرعة
             msgElement.setAttribute('onclick', `translateMsg(this, "${data.msg}")`);
             msgElement.innerHTML = `<strong>${data.user}:</strong> <span class="text-content">${data.msg}</span> <small class="hint">(Tap to translate)</small>`;
             chatBox.appendChild(msgElement);
             chatBox.scrollTop = chatBox.scrollHeight;
         });
 
-        // دالة الترجمة التلقائية للعربية باستخدام API مجاني وسريع
         async function translateMsg(element, text) {
             const textSpan = element.querySelector('.text-content');
             const hint = element.querySelector('.hint');
             
-            if (element.classList.contains('translated')) return; // إذا ترجمت من قبل لا تعيد الترجمة
+            if (element.classList.contains('translated')) return;
 
             try {
                 hint.innerText = "Translating...";
