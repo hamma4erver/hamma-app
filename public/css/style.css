@@ -6,10 +6,9 @@ body {
     height: 100vh; 
     margin: 0; 
     overflow: hidden;
-    direction: rtl; /* يدعم الكتابة من اليمين لليسار في الشات العربي */
+    direction: ltr; /* رجع من اليسار إلى اليمين بالإنجليزية */
 }
 
-/* الـ Sidebar متناسقة */
 .sidebar { 
     width: 60px; 
     background: #111; 
@@ -34,7 +33,6 @@ body {
     transform: scale(1.1);
 }
 
-/* حاوية الشات مرنة وتأخذ المساحة كاملة */
 .chat-container { 
     flex: 1; 
     display: flex; 
@@ -70,7 +68,30 @@ h1 {
     border-radius: 10px; 
     word-break: break-word; 
     max-width: 90%;
+    cursor: pointer;
+    position: relative;
+    transition: background 0.2s;
     animation: fadeIn 0.3s ease;
+}
+
+.msg:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.hint {
+    font-size: 10px;
+    color: #aaa;
+    display: block;
+    margin-top: 5px;
+}
+
+.translated-text {
+    color: #00f2fe;
+    font-weight: bold;
+    display: block;
+    margin-top: 5px;
+    direction: rtl; /* الترجمة تظهر من اليمين لليسار لأنها عربية */
+    text-align: left;
 }
 
 @keyframes fadeIn {
@@ -78,7 +99,6 @@ h1 {
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* منطقة الإدخال مرنة جداً للتليفونات */
 .input-area { 
     display: flex; 
     gap: 8px; 
@@ -92,11 +112,11 @@ input {
     color: white; 
     padding: 12px; 
     border-radius: 8px; 
-    font-size: 16px; /* أساسي لمنع الـ iOS من عمل زووم تلقائي عند الكتابة */
+    font-size: 16px; 
     box-sizing: border-box;
 }
 
-#username { width: 80px; }
+#username { width: 90px; }
 #message { flex: 1; }
 
 button { 
@@ -115,9 +135,8 @@ button:active {
     transform: scale(0.95);
 }
 
-/* تعديل التصميم بالكامل عندما يفتح من التليفون (الشاشات الصغيرة) */
 @media (max-width: 600px) {
-    body { flex-direction: column-reverse; } /* تجعل الـ Sidebar من فوق أو أسفل لتعطي مساحة */
+    body { flex-direction: column-reverse; } 
     .sidebar { 
         width: 100%; 
         height: 60px; 
