@@ -23,7 +23,6 @@
         <div class="input-area">
             <input type="text" id="username" placeholder="Name...">
             <input type="text" id="message" placeholder="Type a message..." onkeydown="checkEnter(event)">
-            <!-- الزرار الجديد مكتوب عليه Enter لسهولة الإرسال -->
             <button onclick="sendMessage()">Enter ↵</button>
         </div>
     </div>
@@ -54,7 +53,12 @@
             msgElement.setAttribute('onclick', `translateMsg(this, "${data.msg}")`);
             msgElement.innerHTML = `<strong>${data.user}:</strong> <span class="text-content">${data.msg}</span> <small class="hint">(Tap to translate)</small>`;
             chatBox.appendChild(msgElement);
-            chatBox.scrollTop = chatBox.scrollHeight;
+            
+            // سكرول ناعم جداً للأسفل تلقائياً عند وصول رسالة جديدة
+            chatBox.scrollTo({
+                top: chatBox.scrollHeight,
+                behavior: 'smooth'
+            });
         });
 
         async function translateMsg(element, text) {
@@ -78,6 +82,8 @@
         }
 
         function changeBg(bg) {
+            // انتقال ناعم للخلفية عند التغيير
+            document.body.style.transition = "background 0.5s ease";
             document.body.style.background = bg;
         }
     </script>
