@@ -1,15 +1,13 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>Hamma Chat</title>
-    <!-- السطر السحري لتعديل مقاسات التليفون ومنع الـ Zoom الزائد -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
-    <!-- الـ Sidebar الخاصة بتبديل الخلفيات الكاسحة -->
     <div class="sidebar">
         <div class="bg-btn" style="background: linear-gradient(135deg, #1e3c72, #2a5298);" onclick="changeBg('linear-gradient(135deg, #1e3c72, #2a5298)')"></div>
         <div class="bg-btn" style="background: linear-gradient(135deg, #667eea, #764ba2);" onclick="changeBg('linear-gradient(135deg, #667eea, #764ba2)')"></div>
@@ -17,15 +15,14 @@
         <div class="bg-btn" style="background: #050505; border: 2px solid #555;" onclick="changeBg('#050505')"></div>
     </div>
 
-    <!-- حاوية الشات الرئيسية -->
     <div class="chat-container">
         <h1>Hamma Chat</h1>
         <div id="chat-box"></div>
         
         <div class="input-area">
-            <input type="text" id="username" placeholder="الاسم...">
-            <input type="text" id="message" placeholder="اكتب رسالتك هنا...">
-            <button onclick="sendMessage()">إرسال</button>
+            <input type="text" id="username" placeholder="Name...">
+            <input type="text" id="message" placeholder="Type a message...">
+            <button onclick="sendMessage()">Send</button>
         </div>
     </div>
 
@@ -35,7 +32,7 @@
         const chatBox = document.getElementById('chat-box');
 
         function sendMessage() {
-            const user = document.getElementById('username').value || 'مجهول';
+            const user = document.getElementById('username').value || 'Anonymous';
             const msg = document.getElementById('message').value;
             if(msg.trim() !== "") {
                 socket.emit('chat-message', { user, msg });
@@ -46,10 +43,33 @@
         socket.on('chat-message', (data) => {
             const msgElement = document.createElement('div');
             msgElement.classList.add('msg');
-            msgElement.innerHTML = `<strong>${data.user}:</strong> ${data.msg}`;
+            // عند النقر يتم استدعاء دالة الترجمة مجاناً وبسرعة
+            msgElement.setAttribute('onclick', `translateMsg(this, "${data.msg}")`);
+            msgElement.innerHTML = `<strong>${data.user}:</strong> <span class="text-content">${data.msg}</span> <small class="hint">(Tap to translate)</small>`;
             chatBox.appendChild(msgElement);
             chatBox.scrollTop = chatBox.scrollHeight;
         });
+
+        // دالة الترجمة التلقائية للعربية باستخدام API مجاني وسريع
+        async function translateMsg(element, text) {
+            const textSpan = element.querySelector('.text-content');
+            const hint = element.querySelector('.hint');
+            
+            if (element.classList.contains('translated')) return; // إذا ترجمت من قبل لا تعيد الترجمة
+
+            try {
+                hint.innerText = "Translating...";
+                const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ar&dt=t&q=${encodeURIComponent(text)}`);
+                const result = await res.json();
+                const translatedText = result[0][0][0];
+                
+                textSpan.innerHTML = `${text} <br><span class="translated-text">🔄 ${translatedText}</span>`;
+                element.classList.add('translated');
+                hint.remove();
+            } catch (error) {
+                hint.innerText = "(Failed to translate)";
+            }
+        }
 
         function changeBg(bg) {
             document.body.style.background = bg;
