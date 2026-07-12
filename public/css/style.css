@@ -1,14 +1,16 @@
 body { 
     background: #050505; 
     color: white; 
-    font-family: sans-serif; 
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
     display: flex; 
     height: 100vh; 
     margin: 0; 
     overflow: hidden;
-    direction: ltr; /* رجع من اليسار إلى اليمين بالإنجليزية */
+    direction: ltr;
+    -webkit-font-smoothing: antialiased; /* تحسين نعومة الخطوط */
 }
 
+/* الـ Sidebar بانتقال سلس للأزرار */
 .sidebar { 
     width: 60px; 
     background: #111; 
@@ -18,6 +20,7 @@ body {
     padding-top: 20px; 
     gap: 15px; 
     z-index: 10;
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .bg-btn { 
@@ -26,13 +29,15 @@ body {
     border-radius: 50%; 
     cursor: pointer; 
     border: 2px solid #333; 
-    transition: 0.3s;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s;
 }
 
 .bg-btn:hover {
-    transform: scale(1.1);
+    transform: scale(1.15);
+    border-color: #00f2fe;
 }
 
+/* حاوية الشات مرنة وانسيابية */
 .chat-container { 
     flex: 1; 
     display: flex; 
@@ -40,6 +45,7 @@ body {
     padding: 15px; 
     box-sizing: border-box;
     height: 100%;
+    animation: scaleUp 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 h1 { 
@@ -47,94 +53,134 @@ h1 {
     text-align: center; 
     font-size: 24px; 
     color: #00f2fe;
-    text-shadow: 0 0 10px #00f2fe;
+    text-shadow: 0 0 12px rgba(0, 242, 254, 0.6);
 }
 
+/* صندوق الشات مع سكرول ناعم مدمج */
 #chat-box { 
     flex: 1; 
     overflow-y: auto; 
-    background: rgba(0, 0, 0, 0.5); 
+    scroll-behavior: smooth; /* سكرول ناعم وسلس */
+    background: rgba(0, 0, 0, 0.4); 
     padding: 15px; 
-    border-radius: 15px; 
+    border-radius: 20px; 
     margin-bottom: 15px; 
-    backdrop-filter: blur(10px); 
-    border: 1px solid rgba(255, 255, 255, 0.1); 
+    backdrop-filter: blur(20px); 
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.08); 
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.6);
 }
 
+/* إخفاء السكرول بار المقرف وجعله ناعم */
+#chat-box::-webkit-scrollbar {
+    width: 6px;
+}
+#chat-box::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+}
+
+/* حركة دخول الرسائل الجديدة ناعمة جداً كالتطبيقات الرسمية */
 .msg { 
-    margin-bottom: 10px; 
-    padding: 10px; 
-    background: rgba(255, 255, 255, 0.1); 
-    border-radius: 10px; 
+    margin-bottom: 12px; 
+    padding: 12px 16px; 
+    background: rgba(255, 255, 255, 0.06); 
+    border-radius: 14px; 
     word-break: break-word; 
-    max-width: 90%;
+    max-width: 85%;
     cursor: pointer;
-    position: relative;
-    transition: background 0.2s;
-    animation: fadeIn 0.3s ease;
+    transition: background 0.25s, transform 0.2s;
+    animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .msg:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.12);
+    transform: translateY(-1px);
 }
 
 .hint {
     font-size: 10px;
-    color: #aaa;
+    color: #888;
     display: block;
-    margin-top: 5px;
+    margin-top: 4px;
 }
 
 .translated-text {
     color: #00f2fe;
-    font-weight: bold;
+    font-weight: 500;
     display: block;
-    margin-top: 5px;
-    direction: rtl; /* الترجمة تظهر من اليمين لليسار لأنها عربية */
+    margin-top: 6px;
+    direction: rtl;
     text-align: left;
+    animation: fadeIn 0.3s ease;
+}
+
+/* حركات نعومة سلسة (Animations) */
+@keyframes slideIn {
+    from { opacity: 0; transform: translateY(12px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes scaleUp {
+    from { opacity: 0; transform: scale(0.98); filter: blur(5px); }
+    to { opacity: 1; transform: scale(1); filter: blur(0); }
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(5px); }
-    to { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
+/* منطقة الإدخال والـ Inputs ناعمة اللمس */
 .input-area { 
     display: flex; 
-    gap: 8px; 
+    gap: 10px; 
     width: 100%;
     box-sizing: border-box;
 }
 
 input { 
-    background: #1a1a2e; 
-    border: 1px solid #444; 
+    background: #121225; 
+    border: 1px solid rgba(255,255,255,0.1); 
     color: white; 
-    padding: 12px; 
-    border-radius: 8px; 
+    padding: 14px; 
+    border-radius: 12px; 
     font-size: 16px; 
     box-sizing: border-box;
+    transition: border-color 0.25s, box-shadow 0.25s;
 }
 
-#username { width: 90px; }
+input:focus {
+    outline: none;
+    border-color: #00f2fe;
+    box-shadow: 0 0 10px rgba(0, 242, 254, 0.2);
+}
+
+#username { width: 95px; }
 #message { flex: 1; }
 
 button { 
     background: linear-gradient(45deg, #00f2fe, #4facfe);
     border: none; 
     color: white;
-    padding: 0 20px; 
-    border-radius: 8px; 
+    padding: 0 24px; 
+    border-radius: 12px; 
     font-weight: bold; 
     cursor: pointer; 
     white-space: nowrap;
-    transition: 0.2s;
+    transition: opacity 0.2s, transform 0.1s;
+    box-shadow: 0 4px 15px rgba(0, 242, 254, 0.3);
+}
+
+button:hover {
+    opacity: 0.9;
 }
 
 button:active {
-    transform: scale(0.95);
+    transform: scale(0.96);
 }
 
+/* التجاوب مع التليفونات */
 @media (max-width: 600px) {
     body { flex-direction: column-reverse; } 
     .sidebar { 
@@ -145,9 +191,11 @@ button:active {
         padding: 0; 
         align-items: center; 
         gap: 20px;
+        border-right: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
     }
     .chat-container {
         height: calc(100vh - 60px);
     }
-    #username { width: 70px; }
+    #username { width: 75px; }
 }
