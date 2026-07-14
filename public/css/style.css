@@ -214,7 +214,7 @@ body {
     padding: 20px; 
     box-sizing: border-box;
     height: 100%;
-    overflow: hidden;
+    overflow: hidden; /* يمنع السكرول الخارجي ويثبت العناصر */
 }
 
 .chat-header {
@@ -222,6 +222,7 @@ body {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 15px;
+    flex-shrink: 0; /* يمنع الهيدر من الاختفاء أو صغر الحجم */
 }
 
 .chat-title {
@@ -286,11 +287,13 @@ body {
     to { opacity: 1; transform: translateY(0); }
 }
 
+/* منطقة المدخلات ثابتة وقوية */
 .input-area { 
     display: flex; 
     gap: 10px; 
     width: 100%;
     box-sizing: border-box;
+    flex-shrink: 0; /* تمنع اختفاء زر الإرسال أو الخانة عند ظهور الكيبورد */
 }
 
 input { 
@@ -325,28 +328,32 @@ input:focus { outline: none; border-color: #00f2fe; }
 /* ================= التجاوب الذكي مع التليفونات (Responsive) ================= */
 @media (max-width: 600px) {
     .main-layout {
-        flex-direction: column; /* يرجع الـ Sidebar فوق والشات لوطة */
+        flex-direction: column; /* الـ Sidebar يرجع فوق تماماً */
     }
     
     .sidebar { 
-        width: 100vw; 
-        height: 65px; 
+        width: 100%; 
+        height: 55px; /* قللنا الإرتفاع شوية باش نربحوا مساحة */
         flex-direction: row; 
         justify-content: center; 
-        padding: 10px 0; 
+        padding: 5px 0; 
         gap: 15px;
         border-right: none; 
         border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     }
     
     .bg-btn {
-        width: 30px;
-        height: 30px;
+        width: 28px;
+        height: 28px;
     }
     
     .chat-container { 
-        height: calc(100vh - 65px); 
-        padding: 12px;
+        height: calc(100vh - 55px); /* الحساب بالظبط من غير خروج */
+        padding: 10px 10px 15px 10px; /* مارجن مريح للأسفل */
+    }
+
+    .chat-header {
+        margin-bottom: 10px;
     }
 
     .chat-title {
@@ -358,17 +365,21 @@ input:focus { outline: none; border-color: #00f2fe; }
         padding: 4px 10px;
     }
 
+    #chat-box {
+        margin-bottom: 10px; /* توازن رائع مع مساحة الكتابة */
+    }
+
     .input-area {
         gap: 6px;
     }
 
     input {
-        padding: 12px;
+        padding: 11px;
         font-size: 14px;
     }
 
     .send-btn {
-        padding: 0 16px;
+        padding: 0 14px;
         font-size: 14px;
     }
 }
