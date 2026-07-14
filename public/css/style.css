@@ -4,7 +4,7 @@ body {
     color: white; 
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
     display: flex; 
-    height: 100vh; 
+    height: 100dvh; 
     margin: 0; 
     overflow: hidden;
     direction: ltr;
@@ -14,7 +14,7 @@ body {
 /* ================= ستايل الـ LOGIN ================= */
 .login-container {
     position: fixed;
-    top: 0; left: 0; width: 100%; height: 100%;
+    top: 0; left: 0; width: 100%; height: 100dvh;
     background: radial-gradient(circle at center, #0f0c20 0%, #030209 100%);
     display: flex;
     justify-content: center;
@@ -178,7 +178,7 @@ body {
 .main-layout {
     display: flex;
     width: 100vw;
-    height: 100vh;
+    height: 100dvh;
 }
 
 /* Sidebar في الديسكتوب */
@@ -214,7 +214,7 @@ body {
     padding: 20px; 
     box-sizing: border-box;
     height: 100%;
-    overflow: hidden; /* يمنع السكرول الخارجي ويثبت العناصر */
+    overflow: hidden; 
 }
 
 .chat-header {
@@ -222,7 +222,7 @@ body {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 15px;
-    flex-shrink: 0; /* يمنع الهيدر من الاختفاء أو صغر الحجم */
+    flex-shrink: 0; 
 }
 
 .chat-title {
@@ -287,13 +287,12 @@ body {
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* منطقة المدخلات ثابتة وقوية */
 .input-area { 
     display: flex; 
     gap: 10px; 
     width: 100%;
     box-sizing: border-box;
-    flex-shrink: 0; /* تمنع اختفاء زر الإرسال أو الخانة عند ظهور الكيبورد */
+    flex-shrink: 0; 
 }
 
 input { 
@@ -325,15 +324,15 @@ input:focus { outline: none; border-color: #00f2fe; }
 
 .send-btn:active { transform: scale(0.96); }
 
-/* ================= التجاوب الذكي مع التليفونات (Responsive) ================= */
+/* ================= التجاوب الذكي مع التليفونات ================= */
 @media (max-width: 600px) {
     .main-layout {
-        flex-direction: column; /* الـ Sidebar يرجع فوق تماماً */
+        flex-direction: column; 
     }
     
     .sidebar { 
         width: 100%; 
-        height: 55px; /* قللنا الإرتفاع شوية باش نربحوا مساحة */
+        height: 55px; 
         flex-direction: row; 
         justify-content: center; 
         padding: 5px 0; 
@@ -348,8 +347,8 @@ input:focus { outline: none; border-color: #00f2fe; }
     }
     
     .chat-container { 
-        height: calc(100vh - 55px); /* الحساب بالظبط من غير خروج */
-        padding: 10px 10px 15px 10px; /* مارجن مريح للأسفل */
+        height: calc(100dvh - 55px); 
+        padding: 10px 10px 15px 10px; 
     }
 
     .chat-header {
@@ -366,7 +365,7 @@ input:focus { outline: none; border-color: #00f2fe; }
     }
 
     #chat-box {
-        margin-bottom: 10px; /* توازن رائع مع مساحة الكتابة */
+        margin-bottom: 10px; 
     }
 
     .input-area {
