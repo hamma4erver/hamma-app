@@ -1,19 +1,209 @@
+/* أساسيات الموقع والمظهر الفضائي */
 body { 
-    background: #050505; 
+    background: #03030c; 
     color: white; 
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
     display: flex; 
     height: 100vh; 
     margin: 0; 
     overflow: hidden;
     direction: ltr;
-    -webkit-font-smoothing: antialiased; /* تحسين نعومة الخطوط */
+    -webkit-font-smoothing: antialiased;
 }
 
-/* الـ Sidebar بانتقال سلس للأزرار */
+/* ================= ستايل الـ LOGIN ================= */
+.login-container {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: radial-gradient(circle at center, #0f0c20 0%, #030209 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+}
+
+.login-card {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 40px;
+    border-radius: 24px;
+    width: 360px;
+    text-align: center;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+    animation: floatingCard 4s ease-in-out infinite alternate;
+}
+
+@keyframes floatingCard {
+    from { transform: translateY(0px); }
+    to { transform: translateY(-10px); }
+}
+
+.logo-area {
+    position: relative;
+    margin-bottom: 30px;
+}
+
+/* كرة مضيئة في الخلفية */
+.glow-orb {
+    position: absolute;
+    top: -20px; left: 50%;
+    transform: translateX(-50%);
+    width: 80px; height: 80px;
+    background: #00f2fe;
+    filter: blur(40px);
+    border-radius: 50%;
+    opacity: 0.6;
+}
+
+.login-card h1 {
+    font-size: 28px;
+    color: #fff;
+    margin: 0;
+    letter-spacing: 2px;
+    background: linear-gradient(45deg, #00f2fe, #4facfe);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 20px rgba(0, 242, 254, 0.3);
+}
+
+.subtitle {
+    font-size: 11px;
+    color: #666;
+    letter-spacing: 3px;
+    margin-top: 5px;
+    text-transform: uppercase;
+}
+
+/* خانات المدخلات */
+.input-group {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.input-icon {
+    position: absolute;
+    left: 15px; top: 50%;
+    transform: translateY(-50%);
+    color: #555;
+    transition: color 0.3s;
+}
+
+.input-group input {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    padding: 14px 14px 14px 45px;
+    border-radius: 12px;
+    font-size: 15px;
+    box-sizing: border-box;
+    transition: all 0.3s ease;
+}
+
+.input-group input:focus {
+    outline: none;
+    border-color: #00f2fe;
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: 0 0 15px rgba(0, 242, 254, 0.2);
+}
+
+.input-group input:focus + .input-icon {
+    color: #00f2fe;
+}
+
+/* الأزرار الفخمة */
+.btn-primary, .btn-secondary {
+    width: 100%;
+    padding: 14px;
+    border-radius: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: none;
+    margin-bottom: 12px;
+    font-size: 15px;
+}
+
+.btn-primary {
+    background: linear-gradient(45deg, #00f2fe, #4facfe);
+    color: white;
+    box-shadow: 0 4px 15px rgba(0, 242, 254, 0.3);
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 242, 254, 0.5);
+}
+
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.05);
+    color: #ccc;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+/* خط الفصل */
+.divider {
+    display: flex;
+    align-items: center;
+    margin: 20px 0;
+    color: #444;
+    font-size: 10px;
+    letter-spacing: 1px;
+}
+
+.divider::before, .divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.05);
+    margin: 0 10px;
+}
+
+/* أزرار قوقل وأبل */
+.social-login {
+    display: flex;
+    gap: 12px;
+}
+
+.social-btn {
+    flex: 1;
+    padding: 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    color: #fff;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.social-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateY(-1px);
+}
+
+/* ================= ستايل الشات الرئيسي ================= */
+.main-layout {
+    display: flex;
+    width: 100%;
+    height: 100vh;
+}
+
 .sidebar { 
     width: 60px; 
-    background: #111; 
+    background: #090913; 
     display: flex; 
     flex-direction: column; 
     align-items: center; 
@@ -28,16 +218,12 @@ body {
     height: 35px; 
     border-radius: 50%; 
     cursor: pointer; 
-    border: 2px solid #333; 
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s;
+    border: 2px solid #222; 
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.bg-btn:hover {
-    transform: scale(1.15);
-    border-color: #00f2fe;
-}
+.bg-btn:hover { transform: scale(1.15); }
 
-/* حاوية الشات مرنة وانسيابية */
 .chat-container { 
     flex: 1; 
     display: flex; 
@@ -45,46 +231,51 @@ body {
     padding: 15px; 
     box-sizing: border-box;
     height: 100%;
-    animation: scaleUp 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-h1 { 
-    margin: 5px 0 15px 0; 
-    text-align: center; 
-    font-size: 24px; 
+.chat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.chat-title {
+    font-size: 22px;
     color: #00f2fe;
-    text-shadow: 0 0 12px rgba(0, 242, 254, 0.6);
+    margin: 0;
+    text-shadow: 0 0 10px rgba(0, 242, 254, 0.5);
 }
 
-/* صندوق الشات مع سكرول ناعم مدمج */
+.user-badge {
+    background: rgba(0, 242, 254, 0.1);
+    border: 1px solid rgba(0, 242, 254, 0.2);
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    color: #00f2fe;
+}
+
 #chat-box { 
     flex: 1; 
     overflow-y: auto; 
-    scroll-behavior: smooth; /* سكرول ناعم وسلس */
+    scroll-behavior: smooth;
     background: rgba(0, 0, 0, 0.4); 
     padding: 15px; 
     border-radius: 20px; 
     margin-bottom: 15px; 
     backdrop-filter: blur(20px); 
     -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.08); 
-    box-shadow: inset 0 0 20px rgba(0,0,0,0.6);
+    border: 1px solid rgba(255, 255, 255, 0.05); 
 }
 
-/* إخفاء السكرول بار المقرف وجعله ناعم */
-#chat-box::-webkit-scrollbar {
-    width: 6px;
-}
-#chat-box::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 10px;
-}
+#chat-box::-webkit-scrollbar { width: 5px; }
+#chat-box::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
 
-/* حركة دخول الرسائل الجديدة ناعمة جداً كالتطبيقات الرسمية */
 .msg { 
     margin-bottom: 12px; 
     padding: 12px 16px; 
-    background: rgba(255, 255, 255, 0.06); 
+    background: rgba(255, 255, 255, 0.05); 
     border-radius: 14px; 
     word-break: break-word; 
     max-width: 85%;
@@ -93,17 +284,9 @@ h1 {
     animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.msg:hover {
-    background: rgba(255, 255, 255, 0.12);
-    transform: translateY(-1px);
-}
+.msg:hover { background: rgba(255, 255, 255, 0.1); transform: translateY(-1px); }
 
-.hint {
-    font-size: 10px;
-    color: #888;
-    display: block;
-    margin-top: 4px;
-}
+.hint { font-size: 10px; color: #777; display: block; margin-top: 4px; }
 
 .translated-text {
     color: #00f2fe;
@@ -112,26 +295,13 @@ h1 {
     margin-top: 6px;
     direction: rtl;
     text-align: left;
-    animation: fadeIn 0.3s ease;
 }
 
-/* حركات نعومة سلسة (Animations) */
 @keyframes slideIn {
-    from { opacity: 0; transform: translateY(12px) scale(0.98); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes scaleUp {
-    from { opacity: 0; transform: scale(0.98); filter: blur(5px); }
-    to { opacity: 1; transform: scale(1); filter: blur(0); }
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-/* منطقة الإدخال والـ Inputs ناعمة اللمس */
 .input-area { 
     display: flex; 
     gap: 10px; 
@@ -140,26 +310,21 @@ h1 {
 }
 
 input { 
-    background: #121225; 
-    border: 1px solid rgba(255,255,255,0.1); 
+    background: #090915; 
+    border: 1px solid rgba(255,255,255,0.08); 
     color: white; 
     padding: 14px; 
     border-radius: 12px; 
     font-size: 16px; 
     box-sizing: border-box;
-    transition: border-color 0.25s, box-shadow 0.25s;
+    transition: border-color 0.25s;
 }
 
-input:focus {
-    outline: none;
-    border-color: #00f2fe;
-    box-shadow: 0 0 10px rgba(0, 242, 254, 0.2);
-}
+input:focus { outline: none; border-color: #00f2fe; }
 
-#username { width: 95px; }
 #message { flex: 1; }
 
-button { 
+.send-btn { 
     background: linear-gradient(45deg, #00f2fe, #4facfe);
     border: none; 
     color: white;
@@ -167,35 +332,20 @@ button {
     border-radius: 12px; 
     font-weight: bold; 
     cursor: pointer; 
-    white-space: nowrap;
-    transition: opacity 0.2s, transform 0.1s;
     box-shadow: 0 4px 15px rgba(0, 242, 254, 0.3);
+    transition: transform 0.1s;
 }
 
-button:hover {
-    opacity: 0.9;
-}
-
-button:active {
-    transform: scale(0.96);
-}
+.send-btn:active { transform: scale(0.96); }
 
 /* التجاوب مع التليفونات */
 @media (max-width: 600px) {
     body { flex-direction: column-reverse; } 
     .sidebar { 
-        width: 100%; 
-        height: 60px; 
-        flex-direction: row; 
-        justify-content: center; 
-        padding: 0; 
-        align-items: center; 
-        gap: 20px;
-        border-right: none;
-        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        width: 100%; height: 60px; 
+        flex-direction: row; justify-content: center; 
+        padding: 0; align-items: center; gap: 20px;
+        border-right: none; border-top: 1px solid rgba(255, 255, 255, 0.05);
     }
-    .chat-container {
-        height: calc(100vh - 60px);
-    }
-    #username { width: 75px; }
+    .chat-container { height: calc(100vh - 60px); }
 }
