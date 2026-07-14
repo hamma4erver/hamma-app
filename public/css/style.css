@@ -27,12 +27,14 @@ body {
     backdrop-filter: blur(25px);
     -webkit-backdrop-filter: blur(25px);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    padding: 40px;
+    padding: 30px;
     border-radius: 24px;
-    width: 360px;
+    width: 90%;
+    max-width: 360px;
     text-align: center;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
     animation: floatingCard 4s ease-in-out infinite alternate;
+    box-sizing: border-box;
 }
 
 @keyframes floatingCard {
@@ -45,7 +47,6 @@ body {
     margin-bottom: 30px;
 }
 
-/* كرة مضيئة في الخلفية */
 .glow-orb {
     position: absolute;
     top: -20px; left: 50%;
@@ -76,7 +77,6 @@ body {
     text-transform: uppercase;
 }
 
-/* خانات المدخلات */
 .input-group {
     position: relative;
     margin-bottom: 20px;
@@ -87,7 +87,6 @@ body {
     left: 15px; top: 50%;
     transform: translateY(-50%);
     color: #555;
-    transition: color 0.3s;
 }
 
 .input-group input {
@@ -109,11 +108,6 @@ body {
     box-shadow: 0 0 15px rgba(0, 242, 254, 0.2);
 }
 
-.input-group input:focus + .input-icon {
-    color: #00f2fe;
-}
-
-/* الأزرار الفخمة */
 .btn-primary, .btn-secondary {
     width: 100%;
     padding: 14px;
@@ -143,12 +137,6 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: white;
-}
-
-/* خط الفصل */
 .divider {
     display: flex;
     align-items: center;
@@ -166,7 +154,6 @@ body {
     margin: 0 10px;
 }
 
-/* أزرار قوقل وأبل */
 .social-login {
     display: flex;
     gap: 12px;
@@ -179,9 +166,7 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.08);
     background: rgba(255, 255, 255, 0.03);
     color: #fff;
-    font-weight: 500;
     cursor: pointer;
-    transition: all 0.3s;
     font-size: 13px;
     display: flex;
     align-items: center;
@@ -189,20 +174,16 @@ body {
     gap: 8px;
 }
 
-.social-btn:hover {
-    background: rgba(255, 255, 255, 0.08);
-    transform: translateY(-1px);
-}
-
 /* ================= ستايل الشات الرئيسي ================= */
 .main-layout {
     display: flex;
-    width: 100%;
+    width: 100vw;
     height: 100vh;
 }
 
+/* Sidebar في الديسكتوب */
 .sidebar { 
-    width: 60px; 
+    width: 70px; 
     background: #090913; 
     display: flex; 
     flex-direction: column; 
@@ -211,6 +192,7 @@ body {
     gap: 15px; 
     z-index: 10;
     border-right: 1px solid rgba(255, 255, 255, 0.05);
+    box-sizing: border-box;
 }
 
 .bg-btn { 
@@ -224,13 +206,15 @@ body {
 
 .bg-btn:hover { transform: scale(1.15); }
 
+/* حاوية الشات */
 .chat-container { 
     flex: 1; 
     display: flex; 
     flex-direction: column; 
-    padding: 15px; 
+    padding: 20px; 
     box-sizing: border-box;
     height: 100%;
+    overflow: hidden;
 }
 
 .chat-header {
@@ -338,14 +322,53 @@ input:focus { outline: none; border-color: #00f2fe; }
 
 .send-btn:active { transform: scale(0.96); }
 
-/* التجاوب مع التليفونات */
+/* ================= التجاوب الذكي مع التليفونات (Responsive) ================= */
 @media (max-width: 600px) {
-    body { flex-direction: column-reverse; } 
-    .sidebar { 
-        width: 100%; height: 60px; 
-        flex-direction: row; justify-content: center; 
-        padding: 0; align-items: center; gap: 20px;
-        border-right: none; border-top: 1px solid rgba(255, 255, 255, 0.05);
+    .main-layout {
+        flex-direction: column; /* يرجع الـ Sidebar فوق والشات لوطة */
     }
-    .chat-container { height: calc(100vh - 60px); }
+    
+    .sidebar { 
+        width: 100vw; 
+        height: 65px; 
+        flex-direction: row; 
+        justify-content: center; 
+        padding: 10px 0; 
+        gap: 15px;
+        border-right: none; 
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    
+    .bg-btn {
+        width: 30px;
+        height: 30px;
+    }
+    
+    .chat-container { 
+        height: calc(100vh - 65px); 
+        padding: 12px;
+    }
+
+    .chat-title {
+        font-size: 18px;
+    }
+
+    .user-badge {
+        font-size: 11px;
+        padding: 4px 10px;
+    }
+
+    .input-area {
+        gap: 6px;
+    }
+
+    input {
+        padding: 12px;
+        font-size: 14px;
+    }
+
+    .send-btn {
+        padding: 0 16px;
+        font-size: 14px;
+    }
 }
