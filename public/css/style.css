@@ -267,39 +267,40 @@ body {
     word-break: break-word; 
     max-width: 75%;
     cursor: pointer;
-    font-weight: bold; /* الكتيبة الكل تولي غليظة En Gras */
+    font-weight: bold; /* خط عريض وكاسح للجميع */
     transition: background 0.25s, transform 0.2s;
     animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* ميساجاتي أنا (رجعت عادية على اليمين بالرمادي) */
+/* ميساجاتي أنا (تدرج بنفسجي غامق ومريح للعين) */
 .my-msg {
     align-self: flex-end;
-    background: rgba(255, 255, 255, 0.08);
+    background: linear-gradient(135deg, #4e148c, #854dff);
     color: white;
     border-bottom-right-radius: 4px; 
+    box-shadow: 0 4px 15px rgba(133, 77, 255, 0.3);
 }
 
 .my-msg:hover {
-    background: rgba(255, 255, 255, 0.12);
+    background: linear-gradient(135deg, #3c0d6e, #713be6);
     transform: translateY(-1px);
 }
 
-/* ميساجات صاحبي (رجعت زرقاء نيون فخمة على اليسار) */
+/* ميساجات صحابي (تدرج أزرق/سيان هادئ ورائع للعين) */
 .other-msg {
     align-self: flex-start;
-    background: linear-gradient(135deg, #00f2fe, #4facfe);
+    background: linear-gradient(135deg, #0082c8, #00c9ff);
     color: white;
     border-bottom-left-radius: 4px; 
-    box-shadow: 0 4px 15px rgba(0, 242, 254, 0.2);
+    box-shadow: 0 4px 15px rgba(0, 201, 255, 0.3);
 }
 
 .other-msg:hover {
-    background: linear-gradient(135deg, #00d2de, #3f9cd8);
+    background: linear-gradient(135deg, #006fa1, #00b4e6);
     transform: translateY(-1px);
 }
 
-.hint { font-size: 10px; color: rgba(255, 255, 255, 0.6); display: block; margin-top: 4px; }
+.hint { font-size: 10px; color: rgba(255, 255, 255, 0.7); display: block; margin-top: 4px; }
 
 .translated-text {
     color: #fff;
@@ -364,52 +365,4 @@ input:focus { outline: none; border-color: #00f2fe; }
     .sidebar { 
         width: 100%; 
         height: 55px; 
-        flex-direction: row; 
-        justify-content: center; 
-        padding: 5px 0; 
-        gap: 15px;
-        border-right: none; 
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    }
-    
-    .bg-btn {
-        width: 28px;
-        height: 28px;
-    }
-    
-    .chat-container { 
-        height: calc(100dvh - 55px); 
-        padding: 10px 10px 15px 10px; 
-    }
-
-    .chat-header {
-        margin-bottom: 10px;
-    }
-
-    .chat-title {
-        font-size: 18px;
-    }
-
-    .user-badge {
-        font-size: 11px;
-        padding: 4px 10px;
-    }
-
-    #chat-box {
-        margin-bottom: 10px; 
-    }
-
-    .input-area {
-        gap: 6px;
-    }
-
-    input {
-        padding: 11px;
-        font-size: 14px;
-    }
-
-    .send-btn {
-        padding: 0 14px;
-        font-size: 14px;
-    }
-}
+        flex-direction: row;
