@@ -36,10 +36,10 @@
             </div>
 
             <div class="social-login">
-                <button class="social-btn google" onclick="alert('Google Auth integration coming soon!')">
+                <button class="social-btn google" onclick="alert('Google Auth coming soon!')">
                     <i class="fab fa-google"></i> Google
                 </button>
-                <button class="social-btn apple" onclick="alert('Apple Auth integration coming soon!')">
+                <button class="social-btn apple" onclick="alert('Apple Auth coming soon!')">
                     <i class="fab fa-apple"></i> Apple
                 </button>
             </div>
@@ -74,7 +74,6 @@
         const chatBox = document.getElementById('chat-box');
         let currentUsername = "";
 
-        // دوال الدخول (Login)
         function loginAsUser() {
             const nameInput = document.getElementById('login-username').value.trim();
             if (nameInput !== "") {
@@ -99,7 +98,6 @@
             currentUsername = username;
             document.getElementById('user-display-tag').innerText = `👤 ${username}`;
             
-            // حركات انتقالية ناعمة (Smooth Switch)
             const loginScreen = document.getElementById('login-screen');
             const chatScreen = document.getElementById('chat-screen');
             
@@ -118,7 +116,6 @@
             }, 500);
         }
 
-        // إرسال الميساجات
         function sendMessage() {
             const msg = document.getElementById('message').value;
             if(msg.trim() !== "") {
@@ -133,11 +130,21 @@
             }
         }
 
+        // معالجة الرسائل والتحقق من صاحب الميساج
         socket.on('chat-message', (data) => {
             const msgElement = document.createElement('div');
             msgElement.classList.add('msg');
-            msgElement.setAttribute('onclick', `translateMsg(this, "${data.msg}")`);
-            msgElement.innerHTML = `<strong>${data.user}:</strong> <span class="text-content">${data.msg}</span> <small class="hint">(Tap to translate)</small>`;
+            
+            // كان الميساج متاعي، حطه ع اليمين، كان متع صحابي حطه ع اليسار
+            if (data.user === currentUsername) {
+                msgElement.classList.add('my-msg');
+                msgElement.innerHTML = `<span class="text-content">${data.msg}</span>`;
+            } else {
+                msgElement.classList.add('other-msg');
+                msgElement.setAttribute('onclick', `translateMsg(this, "${data.msg}")`);
+                msgElement.innerHTML = `<strong>${data.user}:</strong> <span class="text-content">${data.msg}</span> <small class="hint">(Tap to translate)</small>`;
+            }
+            
             chatBox.appendChild(msgElement);
             
             chatBox.scrollTo({
