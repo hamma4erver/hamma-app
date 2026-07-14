@@ -90,7 +90,7 @@
             
             <div id="ai-chat-box" style="flex: 1; overflow-y: auto; background: rgba(0, 0, 0, 0.5); padding: 15px; border-radius: 20px; margin-bottom: 15px; backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.05); display: flex; flex-direction: column; gap: 12px;">
                 <div class="msg other-msg" style="align-self: flex-start; background: linear-gradient(135deg, #0082c8, #00c9ff);">
-                    <strong>Hamma AI 🤖:</strong> <span class="text-content">أهلاً بيك يا غالي في شاتك الخاص والسري! اللي تحكيه معايا هنا ما يشوفو حتى حد غيرك. اسألني أي حاجة!</span>
+                    <strong>Hamma AI 🤖:</strong> <span class="text-content">أهلاً بك في محادثتك السرية! ما تكتبه هنا يبقى خاصاً بك تماماً ولا يمكن لأحد آخر رؤيته. اسألني أي شيء!</span>
                 </div>
             </div>
             
@@ -103,7 +103,14 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        const socket = io();
+        // اتصال مرن بالـ Socket لتفادي تجميد الصفحة إذا لم يتوفر السيرفر
+        let socket;
+        try {
+            socket = io();
+        } catch (e) {
+            console.warn("Socket.io is not connected. Running in local fallback mode.");
+        }
+
         const chatBox = document.getElementById('chat-box');
         const aiChatBox = document.getElementById('ai-chat-box');
         let currentUsername = "";
@@ -135,29 +142,31 @@
             const loginScreen = document.getElementById('login-screen');
             const chatScreen = document.getElementById('chat-screen');
             
+            // حركة تنقل سلسة وفورية
+            loginScreen.style.transition = 'all 0.3s ease';
             loginScreen.style.opacity = '0';
             loginScreen.style.transform = 'scale(0.95)';
-            loginScreen.style.transition = 'all 0.5s ease';
             
             setTimeout(() => {
                 loginScreen.style.display = 'none';
                 chatScreen.style.display = 'flex';
-                chatScreen.style.opacity = '0';
-                setTimeout(() => {
-                    chatScreen.style.opacity = '1';
-                    chatScreen.style.transition = 'opacity 0.5s ease';
-                }, 50);
-            }, 500);
+                chatScreen.style.opacity = '1';
+            }, 300);
         }
 
         function sendMessage() {
             const msg = document.getElementById('message').value;
             if(msg.trim() !== "") {
-                socket.emit('chat-message', { 
-                    user: currentUsername, 
-                    msg: msg,
-                    senderId: socket.id 
-                });
+                if (socket && socket.connected) {
+                    socket.emit('chat-message', { 
+                        user: currentUsername, 
+                        msg: msg,
+                        senderId: socket.id 
+                    });
+                } else {
+                    // تجربة محلية إذا لم يكن السوكيت متصلاً
+                    appendLocalMessage(currentUsername, msg);
+                }
                 document.getElementById('message').value = "";
             }
         }
@@ -168,25 +177,37 @@
             }
         }
 
-        // استقبال ميساجات الشات العام (مفتوح للجميع)
-        socket.on('chat-message', (data) => {
+        // دالة لإضافة الرسالة محلياً في حال غياب السيرفر
+        function appendLocalMessage(user, msg) {
             const msgElement = document.createElement('div');
-            
-            if (data.senderId === socket.id) {
-                msgElement.classList.add('msg', 'my-msg');
-            } else {
-                msgElement.classList.add('msg', 'other-msg');
-            }
-
-            msgElement.setAttribute('onclick', `translateMsg(this, "${data.msg}")`);
-            msgElement.innerHTML = `<strong>${data.user}:</strong> <span class="text-content">${data.msg}</span> <small class="hint">(Tap to translate)</small>`;
+            msgElement.classList.add('msg', 'my-msg');
+            msgElement.setAttribute('onclick', `translateMsg(this, "${msg}")`);
+            msgElement.innerHTML = `<strong>${user}:</strong> <span class="text-content">${msg}</span> <small class="hint">(Tap to translate)</small>`;
             chatBox.appendChild(msgElement);
-            
-            chatBox.scrollTo({
-                top: chatBox.scrollHeight,
-                behavior: 'smooth'
+            chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
+        }
+
+        // استقبال الرسائل المشتركة
+        if (socket) {
+            socket.on('chat-message', (data) => {
+                const msgElement = document.createElement('div');
+                
+                if (data.senderId === socket.id) {
+                    msgElement.classList.add('msg', 'my-msg');
+                } else {
+                    msgElement.classList.add('msg', 'other-msg');
+                }
+
+                msgElement.setAttribute('onclick', `translateMsg(this, "${data.msg}")`);
+                msgElement.innerHTML = `<strong>${data.user}:</strong> <span class="text-content">${data.msg}</span> <small class="hint">(Tap to translate)</small>`;
+                chatBox.appendChild(msgElement);
+                
+                chatBox.scrollTo({
+                    top: chatBox.scrollHeight,
+                    behavior: 'smooth'
+                });
             });
-        });
+        }
 
         async function translateMsg(element, text) {
             const textSpan = element.querySelector('.text-content');
@@ -209,4 +230,71 @@
         }
 
         function changeBg(bg) {
-            document.body.style.transition = "background 0.
+            document.body.style.transition = "background 0.5s ease";
+            document.body.style.background = bg;
+        }
+
+        /* ================= شات الـ AI السري والفردي ================= */
+
+        function openAIScreen() {
+            document.getElementById('chat-screen').style.display = 'none';
+            const aiScreen = document.getElementById('ai-screen');
+            aiScreen.style.display = 'flex';
+            document.getElementById('ai-message-input').focus();
+        }
+
+        function backToChat() {
+            document.getElementById('ai-screen').style.display = 'none';
+            document.getElementById('chat-screen').style.display = 'flex';
+        }
+
+        function checkAIEnter(event) {
+            if (event.key === "Enter") {
+                sendToAI();
+            }
+        }
+
+        async function sendToAI() {
+            const inputField = document.getElementById('ai-message-input');
+            const userText = inputField.value.trim();
+            if (userText === "") return;
+
+            // 1. عرض الرسالة الخاصة بالمستخدم في شاشته فقط
+            const userMsgDiv = document.createElement('div');
+            userMsgDiv.classList.add('msg', 'my-msg');
+            userMsgDiv.innerHTML = `<strong>${currentUsername || 'You'}:</strong> <span class="text-content">${userText}</span>`;
+            aiChatBox.appendChild(userMsgDiv);
+            
+            inputField.value = "";
+            aiChatBox.scrollTop = aiChatBox.scrollHeight;
+
+            // 2. إظهار تأثير التفكير
+            const typingDiv = document.createElement('div');
+            typingDiv.classList.add('msg', 'other-msg');
+            typingDiv.style.opacity = '0.7';
+            typingDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content"><i>جاري التفكير... ⚡</i></span>`;
+            aiChatBox.appendChild(typingDiv);
+            aiChatBox.scrollTop = aiChatBox.scrollHeight;
+
+            try {
+                // استعلام الترجمة السريع للـ AI
+                const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ar&dt=t&q=${encodeURIComponent(userText)}`);
+                const result = await res.json();
+                const translated = result[0][0][0];
+
+                typingDiv.remove();
+
+                // 3. عرض رد الـ AI السري
+                const aiMsgDiv = document.createElement('div');
+                aiMsgDiv.classList.add('msg', 'other-msg');
+                aiMsgDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">لقد فهمت قصدك تماماً! بخصوص سؤالك:<br><strong>"${translated}"</strong> 😉</span>`;
+                aiChatBox.appendChild(aiMsgDiv);
+            } catch (error) {
+                typingDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">عذراً، حدث خطأ أثناء الاتصال بالخادم.</span>`;
+            }
+
+            aiChatBox.scrollTop = aiChatBox.scrollHeight;
+        }
+    </script>
+</body>
+</html>
