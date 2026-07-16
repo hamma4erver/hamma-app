@@ -1,7 +1,7 @@
 {
   "name": "hamma-chat",
   "version": "1.0.0",
-  "description": "Hamma Chat with Gemini AI integration",
+  "description": "A private and secure web-based chat application featuring real-time messaging and an integrated AI assistant.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
