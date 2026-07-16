@@ -90,7 +90,7 @@
             
             <div id="ai-chat-box" style="flex: 1; overflow-y: auto; background: rgba(0, 0, 0, 0.5); padding: 15px; border-radius: 20px; margin-bottom: 15px; backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.05); display: flex; flex-direction: column; gap: 12px;">
                 <div class="msg other-msg" style="align-self: flex-start; background: linear-gradient(135deg, #0082c8, #00c9ff);">
-                    <strong>Hamma AI 🤖:</strong> <span class="text-content">مرحباً بك في محادثتك السرية المدمجة بذكاء Gemini! ما تكتبه هنا يبقى خاصاً بك تماماً ولا يمكن لأحد آخر رؤيته. اسألني أي شيء!</span>
+                    <strong>Hamma AI 🤖:</strong> <span class="text-content">A private and secure web-based chat application featuring real-time messaging and an integrated AI assistant</span>
                 </div>
             </div>
             
@@ -295,7 +295,7 @@
                 aiMsgDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">${data.reply}</span>`;
                 aiChatBox.appendChild(aiMsgDiv);
             } catch (error) {
-                typingDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">عذراً يا كاسح، حدث خطأ أثناء الاتصال بـ Gemini API.</span>`;
+                typingDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">wait، .</span>`;
             }
 
             aiChatBox.scrollTop = aiChatBox.scrollHeight;
