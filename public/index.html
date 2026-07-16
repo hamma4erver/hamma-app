@@ -90,12 +90,12 @@
             
             <div id="ai-chat-box" style="flex: 1; overflow-y: auto; background: rgba(0, 0, 0, 0.5); padding: 15px; border-radius: 20px; margin-bottom: 15px; backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.05); display: flex; flex-direction: column; gap: 12px;">
                 <div class="msg other-msg" style="align-self: flex-start; background: linear-gradient(135deg, #0082c8, #00c9ff);">
-                    <strong>Hamma AI 🤖:</strong> <span class="text-content">أهلاً بك في محادثتك السرية! ما تكتبه هنا يبقى خاصاً بك تماماً ولا يمكن لأحد آخر رؤيته. اسألني أي شيء!</span>
+                    <strong>Hamma AI 🤖:</strong> <span class="text-content">مرحباً بك في محادثتك السرية المدمجة بذكاء Gemini! ما تكتبه هنا يبقى خاصاً بك تماماً ولا يمكن لأحد آخر رؤيته. اسألني أي شيء!</span>
                 </div>
             </div>
             
             <div class="input-area">
-                <input type="text" id="ai-message-input" placeholder="Ask AI anything privately..." onkeydown="checkAIEnter(event)">
+                <input type="text" id="ai-message-input" placeholder="Ask Gemini anything privately..." onkeydown="checkAIEnter(event)">
                 <button onclick="sendToAI()" class="send-btn" style="background: linear-gradient(45deg, #00c9ff, #92fe9d);">Ask ↵</button>
             </div>
         </div>
@@ -187,7 +187,7 @@
             chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
         }
 
-        // استقبال الرسائل المشتركة
+        // استقبال الرسائل المشتركة في الشات العام
         if (socket) {
             socket.on('chat-message', (data) => {
                 const msgElement = document.createElement('div');
@@ -234,7 +234,7 @@
             document.body.style.background = bg;
         }
 
-        /* ================= شات الـ AI السري والفردي ================= */
+        /* ================= شات الـ AI السري والفردي المربوط بـ Gemini ================= */
 
         function openAIScreen() {
             document.getElementById('chat-screen').style.display = 'none';
@@ -259,7 +259,7 @@
             const userText = inputField.value.trim();
             if (userText === "") return;
 
-            // 1. عرض الرسالة الخاصة بالمستخدم في شاشته فقط
+            // 1. عرض الرسالة الخاصة بالمستخدم في شاشته الخاصة فقط
             const userMsgDiv = document.createElement('div');
             userMsgDiv.classList.add('msg', 'my-msg');
             userMsgDiv.innerHTML = `<strong>${currentUsername || 'You'}:</strong> <span class="text-content">${userText}</span>`;
@@ -272,25 +272,30 @@
             const typingDiv = document.createElement('div');
             typingDiv.classList.add('msg', 'other-msg');
             typingDiv.style.opacity = '0.7';
-            typingDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content"><i>جاري التفكير... ⚡</i></span>`;
+            typingDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content"><i>جاري التفكير والكتابة... ⚡</i></span>`;
             aiChatBox.appendChild(typingDiv);
             aiChatBox.scrollTop = aiChatBox.scrollHeight;
 
             try {
-                // استعلام الترجمة السريع للـ AI
-                const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ar&dt=t&q=${encodeURIComponent(userText)}`);
-                const result = await res.json();
-                const translated = result[0][0][0];
+                // 3. الاتصال بسيرفر Node.js لطلب الإجابة من Gemini API بأمان
+                const res = await fetch('/api/gemini', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ prompt: userText })
+                });
+                
+                const data = await res.json();
+                typingDiv.remove(); // إزالة علامة الانتظار
 
-                typingDiv.remove();
-
-                // 3. عرض رد الـ AI السري
+                // 4. عرض رد الـ Gemini AI الحقيقي والسري
                 const aiMsgDiv = document.createElement('div');
                 aiMsgDiv.classList.add('msg', 'other-msg');
-                aiMsgDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">لقد فهمت قصدك تماماً! بخصوص سؤالك:<br><strong>"${translated}"</strong> 😉</span>`;
+                aiMsgDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">${data.reply}</span>`;
                 aiChatBox.appendChild(aiMsgDiv);
             } catch (error) {
-                typingDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">عذراً، حدث خطأ أثناء الاتصال بالخادم.</span>`;
+                typingDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">عذراً يا كاسح، حدث خطأ أثناء الاتصال بـ Gemini API.</span>`;
             }
 
             aiChatBox.scrollTop = aiChatBox.scrollHeight;
