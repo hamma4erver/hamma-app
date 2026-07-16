@@ -1,7 +1,7 @@
 {
   "name": "hamma-chat",
   "version": "1.0.0",
-  "description": "A private and secure web-based chat application featuring real-time messaging and an integrated AI assistant.",
+  "description": "Message...",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
