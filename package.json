@@ -1,12 +1,19 @@
 {
   "name": "hamma-chat",
   "version": "1.0.0",
+  "description": "Hamma Chat with Gemini AI integration",
   "main": "server.js",
-  "dependencies": {
-    "express": "^4.18.2",
-    "socket.io": "^4.7.0"
-  },
   "scripts": {
     "start": "node server.js"
-  }
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.1.1",
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "Hamma",
+  "license": "ISC"
 }
