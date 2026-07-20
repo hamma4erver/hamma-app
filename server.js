@@ -21,12 +21,12 @@ app.post('/api/gemini', async (req, res) => {
     try {
         const fetch = (await import('node-fetch')).default;
         
-        // تم التغيير إلى موديل gemini-pro ليتوافق مع صلاحيات الـ Cloud Project متاعك
+        // تغيير الرابط وطريقة إرسال المفتاح كـ Bearer Token ليتوافق مع النوع AQ.Ab
         const apiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-goog-api-key': apiKey
+                'Authorization': `Bearer ${apiKey}` // تمرير المفتاح كـ Bearer Token لفتح الصلاحيات المعقدة
             },
             body: JSON.stringify({
                 contents: [{
