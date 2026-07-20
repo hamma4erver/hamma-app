@@ -9,44 +9,44 @@ const io = new Server(server);
 app.use(express.json());
 app.use(express.static('public'));
 
-const apiKey = process.env.GEMINI_API_KEY;
+// توا الـ Variable في Render تولي تسميها HF_API_KEY
+const apiKey = process.env.HF_API_KEY; 
 
 app.post('/api/gemini', async (req, res) => {
     const { prompt } = req.body;
     
     if (!apiKey) {
-        return res.json({ reply: "API Key is missing on Render environment variables." });
+        return res.json({ reply: "HF_API_KEY is missing on Render." });
     }
 
     try {
         const fetch = (await import('node-fetch')).default;
         
-        // الطريقة الرسمية والصحيحة لإرسال المفتاح لـ Gemini
-        const apiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`, {
+        // استدعاء موديل Meta Llama 3 القوي والمجاني بالكامل بدون كارت بنكية
+        const apiResponse = await fetch("https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct", {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-goog-api-key': apiKey
+                'Authorization': `Bearer ${apiKey}`
             },
             body: JSON.stringify({
-                contents: [{
-                    parts: [{ text: prompt }]
-                }]
+                inputs: prompt,
+                parameters: { max_new_tokens: 500 }
             })
         });
 
         const data = await apiResponse.json();
         
-        if (data.candidates && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0].text) {
-            res.json({ reply: data.candidates[0].content.parts[0].text });
-        } else if (data.error) {
-            res.json({ reply: `API Error: ${data.error.message}` });
+        if (data && data[0] && data[0].generated_text) {
+            // تنظيف النص المسترجع وإرساله للشات
+            let replyText = data[0].generated_text.replace(prompt, "").trim();
+            res.json({ reply: replyText || "I'm here!" });
         } else {
-            res.json({ reply: "Sorry, received an unreadable response from the AI." });
+            res.json({ reply: "Sorry, Hamma AI is busy right now." });
         }
     } catch (error) {
-        console.error("Fetch Error:", error);
-        res.json({ reply: "Sorry, an error occurred while connecting to the backend." });
+        console.error("HF Error:", error);
+        res.json({ reply: "An error occurred with the AI service." });
     }
 });
 
