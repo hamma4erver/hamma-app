@@ -21,12 +21,12 @@ app.post('/api/gemini', async (req, res) => {
     try {
         const fetch = (await import('node-fetch')).default;
         
-        // تعديل الـ URL والـ Headers لتقبل مفاتيح الـ Cloud والـ Studio بدون مشاكل
-        const apiResponse = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent`, {
+        // تعديل المسار إلى v1beta ليقبل الموديل المختار بشكل سليم
+        const apiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-goog-api-key': apiKey // تمرير المفتاح في الـ Header لضمان عمل الـ Tokens المشفرة
+                'x-goog-api-key': apiKey
             },
             body: JSON.stringify({
                 contents: [{
@@ -37,7 +37,6 @@ app.post('/api/gemini', async (req, res) => {
 
         const data = await apiResponse.json();
         
-        // التحقق من الإجابة واستخراج النص
         if (data.candidates && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0].text) {
             res.json({ reply: data.candidates[0].content.parts[0].text });
         } else if (data.error) {
