@@ -21,8 +21,8 @@ app.post('/api/gemini', async (req, res) => {
     try {
         const fetch = (await import('node-fetch')).default;
         
-        // تعديل المسار إلى v1beta ليقبل الموديل المختار بشكل سليم
-        const apiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`, {
+        // تم التغيير إلى موديل gemini-pro ليتوافق مع صلاحيات الـ Cloud Project متاعك
+        const apiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
