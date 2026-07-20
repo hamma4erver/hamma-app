@@ -9,7 +9,6 @@ const io = new Server(server);
 app.use(express.json());
 app.use(express.static('public'));
 
-// توا الـ Variable في Render تولي تسميها HF_API_KEY
 const apiKey = process.env.HF_API_KEY; 
 
 app.post('/api/gemini', async (req, res) => {
@@ -22,7 +21,6 @@ app.post('/api/gemini', async (req, res) => {
     try {
         const fetch = (await import('node-fetch')).default;
         
-        // استدعاء موديل Meta Llama 3 القوي والمجاني بالكامل بدون كارت بنكية
         const apiResponse = await fetch("https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct", {
             method: 'POST',
             headers: {
@@ -37,16 +35,26 @@ app.post('/api/gemini', async (req, res) => {
 
         const data = await apiResponse.json();
         
-        if (data && data[0] && data[0].generated_text) {
-            // تنظيف النص المسترجع وإرساله للشات
+        // التحقق إذا كان هنالك خطأ قادم من Hugging Face مباشرة وطباعته
+        if (data.error) {
+            console.error("HF API Error:", data.error);
+            return res.json({ reply: `HF API Error: ${data.error}` });
+        }
+
+        // التعامل مع صيغة الـ Array اللي يرجعها Hugging Face
+        if (Array.isArray(data) && data[0] && data[0].generated_text) {
             let replyText = data[0].generated_text.replace(prompt, "").trim();
-            res.json({ reply: replyText || "I'm here!" });
+            res.json({ reply: replyText || "Done!" });
+        } else if (data.generated_text) {
+            let replyText = data.generated_text.replace(prompt, "").trim();
+            res.json({ reply: replyText });
         } else {
-            res.json({ reply: "Sorry, Hamma AI is busy right now." });
+            console.error("Unknown HF Response structure:", data);
+            res.json({ reply: "Sorry, received an unexpected response structure from Hugging Face." });
         }
     } catch (error) {
-        console.error("HF Error:", error);
-        res.json({ reply: "An error occurred with the AI service." });
+        console.error("Fetch Error:", error);
+        res.json({ reply: `Fetch Error: ${error.message}` });
     }
 });
 
