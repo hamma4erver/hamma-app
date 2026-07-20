@@ -21,12 +21,12 @@ app.post('/api/gemini', async (req, res) => {
     try {
         const fetch = (await import('node-fetch')).default;
         
-        // تغيير الرابط وطريقة إرسال المفتاح كـ Bearer Token ليتوافق مع النوع AQ.Ab
-        const apiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent`, {
+        // الطريقة الرسمية والصحيحة لإرسال المفتاح لـ Gemini
+        const apiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}` // تمرير المفتاح كـ Bearer Token لفتح الصلاحيات المعقدة
+                'x-goog-api-key': apiKey
             },
             body: JSON.stringify({
                 contents: [{
@@ -40,10 +40,8 @@ app.post('/api/gemini', async (req, res) => {
         if (data.candidates && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0].text) {
             res.json({ reply: data.candidates[0].content.parts[0].text });
         } else if (data.error) {
-            console.error("Google API Error Details:", data.error);
             res.json({ reply: `API Error: ${data.error.message}` });
         } else {
-            console.error("Unknown API Response Structure:", data);
             res.json({ reply: "Sorry, received an unreadable response from the AI." });
         }
     } catch (error) {
