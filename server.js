@@ -11,7 +11,6 @@ app.use(express.static('public'));
 
 const apiKey = process.env.GEMINI_API_KEY;
 
-// مسار الـ AI مع الـ Fetch المباشر للـ Gemini API (يتعامل مع أي نوع مفتاح)
 app.post('/api/gemini', async (req, res) => {
     const { prompt } = req.body;
     
@@ -22,11 +21,12 @@ app.post('/api/gemini', async (req, res) => {
     try {
         const fetch = (await import('node-fetch')).default;
         
-        // استدعاء موديل gemini-1.5-flash مباشرة عبر الـ REST API الرسمي
-        const apiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+        // تعديل الـ URL والـ Headers لتقبل مفاتيح الـ Cloud والـ Studio بدون مشاكل
+        const apiResponse = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'x-goog-api-key': apiKey // تمرير المفتاح في الـ Header لضمان عمل الـ Tokens المشفرة
             },
             body: JSON.stringify({
                 contents: [{
@@ -37,19 +37,22 @@ app.post('/api/gemini', async (req, res) => {
 
         const data = await apiResponse.json();
         
-        if (data.candidates && data.candidates[0].content.parts[0].text) {
+        // التحقق من الإجابة واستخراج النص
+        if (data.candidates && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0].text) {
             res.json({ reply: data.candidates[0].content.parts[0].text });
+        } else if (data.error) {
+            console.error("Google API Error Details:", data.error);
+            res.json({ reply: `API Error: ${data.error.message}` });
         } else {
-            console.error("API Error Structure:", data);
-            res.json({ reply: "Sorry, received an invalid response from the AI server." });
+            console.error("Unknown API Response Structure:", data);
+            res.json({ reply: "Sorry, received an unreadable response from the AI." });
         }
     } catch (error) {
         console.error("Fetch Error:", error);
-        res.json({ reply: "Sorry, an error occurred while connecting to Gemini." });
+        res.json({ reply: "Sorry, an error occurred while connecting to the backend." });
     }
 });
 
-// إعدادات الـ Socket.io للشات العام
 io.on('connection', (socket) => {
     socket.on('chat-message', (data) => {
         io.emit('chat-message', data);
