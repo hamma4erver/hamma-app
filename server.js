@@ -1,7 +1,6 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const app = express();
 const server = http.createServer(app);
@@ -10,35 +9,43 @@ const io = new Server(server);
 app.use(express.json());
 app.use(express.static('public'));
 
-// تثبيت الـ API Key من الـ Environment Variables
-const aiKey = process.env.GEMINI_API_KEY; 
-let aiModel = null;
+const apiKey = process.env.GEMINI_API_KEY;
 
-if (aiKey) {
-    // استخدام الاسم الصحيح للمكتبة GoogleGenerativeAI
-    const ai = new GoogleGenerativeAI(aiKey);
-    aiModel = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
-} else {
-    console.warn("Warning: GEMINI_API_KEY is not defined in environment variables.");
-}
-
-// الـ Route الخاص بالـ AI
+// مسار الـ AI مع الـ Fetch المباشر للـ Gemini API (يتعامل مع أي نوع مفتاح)
 app.post('/api/gemini', async (req, res) => {
     const { prompt } = req.body;
     
-    if (!aiModel) {
-        return res.json({ reply: "AI Service is not configured. Please check your API Key on Render." });
+    if (!apiKey) {
+        return res.json({ reply: "API Key is missing on Render environment variables." });
     }
 
     try {
-        const result = await aiModel.generateContent(prompt);
-        const response = await result.response;
-        const text = response.text();
+        const fetch = (await import('node-fetch')).default;
         
-        res.json({ reply: text });
+        // استدعاء موديل gemini-1.5-flash مباشرة عبر الـ REST API الرسمي
+        const apiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [{ text: prompt }]
+                }]
+            })
+        });
+
+        const data = await apiResponse.json();
+        
+        if (data.candidates && data.candidates[0].content.parts[0].text) {
+            res.json({ reply: data.candidates[0].content.parts[0].text });
+        } else {
+            console.error("API Error Structure:", data);
+            res.json({ reply: "Sorry, received an invalid response from the AI server." });
+        }
     } catch (error) {
-        console.error("AI Error:", error);
-        res.json({ reply: "Sorry, I am having trouble processing that right now." });
+        console.error("Fetch Error:", error);
+        res.json({ reply: "Sorry, an error occurred while connecting to Gemini." });
     }
 });
 
