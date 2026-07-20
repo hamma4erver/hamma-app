@@ -1,7 +1,7 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const { GoogleGenAI } = require('@google/generative-ai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const app = express();
 const server = http.createServer(app);
@@ -15,13 +15,14 @@ const aiKey = process.env.GEMINI_API_KEY;
 let aiModel = null;
 
 if (aiKey) {
-    const ai = new GoogleGenAI({ apiKey: aiKey });
+    // استخدام الاسم الصحيح للمكتبة GoogleGenerativeAI
+    const ai = new GoogleGenerativeAI(aiKey);
     aiModel = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
 } else {
     console.warn("Warning: GEMINI_API_KEY is not defined in environment variables.");
 }
 
-// الـ Route الخاص بالـ AI واللي تضرب في الـ undefined
+// الـ Route الخاص بالـ AI
 app.post('/api/gemini', async (req, res) => {
     const { prompt } = req.body;
     
@@ -34,7 +35,6 @@ app.post('/api/gemini', async (req, res) => {
         const response = await result.response;
         const text = response.text();
         
-        // تأكيد إرسال خاصية 'reply' ليتطابق مع الـ index.html
         res.json({ reply: text });
     } catch (error) {
         console.error("AI Error:", error);
