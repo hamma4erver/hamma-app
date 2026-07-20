@@ -10,6 +10,7 @@
 </head>
 <body>
 
+    <!-- 1. شاشة تسجيل الدخول -->
     <div id="login-screen" class="login-container">
         <div class="login-card">
             <div class="logo-area">
@@ -46,6 +47,7 @@
         </div>
     </div>
 
+    <!-- 2. شاشة الشات العادي (المشترك بين الناس الكل) -->
     <div id="chat-screen" class="main-layout" style="display: none;">
         <div class="sidebar">
             <div class="bg-btn" style="background: linear-gradient(135deg, #1e3c72, #2a5298);" onclick="changeBg('linear-gradient(135deg, #1e3c72, #2a5298)')"></div>
@@ -53,6 +55,7 @@
             <div class="bg-btn" style="background: linear-gradient(135deg, #ff9a9e, #fecfef);" onclick="changeBg('linear-gradient(135deg, #ff9a9e, #fecfef)')"></div>
             <div class="bg-btn" style="background: #050505; border: 2px solid #555;" onclick="changeBg('#050505')"></div>
             
+            <!-- زر فقاعة الـ AI الكاسح -->
             <div class="ai-btn" onclick="openAIScreen()">
                 <i class="fas fa-robot"></i> AI
             </div>
@@ -72,8 +75,10 @@
         </div>
     </div>
 
+    <!-- 3. شاشة الـ AI الخاصة والسرية -->
     <div id="ai-screen" class="main-layout" style="display: none;">
         <div class="sidebar">
+            <!-- زر الرجوع للشات العادي -->
             <div class="bg-btn" style="background: #222; display: flex; justify-content: center; align-items: center; color: white;" onclick="backToChat()" title="Back to Chat">
                 <i class="fas fa-arrow-left"></i>
             </div>
@@ -88,14 +93,16 @@
                 <span class="user-badge" style="background: rgba(0, 201, 255, 0.1); border-color: #00c9ff; color: #00c9ff;">🔒 Private AI</span>
             </div>
             
+            <!-- صندوق شات الـ AI الخاص بكل مستخدم -->
             <div id="ai-chat-box" style="flex: 1; overflow-y: auto; background: rgba(0, 0, 0, 0.5); padding: 15px; border-radius: 20px; margin-bottom: 15px; backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.05); display: flex; flex-direction: column; gap: 12px;">
                 <div class="msg other-msg" style="align-self: flex-start; background: linear-gradient(135deg, #0082c8, #00c9ff);">
-                    <strong>Hamma AI 🤖:</strong> <span class="text-content">A private and secure web-based chat application featuring real-time messaging and an integrated AI assistant</span>
+                    <strong>Hamma AI 🤖:</strong> <span class="text-content">أهلاً بك في محادثتك السرية! ما تكتبه هنا يبقى خاصاً بك تماماً ولا يمكن لأحد آخر رؤيته. اسألني أي شيء!</span>
                 </div>
             </div>
             
             <div class="input-area">
-                <input type="text" id="ai-message-input" placeholder="Ask Gemini anything privately..." onkeydown="checkAIEnter(event)">
+                <!-- تم تغيير النص هنا إلى Message... -->
+                <input type="text" id="ai-message-input" placeholder="Message..." onkeydown="checkAIEnter(event)">
                 <button onclick="sendToAI()" class="send-btn" style="background: linear-gradient(45deg, #00c9ff, #92fe9d);">Ask ↵</button>
             </div>
         </div>
@@ -103,7 +110,6 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        // اتصال مرن بالـ Socket لتفادي تجميد الصفحة إذا لم يتوفر السيرفر
         let socket;
         try {
             socket = io();
@@ -142,7 +148,6 @@
             const loginScreen = document.getElementById('login-screen');
             const chatScreen = document.getElementById('chat-screen');
             
-            // حركة تنقل سلسة وفورية
             loginScreen.style.transition = 'all 0.3s ease';
             loginScreen.style.opacity = '0';
             loginScreen.style.transform = 'scale(0.95)';
@@ -164,7 +169,6 @@
                         senderId: socket.id 
                     });
                 } else {
-                    // تجربة محلية إذا لم يكن السوكيت متصلاً
                     appendLocalMessage(currentUsername, msg);
                 }
                 document.getElementById('message').value = "";
@@ -177,7 +181,6 @@
             }
         }
 
-        // دالة لإضافة الرسالة محلياً في حال غياب السيرفر
         function appendLocalMessage(user, msg) {
             const msgElement = document.createElement('div');
             msgElement.classList.add('msg', 'my-msg');
@@ -187,7 +190,6 @@
             chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
         }
 
-        // استقبال الرسائل المشتركة في الشات العام
         if (socket) {
             socket.on('chat-message', (data) => {
                 const msgElement = document.createElement('div');
@@ -234,7 +236,7 @@
             document.body.style.background = bg;
         }
 
-        /* ================= شات الـ AI السري والفردي المربوط بـ Gemini ================= */
+        /* ================= شات الـ AI السري والفردي ================= */
 
         function openAIScreen() {
             document.getElementById('chat-screen').style.display = 'none';
@@ -259,7 +261,6 @@
             const userText = inputField.value.trim();
             if (userText === "") return;
 
-            // 1. عرض الرسالة الخاصة بالمستخدم في شاشته الخاصة فقط
             const userMsgDiv = document.createElement('div');
             userMsgDiv.classList.add('msg', 'my-msg');
             userMsgDiv.innerHTML = `<strong>${currentUsername || 'You'}:</strong> <span class="text-content">${userText}</span>`;
@@ -268,16 +269,14 @@
             inputField.value = "";
             aiChatBox.scrollTop = aiChatBox.scrollHeight;
 
-            // 2. إظهار تأثير التفكير
             const typingDiv = document.createElement('div');
             typingDiv.classList.add('msg', 'other-msg');
             typingDiv.style.opacity = '0.7';
-            typingDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content"><i>Thinking and writing... ⚡</i></span>`;
+            typingDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content"><i>جاري التفكير والكتابة... ⚡</i></span>`;
             aiChatBox.appendChild(typingDiv);
             aiChatBox.scrollTop = aiChatBox.scrollHeight;
 
             try {
-                // 3. الاتصال بسيرفر Node.js لطلب الإجابة من Gemini API بأمان
                 const res = await fetch('/api/gemini', {
                     method: 'POST',
                     headers: {
@@ -287,15 +286,14 @@
                 });
                 
                 const data = await res.json();
-                typingDiv.remove(); // إزالة علامة الانتظار
+                typingDiv.remove();
 
-                // 4. عرض رد الـ Gemini AI الحقيقي والسري
                 const aiMsgDiv = document.createElement('div');
                 aiMsgDiv.classList.add('msg', 'other-msg');
                 aiMsgDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">${data.reply}</span>`;
                 aiChatBox.appendChild(aiMsgDiv);
             } catch (error) {
-                typingDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">wait، .</span>`;
+                typingDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">عذراً، حدث خطأ أثناء الاتصال بالخادم.</span>`;
             }
 
             aiChatBox.scrollTop = aiChatBox.scrollHeight;
