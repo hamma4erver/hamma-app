@@ -765,3 +765,16 @@ button:hover, .send-btn:hover, .ai-btn:hover {
     box-shadow: 0 0 6px rgba(255, 255, 255, 0.2);
     display: inline-block;
 }ss
+.admin-badge-img {
+    height: 15px;                  /* الطول الصغير والمناسب */
+    width: auto;                   /* العرض يتكيف وحدو باش تبقى الصورة متناسقة */
+    padding: 1px 4px;
+    background: #000;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    vertical-align: middle;        /* تخليهم في خط واحد مقابلين بعضهم بالزبط */
+    margin-left: 5px;
+    object-fit: contain;
+    box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
+    display: inline-block;
+}
