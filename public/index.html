@@ -159,7 +159,16 @@
 
         function proceedToChat(username) {
             currentUsername = username;
-            document.getElementById('user-display-tag').innerText = `👤 ${username}`;
+            
+            // تحقق إذا كان اسمك هو الأدمن (حط اسمك هنا بالضبط)
+            let displayName = username;
+            if (username.toLowerCase() === "hamma" || username.toLowerCase() === "hamma admin") {
+                displayName = `<span class="rainbow-admin-name">${username}</span> <img src="favicon.png" class="admin-badge-img" title="Owner Admin">`;
+            } else {
+                displayName = `👤 ${username}`;
+            }
+
+            document.getElementById('user-display-tag').innerHTML = displayName;
             
             const loginScreen = document.getElementById('login-screen');
             const chatScreen = document.getElementById('chat-screen');
@@ -172,8 +181,6 @@
                 loginScreen.style.display = 'none';
                 chatScreen.style.display = 'flex';
                 chatScreen.style.opacity = '1';
-                
-                // Show PC Resolution Notice after entering chat
                 document.getElementById('pc-notice-modal').style.display = 'flex';
             }, 300);
         }
@@ -198,11 +205,19 @@
             if (event.key === "Enter") sendMessage();
         }
 
+        function formatUsername(username) {
+            if (username.toLowerCase() === "hamma" || username.toLowerCase() === "hamma admin") {
+                return `<span class="rainbow-admin-name">${username}</span> <img src="favicon.png" class="admin-badge-img" title="Owner Admin">`;
+            }
+            return username;
+        }
+
         function appendLocalMessage(user, msg) {
             const msgElement = document.createElement('div');
             msgElement.classList.add('msg', 'my-msg');
             msgElement.setAttribute('onclick', `translateMsg(this, "${msg}")`);
-            msgElement.innerHTML = `<strong>${user}:</strong> <span class="text-content">${msg}</span> <small class="hint">(Tap to translate)</small>`;
+            const formattedUser = formatUsername(user);
+            msgElement.innerHTML = `<strong>${formattedUser}:</strong> <span class="text-content">${msg}</span> <small class="hint">(Tap to translate)</small>`;
             chatBox.appendChild(msgElement);
             chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
         }
@@ -216,7 +231,8 @@
                     msgElement.classList.add('msg', 'other-msg');
                 }
                 msgElement.setAttribute('onclick', `translateMsg(this, "${data.msg}")`);
-                msgElement.innerHTML = `<strong>${data.user}:</strong> <span class="text-content">${data.msg}</span> <small class="hint">(Tap to translate)</small>`;
+                const formattedUser = formatUsername(data.user);
+                msgElement.innerHTML = `<strong>${formattedUser}:</strong> <span class="text-content">${data.msg}</span> <small class="hint">(Tap to translate)</small>`;
                 chatBox.appendChild(msgElement);
                 chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
             });
@@ -282,7 +298,8 @@
 
             const userMsgDiv = document.createElement('div');
             userMsgDiv.classList.add('msg', 'my-msg');
-            userMsgDiv.innerHTML = `<strong>${currentUsername || 'You'}:</strong> <span class="text-content">${userText}</span>`;
+            const formattedUser = formatUsername(currentUsername || 'You');
+            userMsgDiv.innerHTML = `<strong>${formattedUser}:</strong> <span class="text-content">${userText}</span>`;
             aiChatBox.appendChild(userMsgDiv);
             inputField.value = "";
             aiChatBox.scrollTop = aiChatBox.scrollHeight;
@@ -308,7 +325,7 @@
                 aiMsgDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">${data.reply}</span>`;
                 aiChatBox.appendChild(aiMsgDiv);
             } catch (error) {
-                typingDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">Error connecting to server.</span>`;
+                typingDiv.innerHTML = `<strong>Hamma AI 🤖:</i> <span class="text-content">Error connecting to server.</span>`;
             }
             aiChatBox.scrollTop = aiChatBox.scrollHeight;
         }
