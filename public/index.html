@@ -157,18 +157,16 @@
             if (event.key === "Enter") loginAsUser();
         }
 
+        function formatUsername(username) {
+            if (username.toLowerCase() === "hamma" || username.toLowerCase() === "hamma admin") {
+                return `<span class="rainbow-admin-name">${username}</span> <img src="badge.png" class="admin-badge-img" title="Owner Admin">`;
+            }
+            return username;
+        }
+
         function proceedToChat(username) {
             currentUsername = username;
-            
-            // تحقق إذا كان اسمك هو الأدمن (حط اسمك هنا بالضبط)
-            let displayName = username;
-            if (username.toLowerCase() === "hamma" || username.toLowerCase() === "hamma admin") {
-                displayName = `<span class="rainbow-admin-name">${username}</span> <img src="favicon.png" class="admin-badge-img" title="Owner Admin">`;
-            } else {
-                displayName = `👤 ${username}`;
-            }
-
-            document.getElementById('user-display-tag').innerHTML = displayName;
+            document.getElementById('user-display-tag').innerHTML = formatUsername(username);
             
             const loginScreen = document.getElementById('login-screen');
             const chatScreen = document.getElementById('chat-screen');
@@ -203,13 +201,6 @@
 
         function checkEnter(event) {
             if (event.key === "Enter") sendMessage();
-        }
-
-        function formatUsername(username) {
-            if (username.toLowerCase() === "hamma" || username.toLowerCase() === "hamma admin") {
-                return `<span class="rainbow-admin-name">${username}</span> <img src="favicon.png" class="admin-badge-img" title="Owner Admin">`;
-            }
-            return username;
         }
 
         function appendLocalMessage(user, msg) {
@@ -325,7 +316,7 @@
                 aiMsgDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">${data.reply}</span>`;
                 aiChatBox.appendChild(aiMsgDiv);
             } catch (error) {
-                typingDiv.innerHTML = `<strong>Hamma AI 🤖:</i> <span class="text-content">Error connecting to server.</span>`;
+                typingDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">Error connecting to server.</span>`;
             }
             aiChatBox.scrollTop = aiChatBox.scrollHeight;
         }
