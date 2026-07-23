@@ -724,3 +724,32 @@ button:hover, .send-btn:hover, .ai-btn:hover {
     50% { background-position: 100% 50%; }
     100% { background-position: 0% 50%; }
 }
+/* تنسيق الشارة المستطيلة Cute */
+.admin-badge-img {
+    height: 22px;
+    padding: 2px 8px;
+    background: rgba(0, 0, 0, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 6px;
+    vertical-align: middle;
+    margin-left: 6px;
+    object-fit: contain;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+    display: inline-block;
+}
+
+/* تأثير اسمك اللي يتغير لونه بطريقة مريحة وفخمة */
+.rainbow-admin-name {
+    background: linear-gradient(270deg, #00c9ff, #92fe9d, #ffd700, #ff758c);
+    background-size: 800% 800%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: smoothRainbow 8s ease infinite;
+    font-weight: bold;
+}
+
+@keyframes smoothRainbow {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
