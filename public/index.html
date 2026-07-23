@@ -2,301 +2,303 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Hamma Chat</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <link rel="icon" type="image/png" href="favicon.png">
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Just Chatting</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #0b0e14;
+            color: #ffffff;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            width: 100vw;
+            height: 100vh;
+            background-color: #d9383a;
+        }
+
+        /* Sidebar Styling */
+        .sidebar {
+            width: 70px;
+            background-color: #0d0f17;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 25px;
+            gap: 20px;
+            z-index: 10;
+        }
+
+        .sidebar-btn {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background-color: #1a1d28;
+            border: none;
+            color: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .sidebar-btn:hover {
+            background-color: #2a2e3d;
+            transform: scale(1.05);
+        }
+
+        .sidebar-btn.active {
+            background-color: #d9383a;
+        }
+
+        .sidebar-btn.ai-mode {
+            background-color: #1d2538;
+            color: #4da6ff;
+            font-weight: bold;
+            font-size: 13px;
+        }
+
+        .sidebar-btn.ai-mode.active {
+            background-color: #2563eb;
+            color: #ffffff;
+            box-shadow: 0 0 12px rgba(37, 99, 235, 0.6);
+        }
+
+        /* Main Chat Area */
+        .chat-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            position: relative;
+        }
+
+        /* Header Styling - Center Aligned */
+        .chat-header {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 10px 20px 20px 20px;
+            position: relative;
+            width: 100%;
+        }
+
+        .chat-title {
+            color: #10b981;
+            font-size: 26px;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+            text-align: center;
+            margin: 0 auto;
+        }
+
+        .user-profile {
+            position: absolute;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background-color: rgba(0, 0, 0, 0.2);
+            padding: 6px 14px;
+            border-radius: 20px;
+            cursor: pointer;
+        }
+
+        .avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background-color: #4b5563;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+
+        .username {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        /* Message Display Container */
+        .chat-messages {
+            flex: 1;
+            background: linear-gradient(180deg, #8b1d2c 0%, #6b1522 100%);
+            border-radius: 24px;
+            padding: 25px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Scrollbar Styling */
+        .chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb {
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+
+        /* Message Bubbles */
+        .message {
+            max-width: 75%;
+            padding: 12px 18px;
+            border-radius: 18px;
+            font-size: 15px;
+            line-height: 1.4;
+            word-wrap: break-word;
+            animation: fadeIn 0.2s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            align-self: flex-end;
+            background-color: #2563eb;
+            color: #ffffff;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.other {
+            align-self: flex-start;
+            background-color: #1f2937;
+            color: #f3f4f6;
+            border-bottom-left-radius: 4px;
+        }
+
+        .message.ai {
+            align-self: flex-start;
+            background-color: #064e3b;
+            color: #a7f3d0;
+            border: 1px solid #059669;
+            border-bottom-left-radius: 4px;
+        }
+
+        .message-sender {
+            font-size: 11px;
+            opacity: 0.75;
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+
+        /* Input Bar Container */
+        .chat-input-container {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        #message-input {
+            flex: 1;
+            background-color: #1a233a;
+            border: 1px solid #2d3748;
+            border-radius: 16px;
+            padding: 16px 22px;
+            color: #ffffff;
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        #message-input:focus {
+            border-color: #3b82f6;
+        }
+
+        #message-input::placeholder {
+            color: #64748b;
+        }
+
+        #send-btn {
+            background-color: #06b6d4;
+            color: #ffffff;
+            border: none;
+            border-radius: 16px;
+            padding: 0 28px;
+            height: 52px;
+            font-weight: 600;
+            font-size: 15px;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        #send-btn:hover {
+            background-color: #0891b2;
+        }
+
+        #send-btn:active {
+            transform: scale(0.98);
+        }
+    </style>
 </head>
 <body>
-
-    <!-- 1. LOGIN SCREEN -->
-    <div id="login-screen" class="login-container">
-        <div class="login-card">
-            <div class="logo-area">
-                <div class="glow-orb"></div>
-                <h1>HAMMA CHAT</h1>
-                <p class="subtitle">Connect to the Future</p>
-            </div>
-
-            <div class="input-group">
-                <i class="fas fa-user input-icon"></i>
-                <input type="text" id="login-username" placeholder="Enter your name..." onkeydown="checkLoginEnter(event)">
-            </div>
-
-            <button class="btn-primary" onclick="loginAsUser()">
-                <span>Enter Chat</span> <i class="fas fa-arrow-right"></i>
-            </button>
-
-            <button class="btn-secondary" onclick="loginAsGuest()">
-                <i class="fas fa-user-secret"></i> Enter as Guest
-            </button>
-
-            <div class="divider">
-                <span>OR CONNECT WITH</span>
-            </div>
-
-            <div class="social-login">
-                <button class="social-btn google" onclick="alert('Google Auth integration coming soon!')">
-                    <i class="fab fa-google"></i> Google
-                </button>
-                <button class="social-btn apple" onclick="alert('Apple Auth integration coming soon!')">
-                    <i class="fab fa-apple"></i> Apple
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 2. MAIN PUBLIC CHAT SCREEN -->
-    <div id="chat-screen" class="main-layout" style="display: none;">
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
         <div class="sidebar">
-            <div class="bg-btn" style="background: linear-gradient(135deg, #1e3c72, #2a5298);" onclick="changeBg('linear-gradient(135deg, #1e3c72, #2a5298)')"></div>
-            <div class="bg-btn" style="background: linear-gradient(135deg, #667eea, #764ba2);" onclick="changeBg('linear-gradient(135deg, #667eea, #764ba2)')"></div>
-            <div class="bg-btn" style="background: linear-gradient(135deg, #ff9a9e, #fecfef);" onclick="changeBg('linear-gradient(135deg, #ff9a9e, #fecfef)')"></div>
-            <div class="bg-btn" style="background: #050505; border: 2px solid #555;" onclick="changeBg('#050505')"></div>
-            
-            <!-- AI Bubble Button -->
-            <div class="ai-btn" onclick="openAIScreen()">
-                <i class="fas fa-robot"></i> AI
-            </div>
+            <button class="sidebar-btn active" title="Global Chat">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+            </button>
+            <button class="sidebar-btn ai-mode" id="ai-toggle-btn" title="Hamma AI Assistant">
+                🤖 AI
+            </button>
         </div>
 
-        <div class="chat-container">
-            <div class="chat-header">
-                <h1 class="chat-title">Hamma Chat</h1>
-                <span id="user-display-tag" class="user-badge"></span>
-            </div>
-            <div id="chat-box"></div>
-            
-            <div class="input-area">
-                <input type="text" id="message" placeholder="Type a message..." onkeydown="checkEnter(event)">
-                <button onclick="sendMessage()" class="send-btn">Enter ↵</button>
-            </div>
-        </div>
-    </div>
+        <!-- Main Chat Panel -->
+        <div class="chat-main">
+            <!-- Header Section -->
+            <header class="chat-header">
+                <h1 class="chat-title">Just Chatting</h1>
+                <div class="user-profile">
+                    <div class="avatar">👤</div>
+                    <span class="username" id="display-username">Admin</span>
+                </div>
+            </header>
 
-    <!-- 3. PRIVATE AI CHAT SCREEN -->
-    <div id="ai-screen" class="main-layout" style="display: none;">
-        <div class="sidebar">
-            <!-- Back Button -->
-            <div class="bg-btn" style="background: #222; display: flex; justify-content: center; align-items: center; color: white;" onclick="backToChat()" title="Back to Chat">
-                <i class="fas fa-arrow-left"></i>
-            </div>
-            <div class="bg-btn" style="background: linear-gradient(135deg, #1e3c72, #2a5298);" onclick="changeBg('linear-gradient(135deg, #1e3c72, #2a5298)')"></div>
-            <div class="bg-btn" style="background: linear-gradient(135deg, #667eea, #764ba2);" onclick="changeBg('linear-gradient(135deg, #667eea, #764ba2)')"></div>
-            <div class="bg-btn" style="background: #050505; border: 2px solid #555;" onclick="changeBg('#050505')"></div>
-        </div>
-
-        <div class="chat-container">
-            <div class="chat-header">
-                <h1 class="chat-title" style="color: #00c9ff; text-shadow: 0 0 10px rgba(0, 201, 255, 0.5);">Chat with me</h1>
-                <span class="user-badge" style="background: rgba(0, 201, 255, 0.1); border-color: #00c9ff; color: #00c9ff;">🔒 Private AI</span>
-            </div>
-            
-            <!-- Private AI Box -->
-            <div id="ai-chat-box" style="flex: 1; overflow-y: auto; background: rgba(0, 0, 0, 0.5); padding: 15px; border-radius: 20px; margin-bottom: 15px; backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.05); display: flex; flex-direction: column; gap: 12px;">
-                <div class="msg other-msg" style="align-self: flex-start; background: linear-gradient(135deg, #0082c8, #00c9ff);">
-                    <strong>Hamma AI 🤖:</strong> <span class="text-content">Welcome to your private session. Your messages are completely secure and visible only to you. Ask me anything!</span>
+            <!-- Messages Window -->
+            <div id="chat-messages" class="chat-messages">
+                <div class="message ai">
+                    <div class="message-sender">Hamma AI 🤖</div>
+                    Welcome to your private session. Your messages are completely secure and visible only to you. Ask me anything!
                 </div>
             </div>
-            
-            <div class="input-area">
-                <input type="text" id="ai-message-input" placeholder="Message..." onkeydown="checkAIEnter(event)">
-                <button onclick="sendToAI()" class="send-btn" style="background: linear-gradient(45deg, #00c9ff, #92fe9d);">Ask ↵</button>
+
+            <!-- Input Area -->
+            <div class="chat-input-container">
+                <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off">
+                <button id="send-btn">Ask ↵</button>
             </div>
         </div>
     </div>
 
+    <!-- Socket.io & Logic -->
     <script src="/socket.io/socket.io.js"></script>
-    <script>
-        let socket;
-        try {
-            socket = io();
-        } catch (e) {
-            console.warn("Socket.io is not connected. Running in local fallback mode.");
-        }
-
-        const chatBox = document.getElementById('chat-box');
-        const aiChatBox = document.getElementById('ai-chat-box');
-        let currentUsername = "";
-
-        function loginAsUser() {
-            const nameInput = document.getElementById('login-username').value.trim();
-            if (nameInput !== "") {
-                proceedToChat(nameInput);
-            } else {
-                alert("Please enter your name first!");
-            }
-        }
-
-        function loginAsGuest() {
-            const randomID = Math.floor(1000 + Math.random() * 9000);
-            proceedToChat(`Guest_${randomID}`);
-        }
-
-        function checkLoginEnter(event) {
-            if (event.key === "Enter") {
-                loginAsUser();
-            }
-        }
-
-        function proceedToChat(username) {
-            currentUsername = username;
-            document.getElementById('user-display-tag').innerText = `👤 ${username}`;
-            
-            const loginScreen = document.getElementById('login-screen');
-            const chatScreen = document.getElementById('chat-screen');
-            
-            loginScreen.style.transition = 'all 0.3s ease';
-            loginScreen.style.opacity = '0';
-            loginScreen.style.transform = 'scale(0.95)';
-            
-            setTimeout(() => {
-                loginScreen.style.display = 'none';
-                chatScreen.style.display = 'flex';
-                chatScreen.style.opacity = '1';
-            }, 300);
-        }
-
-        function sendMessage() {
-            const msg = document.getElementById('message').value;
-            if(msg.trim() !== "") {
-                if (socket && socket.connected) {
-                    socket.emit('chat-message', { 
-                        user: currentUsername, 
-                        msg: msg,
-                        senderId: socket.id 
-                    });
-                } else {
-                    appendLocalMessage(currentUsername, msg);
-                }
-                document.getElementById('message').value = "";
-            }
-        }
-
-        function checkEnter(event) {
-            if (event.key === "Enter") {
-                sendMessage();
-            }
-        }
-
-        function appendLocalMessage(user, msg) {
-            const msgElement = document.createElement('div');
-            msgElement.classList.add('msg', 'my-msg');
-            msgElement.setAttribute('onclick', `translateMsg(this, "${msg}")`);
-            msgElement.innerHTML = `<strong>${user}:</strong> <span class="text-content">${msg}</span> <small class="hint">(Tap to translate)</small>`;
-            chatBox.appendChild(msgElement);
-            chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
-        }
-
-        if (socket) {
-            socket.on('chat-message', (data) => {
-                const msgElement = document.createElement('div');
-                
-                if (data.senderId === socket.id) {
-                    msgElement.classList.add('msg', 'my-msg');
-                } else {
-                    msgElement.classList.add('msg', 'other-msg');
-                }
-
-                msgElement.setAttribute('onclick', `translateMsg(this, "${data.msg}")`);
-                msgElement.innerHTML = `<strong>${data.user}:</strong> <span class="text-content">${data.msg}</span> <small class="hint">(Tap to translate)</small>`;
-                chatBox.appendChild(msgElement);
-                
-                chatBox.scrollTo({
-                    top: chatBox.scrollHeight,
-                    behavior: 'smooth'
-                });
-            });
-        }
-
-        async function translateMsg(element, text) {
-            const textSpan = element.querySelector('.text-content');
-            const hint = element.querySelector('.hint');
-            
-            if (element.classList.contains('translated')) return;
-
-            try {
-                hint.innerText = "Translating...";
-                const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ar&dt=t&q=${encodeURIComponent(text)}`);
-                const result = await res.json();
-                const translatedText = result[0][0][0];
-                
-                textSpan.innerHTML = `${text} <br><span class="translated-text">🔄 ${translatedText}</span>`;
-                element.classList.add('translated');
-                hint.remove();
-            } catch (error) {
-                hint.innerText = "(Failed to translate)";
-            }
-        }
-
-        function changeBg(bg) {
-            document.body.style.transition = "background 0.5s ease";
-            document.body.style.background = bg;
-        }
-
-        /* ================= AI CHAT SECTION ================= */
-
-        function openAIScreen() {
-            document.getElementById('chat-screen').style.display = 'none';
-            const aiScreen = document.getElementById('ai-screen');
-            aiScreen.style.display = 'flex';
-            document.getElementById('ai-message-input').focus();
-        }
-
-        function backToChat() {
-            document.getElementById('ai-screen').style.display = 'none';
-            document.getElementById('chat-screen').style.display = 'flex';
-        }
-
-        function checkAIEnter(event) {
-            if (event.key === "Enter") {
-                sendToAI();
-            }
-        }
-
-        async function sendToAI() {
-            const inputField = document.getElementById('ai-message-input');
-            const userText = inputField.value.trim();
-            if (userText === "") return;
-
-            const userMsgDiv = document.createElement('div');
-            userMsgDiv.classList.add('msg', 'my-msg');
-            userMsgDiv.innerHTML = `<strong>${currentUsername || 'You'}:</strong> <span class="text-content">${userText}</span>`;
-            aiChatBox.appendChild(userMsgDiv);
-            
-            inputField.value = "";
-            aiChatBox.scrollTop = aiChatBox.scrollHeight;
-
-            const typingDiv = document.createElement('div');
-            typingDiv.classList.add('msg', 'other-msg');
-            typingDiv.style.opacity = '0.7';
-            typingDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content"><i>Thinking... ⚡</i></span>`;
-            aiChatBox.appendChild(typingDiv);
-            aiChatBox.scrollTop = aiChatBox.scrollHeight;
-
-            try {
-                const res = await fetch('/api/gemini', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ prompt: userText })
-                });
-                
-                const data = await res.json();
-                typingDiv.remove();
-
-                const aiMsgDiv = document.createElement('div');
-                aiMsgDiv.classList.add('msg', 'other-msg');
-                aiMsgDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">${data.reply}</span>`;
-                aiChatBox.appendChild(aiMsgDiv);
-            } catch (error) {
-                typingDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">Sorry, an error occurred while connecting to the server.</span>`;
-            }
-
-            aiChatBox.scrollTop = aiChatBox.scrollHeight;
-        }
-    </script>
+    <script src="script.js"></script>
 </body>
 </html>
