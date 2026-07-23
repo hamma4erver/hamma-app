@@ -778,3 +778,12 @@ button:hover, .send-btn:hover, .ai-btn:hover {
     box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
     display: inline-block;
 }
+.admin-badge-img {
+    width: 75px; /* يمكنك تعديل هذا الرقم لزيادة أو تقليل العرض حسب رغبتك */
+    height: 20px;
+    object-fit: cover;
+    border-radius: 4px;
+    vertical-align: middle;
+    margin-left: 5px;
+    display: inline-block;
+}
