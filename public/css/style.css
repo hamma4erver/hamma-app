@@ -698,3 +698,29 @@ button:hover, .send-btn:hover, .ai-btn:hover {
 .modal-btn { flex: 1; padding: 10px 18px; border-radius: 12px; border: none; font-weight: bold; cursor: pointer; }
 .modal-btn.confirm { background: linear-gradient(135deg, #00c9ff, #92fe9d); color: #000; }
 .modal-btn.cancel { background: rgba(255, 255, 255, 0.1); color: #fff; border: 1px solid rgba(255, 255, 255, 0.2); }
+/* شارة الأدمن الفخمة */
+.admin-badge-img {
+    width: 22px;
+    height: 22px;
+    vertical-align: middle;
+    margin-left: 5px;
+    border-radius: 50%;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+    display: inline-block;
+}
+
+/* تأثير اسمك اللي يتغير لونه بطريقة مريحة وفخمة */
+.rainbow-admin-name {
+    background: linear-gradient(270deg, #00c9ff, #92fe9d, #ffd700, #ff758c);
+    background-size: 800% 800%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: smoothRainbow 8s ease infinite;
+    font-weight: bold;
+}
+
+@keyframes smoothRainbow {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
