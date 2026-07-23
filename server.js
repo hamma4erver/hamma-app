@@ -9,49 +9,42 @@ const io = new Server(server);
 app.use(express.json());
 app.use(express.static('public'));
 
-const apiKey = process.env.HF_API_KEY; 
+const apiKey = process.env.GROQ_API_KEY;
 
 app.post('/api/gemini', async (req, res) => {
     const { prompt } = req.body;
     
     if (!apiKey) {
-        return res.json({ reply: "HF_API_KEY is missing on Render environment variables." });
+        return res.json({ reply: "GROQ_API_KEY is missing on Render." });
     }
 
     try {
         const fetch = (await import('node-fetch')).default;
         
-        // استخدام رابط الـ Router الجديد والمستقر مع موديل Mistral السريع
-        const apiResponse = await fetch("https://router.huggingface.co/hf-inference/v1/chat/completions", {
+        const apiResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${apiKey}`
             },
             body: JSON.stringify({
-                model: "mistralai/Mistral-7B-Instruct-v0.3",
+                model: "llama-3.1-8b-instant",
                 messages: [
                     { role: "user", content: prompt }
-                ],
-                max_tokens: 500
+                ]
             })
         });
 
         const data = await apiResponse.json();
         
-        if (data.error) {
-            console.error("HF Error:", data.error);
-            return res.json({ reply: `HF Error: ${typeof data.error === 'object' ? JSON.stringify(data.error) : data.error}` });
-        }
-
         if (data.choices && data.choices[0] && data.choices[0].message) {
             res.json({ reply: data.choices[0].message.content });
+        } else if (data.error) {
+            res.json({ reply: `Groq Error: ${data.error.message}` });
         } else {
-            console.error("HF Unknown Response:", data);
-            res.json({ reply: "Sorry, received an invalid response structure." });
+            res.json({ reply: "Received an invalid response structure." });
         }
     } catch (error) {
-        console.error("Fetch Error:", error);
         res.json({ reply: `Fetch Error: ${error.message}` });
     }
 });
