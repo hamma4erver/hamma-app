@@ -604,3 +604,72 @@ button:hover, .send-btn:hover, .ai-btn:hover {
         font-size: 14px !important;
     }
 }
+/* تجاوب شامل ومثالي لجميع هواتف أندرويد وآيفون (Android & iOS) */
+@media (max-width: 768px) {
+    html {
+        height: 100% !important;
+    }
+
+    body {
+        height: 100vh !important;
+        height: -webkit-fill-available !important;
+        height: 100dvh !important;
+        overflow: hidden !important;
+        position: fixed;
+        width: 100%;
+    }
+
+    .main-layout {
+        flex-direction: column !important;
+        height: 100% !important;
+        padding: 8px !important;
+        box-sizing: border-box !important;
+        padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
+    }
+
+    .sidebar {
+        flex-direction: row !important;
+        width: 100% !important;
+        height: auto !important;
+        padding: 6px !important;
+        justify-content: center !important;
+        gap: 12px !important;
+        flex-shrink: 0 !important;
+    }
+
+    .chat-container {
+        flex: 1 !important;
+        min-height: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        margin: 0 !important;
+        padding: 10px !important;
+        border-radius: 16px !important;
+    }
+
+    #chat-box, #ai-chat-box {
+        flex: 1 !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important; /* سلاسة التمرير في آيفون */
+        margin-bottom: 10px !important;
+    }
+
+    .input-area {
+        flex-shrink: 0 !important;
+        display: flex !important;
+        gap: 8px !important;
+    }
+
+    /* حماية من التكبير التلقائي المزعج في آيفون عند التركيز على الكتابة */
+    input[type="text"], #ai-message-input {
+        font-size: 16px !important;
+        padding: 10px 14px !important;
+    }
+
+    .send-btn {
+        padding: 0 16px !important;
+        font-size: 14px !important;
+        height: 44px !important;
+        white-space: nowrap !important;
+    }
+}
