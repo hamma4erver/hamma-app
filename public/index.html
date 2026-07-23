@@ -7,6 +7,37 @@
     <link rel="icon" type="image/png" href="favicon.png">
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* شارة المستطيل الأنيقة بالصورة الحقيقية */
+        .admin-badge-img {
+            height: 22px;
+            padding: 2px 6px;
+            background: #000;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            vertical-align: middle;
+            margin-left: 6px;
+            object-fit: contain;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.25);
+            display: inline-block;
+        }
+
+        /* تأثير اسمك اللي يتغير لونه بطريقة مريحة وفخمة */
+        .rainbow-admin-name {
+            background: linear-gradient(270deg, #00c9ff, #92fe9d, #ffd700, #ff758c);
+            background-size: 800% 800%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: smoothRainbow 8s ease infinite;
+            font-weight: bold;
+        }
+
+        @keyframes smoothRainbow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+    </style>
 </head>
 <body>
 
@@ -159,7 +190,7 @@
 
         function formatUsername(username) {
             if (username.toLowerCase() === "hamma" || username.toLowerCase() === "hamma admin") {
-                return `<span class="rainbow-admin-name">${username}</span> <img src="badge.png" class="admin-badge-img" title="Owner Admin">`;
+                return `<span class="rainbow-admin-name">${username}</span> <img src="/badge.png" class="admin-badge-img" title="Owner Admin">`;
             }
             return username;
         }
