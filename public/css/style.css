@@ -779,8 +779,8 @@ button:hover, .send-btn:hover, .ai-btn:hover {
     display: inline-block;
 }
 .admin-badge-img {
-    width: 75px; /* يمكنك تعديل هذا الرقم لزيادة أو تقليل العرض حسب رغبتك */
-    height: 20px;
+    width: 65px; /* يمكنك تعديل هذا الرقم لزيادة أو تقليل العرض حسب رغبتك */
+    height: 15px;
     object-fit: cover;
     border-radius: 4px;
     vertical-align: middle;
