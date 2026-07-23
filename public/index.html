@@ -2,34 +2,301 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Just Chatting</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Hamma Chat</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-    <div class="app-container">
-        <div class="sidebar">
-            <button class="sidebar-btn active">💬</button>
-            <button class="sidebar-btn ai-mode" id="ai-toggle-btn">🤖 AI</button>
-        </div>
 
-        <div class="chat-main">
-            <header class="chat-header" style="justify-content: center;">
-                <h1 class="chat-title" style="margin: 0 auto; text-align: center;">Just Chatting</h1>
-            </header>
-
-            <div id="chat-messages" class="chat-messages">
-                <!-- الرسائل -->
+    <!-- 1. LOGIN SCREEN -->
+    <div id="login-screen" class="login-container">
+        <div class="login-card">
+            <div class="logo-area">
+                <div class="glow-orb"></div>
+                <h1>HAMMA CHAT</h1>
+                <p class="subtitle">Connect to the Future</p>
             </div>
 
-            <div class="chat-input-container">
-                <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off">
-                <button id="send-btn">Enter ↵</button>
+            <div class="input-group">
+                <i class="fas fa-user input-icon"></i>
+                <input type="text" id="login-username" placeholder="Enter your name..." onkeydown="checkLoginEnter(event)">
+            </div>
+
+            <button class="btn-primary" onclick="loginAsUser()">
+                <span>Enter Chat</span> <i class="fas fa-arrow-right"></i>
+            </button>
+
+            <button class="btn-secondary" onclick="loginAsGuest()">
+                <i class="fas fa-user-secret"></i> Enter as Guest
+            </button>
+
+            <div class="divider">
+                <span>OR CONNECT WITH</span>
+            </div>
+
+            <div class="social-login">
+                <button class="social-btn google" onclick="alert('Google Auth integration coming soon!')">
+                    <i class="fab fa-google"></i> Google
+                </button>
+                <button class="social-btn apple" onclick="alert('Apple Auth integration coming soon!')">
+                    <i class="fab fa-apple"></i> Apple
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. MAIN PUBLIC CHAT SCREEN -->
+    <div id="chat-screen" class="main-layout" style="display: none;">
+        <div class="sidebar">
+            <div class="bg-btn" style="background: linear-gradient(135deg, #1e3c72, #2a5298);" onclick="changeBg('linear-gradient(135deg, #1e3c72, #2a5298)')"></div>
+            <div class="bg-btn" style="background: linear-gradient(135deg, #667eea, #764ba2);" onclick="changeBg('linear-gradient(135deg, #667eea, #764ba2)')"></div>
+            <div class="bg-btn" style="background: linear-gradient(135deg, #ff9a9e, #fecfef);" onclick="changeBg('linear-gradient(135deg, #ff9a9e, #fecfef)')"></div>
+            <div class="bg-btn" style="background: #050505; border: 2px solid #555;" onclick="changeBg('#050505')"></div>
+            
+            <!-- AI Bubble Button -->
+            <div class="ai-btn" onclick="openAIScreen()">
+                <i class="fas fa-robot"></i> AI
+            </div>
+        </div>
+
+        <div class="chat-container">
+            <div class="chat-header">
+                <h1 class="chat-title">Hamma Chat</h1>
+                <span id="user-display-tag" class="user-badge"></span>
+            </div>
+            <div id="chat-box"></div>
+            
+            <div class="input-area">
+                <input type="text" id="message" placeholder="Type a message..." onkeydown="checkEnter(event)">
+                <button onclick="sendMessage()" class="send-btn">Enter ↵</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. PRIVATE AI CHAT SCREEN -->
+    <div id="ai-screen" class="main-layout" style="display: none;">
+        <div class="sidebar">
+            <!-- Back Button -->
+            <div class="bg-btn" style="background: #222; display: flex; justify-content: center; align-items: center; color: white;" onclick="backToChat()" title="Back to Chat">
+                <i class="fas fa-arrow-left"></i>
+            </div>
+            <div class="bg-btn" style="background: linear-gradient(135deg, #1e3c72, #2a5298);" onclick="changeBg('linear-gradient(135deg, #1e3c72, #2a5298)')"></div>
+            <div class="bg-btn" style="background: linear-gradient(135deg, #667eea, #764ba2);" onclick="changeBg('linear-gradient(135deg, #667eea, #764ba2)')"></div>
+            <div class="bg-btn" style="background: #050505; border: 2px solid #555;" onclick="changeBg('#050505')"></div>
+        </div>
+
+        <div class="chat-container">
+            <div class="chat-header">
+                <h1 class="chat-title" style="color: #00c9ff; text-shadow: 0 0 10px rgba(0, 201, 255, 0.5);">Chat with me</h1>
+                <span class="user-badge" style="background: rgba(0, 201, 255, 0.1); border-color: #00c9ff; color: #00c9ff;">🔒 Private AI</span>
+            </div>
+            
+            <!-- Private AI Box -->
+            <div id="ai-chat-box" style="flex: 1; overflow-y: auto; background: rgba(0, 0, 0, 0.5); padding: 15px; border-radius: 20px; margin-bottom: 15px; backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.05); display: flex; flex-direction: column; gap: 12px;">
+                <div class="msg other-msg" style="align-self: flex-start; background: linear-gradient(135deg, #0082c8, #00c9ff);">
+                    <strong>Hamma AI 🤖:</strong> <span class="text-content">Welcome to your private session. Your messages are completely secure and visible only to you. Ask me anything!</span>
+                </div>
+            </div>
+            
+            <div class="input-area">
+                <input type="text" id="ai-message-input" placeholder="Message..." onkeydown="checkAIEnter(event)">
+                <button onclick="sendToAI()" class="send-btn" style="background: linear-gradient(45deg, #00c9ff, #92fe9d);">Ask ↵</button>
             </div>
         </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script src="script.js"></script>
+    <script>
+        let socket;
+        try {
+            socket = io();
+        } catch (e) {
+            console.warn("Socket.io is not connected. Running in local fallback mode.");
+        }
+
+        const chatBox = document.getElementById('chat-box');
+        const aiChatBox = document.getElementById('ai-chat-box');
+        let currentUsername = "";
+
+        function loginAsUser() {
+            const nameInput = document.getElementById('login-username').value.trim();
+            if (nameInput !== "") {
+                proceedToChat(nameInput);
+            } else {
+                alert("Please enter your name first!");
+            }
+        }
+
+        function loginAsGuest() {
+            const randomID = Math.floor(1000 + Math.random() * 9000);
+            proceedToChat(`Guest_${randomID}`);
+        }
+
+        function checkLoginEnter(event) {
+            if (event.key === "Enter") {
+                loginAsUser();
+            }
+        }
+
+        function proceedToChat(username) {
+            currentUsername = username;
+            document.getElementById('user-display-tag').innerText = `👤 ${username}`;
+            
+            const loginScreen = document.getElementById('login-screen');
+            const chatScreen = document.getElementById('chat-screen');
+            
+            loginScreen.style.transition = 'all 0.3s ease';
+            loginScreen.style.opacity = '0';
+            loginScreen.style.transform = 'scale(0.95)';
+            
+            setTimeout(() => {
+                loginScreen.style.display = 'none';
+                chatScreen.style.display = 'flex';
+                chatScreen.style.opacity = '1';
+            }, 300);
+        }
+
+        function sendMessage() {
+            const msg = document.getElementById('message').value;
+            if(msg.trim() !== "") {
+                if (socket && socket.connected) {
+                    socket.emit('chat-message', { 
+                        user: currentUsername, 
+                        msg: msg,
+                        senderId: socket.id 
+                    });
+                } else {
+                    appendLocalMessage(currentUsername, msg);
+                }
+                document.getElementById('message').value = "";
+            }
+        }
+
+        function checkEnter(event) {
+            if (event.key === "Enter") {
+                sendMessage();
+            }
+        }
+
+        function appendLocalMessage(user, msg) {
+            const msgElement = document.createElement('div');
+            msgElement.classList.add('msg', 'my-msg');
+            msgElement.setAttribute('onclick', `translateMsg(this, "${msg}")`);
+            msgElement.innerHTML = `<strong>${user}:</strong> <span class="text-content">${msg}</span> <small class="hint">(Tap to translate)</small>`;
+            chatBox.appendChild(msgElement);
+            chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
+        }
+
+        if (socket) {
+            socket.on('chat-message', (data) => {
+                const msgElement = document.createElement('div');
+                
+                if (data.senderId === socket.id) {
+                    msgElement.classList.add('msg', 'my-msg');
+                } else {
+                    msgElement.classList.add('msg', 'other-msg');
+                }
+
+                msgElement.setAttribute('onclick', `translateMsg(this, "${data.msg}")`);
+                msgElement.innerHTML = `<strong>${data.user}:</strong> <span class="text-content">${data.msg}</span> <small class="hint">(Tap to translate)</small>`;
+                chatBox.appendChild(msgElement);
+                
+                chatBox.scrollTo({
+                    top: chatBox.scrollHeight,
+                    behavior: 'smooth'
+                });
+            });
+        }
+
+        async function translateMsg(element, text) {
+            const textSpan = element.querySelector('.text-content');
+            const hint = element.querySelector('.hint');
+            
+            if (element.classList.contains('translated')) return;
+
+            try {
+                hint.innerText = "Translating...";
+                const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ar&dt=t&q=${encodeURIComponent(text)}`);
+                const result = await res.json();
+                const translatedText = result[0][0][0];
+                
+                textSpan.innerHTML = `${text} <br><span class="translated-text">🔄 ${translatedText}</span>`;
+                element.classList.add('translated');
+                hint.remove();
+            } catch (error) {
+                hint.innerText = "(Failed to translate)";
+            }
+        }
+
+        function changeBg(bg) {
+            document.body.style.transition = "background 0.5s ease";
+            document.body.style.background = bg;
+        }
+
+        /* ================= AI CHAT SECTION ================= */
+
+        function openAIScreen() {
+            document.getElementById('chat-screen').style.display = 'none';
+            const aiScreen = document.getElementById('ai-screen');
+            aiScreen.style.display = 'flex';
+            document.getElementById('ai-message-input').focus();
+        }
+
+        function backToChat() {
+            document.getElementById('ai-screen').style.display = 'none';
+            document.getElementById('chat-screen').style.display = 'flex';
+        }
+
+        function checkAIEnter(event) {
+            if (event.key === "Enter") {
+                sendToAI();
+            }
+        }
+
+        async function sendToAI() {
+            const inputField = document.getElementById('ai-message-input');
+            const userText = inputField.value.trim();
+            if (userText === "") return;
+
+            const userMsgDiv = document.createElement('div');
+            userMsgDiv.classList.add('msg', 'my-msg');
+            userMsgDiv.innerHTML = `<strong>${currentUsername || 'You'}:</strong> <span class="text-content">${userText}</span>`;
+            aiChatBox.appendChild(userMsgDiv);
+            
+            inputField.value = "";
+            aiChatBox.scrollTop = aiChatBox.scrollHeight;
+
+            const typingDiv = document.createElement('div');
+            typingDiv.classList.add('msg', 'other-msg');
+            typingDiv.style.opacity = '0.7';
+            typingDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content"><i>Thinking... ⚡</i></span>`;
+            aiChatBox.appendChild(typingDiv);
+            aiChatBox.scrollTop = aiChatBox.scrollHeight;
+
+            try {
+                const res = await fetch('/api/gemini', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ prompt: userText })
+                });
+                
+                const data = await res.json();
+                typingDiv.remove();
+
+                const aiMsgDiv = document.createElement('div');
+                aiMsgDiv.classList.add('msg', 'other-msg');
+                aiMsgDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">${data.reply}</span>`;
+                aiChatBox.appendChild(aiMsgDiv);
+            } catch (error) {
+                typingDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">Sorry, an error occurred while connecting to the server.</span>`;
+            }
+
+            aiChatBox.scrollTop = aiChatBox.scrollHeight;
+        }
+    </script>
 </body>
 </html>
