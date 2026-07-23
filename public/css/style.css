@@ -753,3 +753,15 @@ button:hover, .send-btn:hover, .ai-btn:hover {
     50% { background-position: 100% 50%; }
     100% { background-position: 0% 50%; }
 }
+.admin-badge-img {
+    height: 16px;
+    padding: 1px 3px;
+    background: #000;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    vertical-align: middle;
+    margin-left: 4px;
+    object-fit: contain;
+    box-shadow: 0 0 6px rgba(255, 255, 255, 0.2);
+    display: inline-block;
+}ss
