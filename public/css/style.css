@@ -502,3 +502,22 @@ input:focus { outline: none; border-color: #00f2fe; }
     transform: translateX(-50%);
     margin: 0;
 }
+.chat-header {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    width: 100%;
+}
+
+.chat-title {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+}
+
+#user-display-tag {
+    position: absolute;
+    right: 15px;
+}
