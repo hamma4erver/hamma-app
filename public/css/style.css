@@ -562,3 +562,45 @@ button:hover, .send-btn:hover, .ai-btn:hover {
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
 }
+/* تجاوب خاص بالشاشات الهواتف */
+@media (max-width: 768px) {
+    .main-layout {
+        flex-direction: column;
+        height: 100vh;
+    }
+
+    .sidebar {
+        flex-direction: row;
+        width: 100%;
+        height: auto;
+        padding: 8px;
+        justify-content: center;
+        gap: 10px;
+    }
+
+    .chat-container {
+        flex: 1;
+        border-radius: 15px;
+        margin: 5px;
+        height: calc(100vh - 70px);
+    }
+
+    .chat-title {
+        font-size: 18px !important;
+    }
+
+    .input-area {
+        gap: 8px;
+        padding: 8px;
+    }
+
+    input[type="text"] {
+        font-size: 14px !important;
+        padding: 12px 14px !important;
+    }
+
+    .send-btn {
+        padding: 0 16px !important;
+        font-size: 14px !important;
+    }
+}
