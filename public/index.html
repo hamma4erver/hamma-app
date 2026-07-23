@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Hamma Chat</title>
+    <title>Just Chatting</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="icon" type="image/png" href="favicon.png">
     <link rel="stylesheet" href="css/style.css">
@@ -15,7 +15,7 @@
         <div class="login-card">
             <div class="logo-area">
                 <div class="glow-orb"></div>
-                <h1>HAMMA CHAT</h1>
+                <h1>JUST CHATTING</h1>
                 <p class="subtitle">Connect to the Future</p>
             </div>
 
@@ -62,9 +62,9 @@
         </div>
 
         <div class="chat-container">
-            <div class="chat-header">
-                <h1 class="chat-title">just Chating</h1>
-                <span id="user-display-tag" class="user-badge"></span>
+            <div class="chat-header" style="justify-content: center; position: relative;">
+                <h1 class="chat-title" style="text-align: center; margin: 0 auto;">Just Chatting</h1>
+                <span id="user-display-tag" class="user-badge" style="position: absolute; right: 15px;"></span>
             </div>
             <div id="chat-box"></div>
             
@@ -88,9 +88,9 @@
         </div>
 
         <div class="chat-container">
-            <div class="chat-header">
-                <h1 class="chat-title" style="color: #00c9ff; text-shadow: 0 0 10px rgba(0, 201, 255, 0.5);">Chat with me</h1>
-                <span class="user-badge" style="background: rgba(0, 201, 255, 0.1); border-color: #00c9ff; color: #00c9ff;">🔒 Private AI</span>
+            <div class="chat-header" style="justify-content: center; position: relative;">
+                <h1 class="chat-title" style="color: #00c9ff; text-shadow: 0 0 10px rgba(0, 201, 255, 0.5); text-align: center; margin: 0 auto;">Chat with me</h1>
+                <span class="user-badge" style="background: rgba(0, 201, 255, 0.1); border-color: #00c9ff; color: #00c9ff; position: absolute; right: 15px;">🔒 Private AI</span>
             </div>
             
             <!-- Private AI Box -->
@@ -119,10 +119,12 @@
         const chatBox = document.getElementById('chat-box');
         const aiChatBox = document.getElementById('ai-chat-box');
         let currentUsername = "";
+        let isGuest = false;
 
         function loginAsUser() {
             const nameInput = document.getElementById('login-username').value.trim();
             if (nameInput !== "") {
+                isGuest = false;
                 proceedToChat(nameInput);
             } else {
                 alert("Please enter your name first!");
@@ -131,6 +133,7 @@
 
         function loginAsGuest() {
             const randomID = Math.floor(1000 + Math.random() * 9000);
+            isGuest = true;
             proceedToChat(`Guest_${randomID}`);
         }
 
@@ -238,6 +241,11 @@
         /* ================= AI CHAT SECTION ================= */
 
         function openAIScreen() {
+            if (isGuest) {
+                alert("🔒 AI Chat is only available for registered users! Please log in with your name to chat with AI.");
+                return;
+            }
+
             document.getElementById('chat-screen').style.display = 'none';
             const aiScreen = document.getElementById('ai-screen');
             aiScreen.style.display = 'flex';
