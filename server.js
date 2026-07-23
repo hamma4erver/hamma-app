@@ -15,42 +15,40 @@ app.post('/api/gemini', async (req, res) => {
     const { prompt } = req.body;
     
     if (!apiKey) {
-        return res.json({ reply: "HF_API_KEY is missing on Render." });
+        return res.json({ reply: "HF_API_KEY is missing on Render environment variables." });
     }
 
     try {
         const fetch = (await import('node-fetch')).default;
         
-        const apiResponse = await fetch("https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct", {
+        // استخدام رابط الـ Router الجديد والمستقر مع موديل Mistral السريع
+        const apiResponse = await fetch("https://router.huggingface.co/hf-inference/v1/chat/completions", {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${apiKey}`
             },
             body: JSON.stringify({
-                inputs: prompt,
-                parameters: { max_new_tokens: 500 }
+                model: "mistralai/Mistral-7B-Instruct-v0.3",
+                messages: [
+                    { role: "user", content: prompt }
+                ],
+                max_tokens: 500
             })
         });
 
         const data = await apiResponse.json();
         
-        // التحقق إذا كان هنالك خطأ قادم من Hugging Face مباشرة وطباعته
         if (data.error) {
-            console.error("HF API Error:", data.error);
-            return res.json({ reply: `HF API Error: ${data.error}` });
+            console.error("HF Error:", data.error);
+            return res.json({ reply: `HF Error: ${typeof data.error === 'object' ? JSON.stringify(data.error) : data.error}` });
         }
 
-        // التعامل مع صيغة الـ Array اللي يرجعها Hugging Face
-        if (Array.isArray(data) && data[0] && data[0].generated_text) {
-            let replyText = data[0].generated_text.replace(prompt, "").trim();
-            res.json({ reply: replyText || "Done!" });
-        } else if (data.generated_text) {
-            let replyText = data.generated_text.replace(prompt, "").trim();
-            res.json({ reply: replyText });
+        if (data.choices && data.choices[0] && data.choices[0].message) {
+            res.json({ reply: data.choices[0].message.content });
         } else {
-            console.error("Unknown HF Response structure:", data);
-            res.json({ reply: "Sorry, received an unexpected response structure from Hugging Face." });
+            console.error("HF Unknown Response:", data);
+            res.json({ reply: "Sorry, received an invalid response structure." });
         }
     } catch (error) {
         console.error("Fetch Error:", error);
