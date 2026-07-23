@@ -673,3 +673,28 @@ button:hover, .send-btn:hover, .ai-btn:hover {
         white-space: nowrap !important;
     }
 }
+/* تجاوب الشاشات وتنسيق العناوين والنافذة */
+@media (max-width: 768px) {
+    html { height: 100% !important; }
+    body { height: 100vh !important; height: 100dvh !important; overflow: hidden !important; position: fixed; width: 100%; }
+    .main-layout { flex-direction: column !important; height: 100% !important; padding: 8px !important; box-sizing: border-box !important; }
+    .sidebar { flex-direction: row !important; width: 100% !important; height: auto !important; padding: 6px !important; justify-content: center !important; gap: 12px !important; flex-shrink: 0 !important; }
+    .chat-container { flex: 1 !important; min-height: 0 !important; display: flex !important; flex-direction: column !important; margin: 0 !important; padding: 10px !important; border-radius: 16px !important; }
+    #chat-box, #ai-chat-box { flex: 1 !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; margin-bottom: 10px !important; }
+    .input-area { flex-shrink: 0 !important; display: flex !important; gap: 8px !important; }
+    input[type="text"], #ai-message-input { font-size: 16px !important; padding: 10px 14px !important; }
+    .send-btn { padding: 0 16px !important; font-size: 14px !important; height: 44px !important; white-space: nowrap !important; }
+}
+
+.chat-header { display: flex; justify-content: center; align-items: center; position: relative; width: 100%; }
+.chat-title { position: absolute; left: 50%; transform: translateX(-50%); margin: 0; text-align: center; }
+#user-display-tag, #ai-screen .user-badge { position: absolute; right: 15px; }
+
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(10px); display: flex; justify-content: center; align-items: center; z-index: 9999; }
+.modal-card { background: rgba(18, 22, 36, 0.95); border: 1px solid rgba(0, 201, 255, 0.3); box-shadow: 0 0 35px rgba(0, 201, 255, 0.25); border-radius: 20px; padding: 25px; max-width: 360px; width: 85%; text-align: center; color: #ffffff; }
+.modal-card h3 { color: #00c9ff; margin-bottom: 10px; font-size: 20px; }
+.modal-card p { font-size: 14px; color: #cbd5e1; line-height: 1.5; margin-bottom: 20px; }
+.modal-buttons { display: flex; gap: 12px; justify-content: center; }
+.modal-btn { flex: 1; padding: 10px 18px; border-radius: 12px; border: none; font-weight: bold; cursor: pointer; }
+.modal-btn.confirm { background: linear-gradient(135deg, #00c9ff, #92fe9d); color: #000; }
+.modal-btn.cancel { background: rgba(255, 255, 255, 0.1); color: #fff; border: 1px solid rgba(255, 255, 255, 0.2); }
