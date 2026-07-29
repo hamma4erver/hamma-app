@@ -1,13 +1,19 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
 app.use(express.json());
-app.use(express.static(__dirname)); // تعديل المسار ليقرأ الملفات من المجلد الرئيسي مباشرة
+app.use(express.static(__dirname));
+
+// توجيه صريح لملف الواجهة (تأكد أن اسم الملف index.html أو غيّر الاسم هنا)
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 const apiKey = process.env.GROQ_API_KEY;
 
@@ -19,8 +25,6 @@ app.post('/api/gemini', async (req, res) => {
     }
 
     try {
-        const fetch = (await import('node-fetch')).default;
-        
         const apiResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: 'POST',
             headers: {
