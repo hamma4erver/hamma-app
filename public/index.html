@@ -55,6 +55,20 @@
         .profile-panel.open { right: 0; }
         .profile-panel h3 { color: #00c9ff; margin-bottom: 25px; font-size: 20px; }
         .close-panel { background: none; color: #94a3b8; font-size: 22px; cursor: pointer; border: none; text-align: right; width: auto; margin-bottom: 20px; }
+
+        /* تأثير التحميل والبحث للزر */
+        .btn-loading {
+            opacity: 0.7;
+            pointer-events: none;
+            position: relative;
+        }
+        .fa-spin {
+            animation: fa-spin 1s infinite linear;
+        }
+        @keyframes fa-spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -239,7 +253,7 @@
         </div>
     </div>
 
-    <!-- Firebase Script with Firestore -->
+    <!-- Firebase Script -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
         import { 
@@ -283,9 +297,7 @@
             const email = emailInput.value.trim();
             const password = passwordInput.value;
             if(!email || !password) return showAuthError("Please enter email and password.");
-            
             isRegistering = true; 
-
             createUserWithEmailAndPassword(auth, email, password)
                 .then(() => {
                     document.getElementById('login-screen').style.display = 'none';
@@ -297,12 +309,10 @@
                 });
         });
 
-        // حفظ الاسم والتحقق من عدم تكراره
         document.getElementById('btn-save-profile').addEventListener('click', async () => {
             const nom = document.getElementById('setup-nom').value.trim();
             const prenom = document.getElementById('setup-prenom').value.trim();
             const username = document.getElementById('setup-username').value.trim();
-            
             const finalName = username || `${nom} ${prenom}`.trim();
             if(!finalName) {
                 setupError.style.display = 'block';
@@ -311,28 +321,22 @@
             }
 
             const lowerName = finalName.toLowerCase();
-
             try {
-                // التحقق هل الاسم موجود مسبقاً في القاعدة
                 const usernameRef = doc(db, "usernames", lowerName);
                 const usernameSnap = await getDoc(usernameRef);
-
                 if (usernameSnap.exists()) {
                     setupError.style.display = 'block';
                     setupError.innerText = "This username is already taken! Choose another one.";
                     return;
                 }
 
-                // إذا كان الاسم غير موجود، نقوم بحجزه وحفظه
                 const oldUsername = auth.currentUser.displayName ? auth.currentUser.displayName.toLowerCase() : null;
-                
                 await setDoc(usernameRef, { uid: auth.currentUser.uid });
                 if (oldUsername && oldUsername !== lowerName) {
                     await deleteDoc(doc(db, "usernames", oldUsername));
                 }
 
                 await updateProfile(auth.currentUser, { displayName: finalName });
-
                 document.getElementById('profile-setup-screen').style.display = 'none';
                 logoutBtn.style.display = 'flex';
                 isRegistering = false;
@@ -343,8 +347,9 @@
             }
         });
 
-        // تحديث الاسم من القائمة الجانبية مع التأكد من عدم تكراره
+        // زر تحديث البروفايل مع تأثير البحث (Searching...)
         document.getElementById('btnUpdateUsername').addEventListener('click', async () => {
+            const btn = document.getElementById('btnUpdateUsername');
             const newName = document.getElementById('panelNewUsername').value.trim();
             if(!newName) {
                 panelError.style.display = 'block';
@@ -353,6 +358,9 @@
             }
 
             const lowerNewName = newName.toLowerCase();
+            btn.classList.add('btn-loading');
+            btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Searching...`;
+            panelError.style.display = 'none';
 
             try {
                 const usernameRef = doc(db, "usernames", lowerNewName);
@@ -361,18 +369,18 @@
                 if (usernameSnap.exists()) {
                     panelError.style.display = 'block';
                     panelError.innerText = "This username is already taken!";
+                    btn.classList.remove('btn-loading');
+                    btn.innerHTML = `Save Changes ⚡`;
                     return;
                 }
 
                 const oldUsername = auth.currentUser.displayName ? auth.currentUser.displayName.toLowerCase() : null;
-
                 await setDoc(usernameRef, { uid: auth.currentUser.uid });
                 if (oldUsername && oldUsername !== lowerNewName) {
                     await deleteDoc(doc(db, "usernames", oldUsername));
                 }
 
                 await updateProfile(auth.currentUser, { displayName: newName });
-
                 window.currentUsername = newName;
                 document.getElementById('user-display-tag').innerHTML = window.formatUsername(newName);
                 document.getElementById('profilePanel').classList.remove('open');
@@ -381,6 +389,9 @@
             } catch (err) {
                 panelError.style.display = 'block';
                 panelError.innerText = "Failed to update username.";
+            } finally {
+                btn.classList.remove('btn-loading');
+                btn.innerHTML = `Save Changes ⚡`;
             }
         });
 
@@ -396,9 +407,7 @@
         });
 
         logoutBtn.addEventListener('click', () => {
-            signOut(auth).then(() => {
-                location.reload();
-            });
+            signOut(auth).then(() => location.reload());
         });
 
         onAuthStateChanged(auth, (user) => {
