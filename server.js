@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
@@ -10,9 +11,16 @@ const io = new Server(server);
 app.use(express.json());
 app.use(express.static(__dirname));
 
-// توجيه صريح لملف الواجهة (تأكد أن اسم الملف index.html أو غيّر الاسم هنا)
+// طباعة جميع الملفات في المجلد الحالي لمراقبتها في الـ Logs
+console.log("الملفات الموجودة في السيرفر:", fs.readdirSync(__dirname));
+
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+    const filePath = path.join(__dirname, 'index.html');
+    if (fs.existsSync(filePath)) {
+        res.sendFile(filePath);
+    } else {
+        res.status(404).send("ملف الواجهة index.html غير موجود في المجلد الرئيسي!");
+    }
 });
 
 const apiKey = process.env.GROQ_API_KEY;
