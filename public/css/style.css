@@ -787,3 +787,38 @@ button:hover, .send-btn:hover, .ai-btn:hover {
     margin-left: 5px;
     display: inline-block;
 }
+.chat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding: 5px 10px;
+    box-sizing: border-box;
+    gap: 10px;
+    flex-wrap: nowrap;
+}
+
+.chat-title {
+    font-size: clamp(14px, 3.5vw, 18px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.user-badge {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    font-size: clamp(12px, 3vw, 15px);
+}
+
+.admin-badge-img {
+    height: 1.3em;
+    width: auto;
+    max-width: 32px;
+    object-fit: contain;
+    border-radius: 4px;
+    vertical-align: middle;
+    margin-left: 5px;
+    display: inline-block;
+}
