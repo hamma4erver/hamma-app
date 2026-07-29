@@ -8,10 +8,14 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 app.use(express.json());
-// رجعناها تقرأ من الدوسي public كيما كودك الأول
 app.use(express.static(path.join(__dirname, 'public')));
 
 const apiKey = process.env.GROQ_API_KEY;
+
+// مسار لوحة التحكم (Admin Page)
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
 
 app.post('/api/gemini', async (req, res) => {
     const { prompt } = req.body;
@@ -51,7 +55,18 @@ app.post('/api/gemini', async (req, res) => {
     }
 });
 
+// تتبع المتواجدين Online عبر Socket.io
+let onlineUsersCount = 0;
+
 io.on('connection', (socket) => {
+    onlineUsersCount++;
+    io.emit('update-online', onlineUsersCount);
+
+    socket.on('disconnect', () => {
+        onlineUsersCount = Math.max(0, onlineUsersCount - 1);
+        io.emit('update-online', onlineUsersCount);
+    });
+
     socket.on('chat-message', (data) => {
         io.emit('chat-message', data);
     });
