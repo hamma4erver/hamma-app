@@ -8,7 +8,6 @@
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* شارة المستطيل الأنيقة بالصورة الحقيقية */
         .admin-badge-img {
             height: 22px;
             padding: 2px 6px;
@@ -22,7 +21,6 @@
             display: inline-block;
         }
 
-        /* تأثير اسمك اللي يتغير لونه بطريقة مريحة وفخمة */
         .rainbow-admin-name {
             background: linear-gradient(270deg, #00c9ff, #92fe9d, #ffd700, #ff758c);
             background-size: 800% 800%;
@@ -51,12 +49,23 @@
             </div>
 
             <div class="input-group">
-                <i class="fas fa-user input-icon"></i>
-                <input type="text" id="login-username" placeholder="Enter your name..." onkeydown="checkLoginEnter(event)">
+                <i class="fas fa-envelope input-icon"></i>
+                <input type="email" id="login-email" placeholder="Email...">
+            </div>
+            
+            <div class="input-group">
+                <i class="fas fa-lock input-icon"></i>
+                <input type="password" id="login-password" placeholder="Password..." onkeydown="if(event.key === 'Enter') document.getElementById('btn-login').click();">
             </div>
 
-            <button class="btn-primary" onclick="loginAsUser()">
-                <span>Enter Chat</span> <i class="fas fa-arrow-right"></i>
+            <p id="auth-error" style="color: #ff4d4d; font-size: 14px; display: none; margin-bottom: 10px;"></p>
+
+            <button class="btn-primary" id="btn-login" style="margin-bottom: 10px;">
+                <span>Login</span> <i class="fas fa-sign-in-alt"></i>
+            </button>
+
+            <button class="btn-primary" id="btn-register" style="background: #28a745; margin-bottom: 15px;">
+                <span>Register</span> <i class="fas fa-user-plus"></i>
             </button>
 
             <button class="btn-secondary" onclick="loginAsGuest()">
@@ -68,7 +77,7 @@
             </div>
 
             <div class="social-login">
-                <button class="social-btn google" onclick="alert('Google Auth integration coming soon!')">
+                <button class="social-btn google" id="btn-google">
                     <i class="fab fa-google"></i> Google
                 </button>
                 <button class="social-btn apple" onclick="alert('Apple Auth integration coming soon!')">
@@ -78,7 +87,36 @@
         </div>
     </div>
 
-    <!-- 2. MAIN PUBLIC CHAT SCREEN -->
+    <!-- 2. PROFILE SETUP SCREEN (NEW) -->
+    <div id="profile-setup-screen" class="login-container" style="display: none;">
+        <div class="login-card" style="background: rgba(20, 20, 30, 0.85); border: 1px solid rgba(0, 201, 255, 0.3);">
+            <div class="logo-area">
+                <h2 style="color: #00c9ff; text-shadow: 0 0 10px rgba(0,201,255,0.5); margin-bottom: 5px;">Profile Setup</h2>
+                <p class="subtitle" style="margin-bottom: 20px;">Complete your account details</p>
+            </div>
+
+            <div class="input-group">
+                <i class="fas fa-user input-icon"></i>
+                <input type="text" id="setup-nom" placeholder="First Name (Nom)">
+            </div>
+            
+            <div class="input-group">
+                <i class="fas fa-user input-icon"></i>
+                <input type="text" id="setup-prenom" placeholder="Last Name (Prenom)">
+            </div>
+
+            <div class="input-group">
+                <i class="fas fa-at input-icon"></i>
+                <input type="text" id="setup-username" placeholder="Username (Optional)">
+            </div>
+
+            <button class="btn-primary" id="btn-save-profile" style="background: linear-gradient(45deg, #00c9ff, #92fe9d); color: #000; font-weight: bold; margin-top: 10px;">
+                <span>Save & Enter</span> <i class="fas fa-arrow-right"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- 3. MAIN PUBLIC CHAT SCREEN -->
     <div id="chat-screen" class="main-layout" style="display: none;">
         <div class="sidebar">
             <div class="bg-btn" style="background: linear-gradient(135deg, #1e3c72, #2a5298);" onclick="changeBg('linear-gradient(135deg, #1e3c72, #2a5298)')"></div>
@@ -88,6 +126,10 @@
             
             <div class="ai-btn" onclick="openAIScreen()">
                 <i class="fas fa-robot"></i> AI
+            </div>
+            
+            <div class="ai-btn" id="btn-logout" style="background: #dc3545; margin-top: 10px; display: none;" title="Logout">
+                <i class="fas fa-sign-out-alt"></i>
             </div>
         </div>
 
@@ -105,7 +147,7 @@
         </div>
     </div>
 
-    <!-- 3. PRIVATE AI CHAT SCREEN -->
+    <!-- 4. PRIVATE AI CHAT SCREEN -->
     <div id="ai-screen" class="main-layout" style="display: none;">
         <div class="sidebar">
             <div class="bg-btn" style="background: #222; display: flex; justify-content: center; align-items: center; color: white;" onclick="backToChat()" title="Back to Chat">
@@ -135,7 +177,7 @@
         </div>
     </div>
 
-    <!-- NOTICE MODAL FOR GUEST -->
+    <!-- NOTICE MODALS -->
     <div id="ai-notice-modal" class="modal-overlay" style="display: none;">
         <div class="modal-card">
             <h3><i class="fas fa-lock"></i> AI Feature Locked</h3>
@@ -147,7 +189,6 @@
         </div>
     </div>
 
-    <!-- PC RECOMMENDATION NOTICE MODAL -->
     <div id="pc-notice-modal" class="modal-overlay" style="display: none;">
         <div class="modal-card">
             <h3><i class="fas fa-desktop"></i> Desktop Recommendation</h3>
@@ -158,6 +199,102 @@
         </div>
     </div>
 
+    <!-- Firebase Script -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
+        import { 
+            getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, 
+            signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, updateProfile
+        } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyA91YpdPs7LcvOfcidq_AhH2aKfAmJbWQ0",
+            authDomain: "hamma-1a466.firebaseapp.com",
+            projectId: "hamma-1a466",
+            storageBucket: "hamma-1a466.firebasestorage.app",
+            messagingSenderId: "997995104735",
+            appId: "1:997995104735:web:75b9f4ecaff46f9591c6a",
+            measurementId: "G-3MFBFW3LJK"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const provider = new GoogleAuthProvider();
+
+        const emailInput = document.getElementById('login-email');
+        const passwordInput = document.getElementById('login-password');
+        const errorMsg = document.getElementById('auth-error');
+        const logoutBtn = document.getElementById('btn-logout');
+
+        let isRegistering = false; // يمنع الدخول المباشر بعد التسجيل
+
+        function showAuthError(msg) {
+            errorMsg.style.display = 'block';
+            errorMsg.innerText = msg;
+        }
+
+        document.getElementById('btn-register').addEventListener('click', () => {
+            const email = emailInput.value.trim();
+            const password = passwordInput.value;
+            if(!email || !password) return showAuthError("Please enter email and password.");
+            
+            isRegistering = true; 
+
+            createUserWithEmailAndPassword(auth, email, password)
+                .then(() => {
+                    document.getElementById('login-screen').style.display = 'none';
+                    document.getElementById('profile-setup-screen').style.display = 'flex';
+                })
+                .catch(e => {
+                    isRegistering = false;
+                    showAuthError(e.message);
+                });
+        });
+
+        document.getElementById('btn-save-profile').addEventListener('click', () => {
+            const nom = document.getElementById('setup-nom').value.trim();
+            const prenom = document.getElementById('setup-prenom').value.trim();
+            const username = document.getElementById('setup-username').value.trim();
+            
+            const finalName = username || `${nom} ${prenom}`.trim() || 'User';
+
+            updateProfile(auth.currentUser, {
+                displayName: finalName
+            }).then(() => {
+                document.getElementById('profile-setup-screen').style.display = 'none';
+                logoutBtn.style.display = 'flex';
+                isRegistering = false;
+                window.proceedToChat(finalName);
+            });
+        });
+
+        document.getElementById('btn-login').addEventListener('click', () => {
+            const email = emailInput.value.trim();
+            const password = passwordInput.value;
+            if(!email || !password) return showAuthError("Please enter email and password.");
+            signInWithEmailAndPassword(auth, email, password).catch(e => showAuthError("Invalid credentials."));
+        });
+
+        document.getElementById('btn-google').addEventListener('click', () => {
+            signInWithPopup(auth, provider).catch(e => showAuthError(e.message));
+        });
+
+        logoutBtn.addEventListener('click', () => {
+            signOut(auth).then(() => {
+                location.reload();
+            });
+        });
+
+        onAuthStateChanged(auth, (user) => {
+            if (user && !isRegistering) {
+                const username = user.displayName || user.email.split('@')[0];
+                logoutBtn.style.display = 'flex';
+                window.proceedToChat(username);
+            }
+        });
+    </script>
+
+    <!-- Main Logic Script -->
     <script src="/socket.io/socket.io.js"></script>
     <script>
         let socket;
@@ -168,24 +305,10 @@
         let currentUsername = "";
         let isGuest = false;
 
-        function loginAsUser() {
-            const nameInput = document.getElementById('login-username').value.trim();
-            if (nameInput !== "") {
-                isGuest = false;
-                proceedToChat(nameInput);
-            } else {
-                alert("Please enter your name first!");
-            }
-        }
-
         function loginAsGuest() {
             const randomID = Math.floor(1000 + Math.random() * 9000);
             isGuest = true;
             proceedToChat(`Guest_${randomID}`);
-        }
-
-        function checkLoginEnter(event) {
-            if (event.key === "Enter") loginAsUser();
         }
 
         function formatUsername(username) {
@@ -195,7 +318,7 @@
             return username;
         }
 
-        function proceedToChat(username) {
+        window.proceedToChat = function(username) {
             currentUsername = username;
             document.getElementById('user-display-tag').innerHTML = formatUsername(username);
             
