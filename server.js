@@ -2,26 +2,14 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
-const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
 app.use(express.json());
-app.use(express.static(__dirname));
-
-// طباعة جميع الملفات في المجلد الحالي لمراقبتها في الـ Logs
-console.log("الملفات الموجودة في السيرفر:", fs.readdirSync(__dirname));
-
-app.get('/', (req, res) => {
-    const filePath = path.join(__dirname, 'index.html');
-    if (fs.existsSync(filePath)) {
-        res.sendFile(filePath);
-    } else {
-        res.status(404).send("ملف الواجهة index.html غير موجود في المجلد الرئيسي!");
-    }
-});
+// رجعناها تقرأ من الدوسي public كيما كودك الأول
+app.use(express.static(path.join(__dirname, 'public')));
 
 const apiKey = process.env.GROQ_API_KEY;
 
@@ -33,6 +21,8 @@ app.post('/api/gemini', async (req, res) => {
     }
 
     try {
+        const fetch = (await import('node-fetch')).default;
+        
         const apiResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: 'POST',
             headers: {
