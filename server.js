@@ -12,11 +12,12 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const apiKey = process.env.GROQ_API_KEY;
 
-// مسار لوحة التحكم (Admin Page)
+// مسار لوحة التحكم
 app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
+// API الذكاء الاصطناعي (Groq)
 app.post('/api/gemini', async (req, res) => {
     const { prompt } = req.body;
     
@@ -55,20 +56,39 @@ app.post('/api/gemini', async (req, res) => {
     }
 });
 
-// تتبع المتواجدين Online عبر Socket.io
+// إدارة الاتصالات والـ Admin Options
 let onlineUsersCount = 0;
 
 io.on('connection', (socket) => {
     onlineUsersCount++;
     io.emit('update-online', onlineUsersCount);
 
+    // استقبال وإرسال الرسائل العادية
+    socket.on('chat-message', (data) => {
+        io.emit('chat-message', data);
+    });
+
+    // --- خيارات الأدمن (Admin Options) ---
+    
+    // 1. حذف رسالة
+    socket.on('delete-message', (msgId) => {
+        io.emit('delete-message', msgId);
+    });
+
+    // 2. كتم مستخدم
+    socket.on('mute-user', (username) => {
+        io.emit('user-muted', username);
+    });
+
+    // 3. طرد مستخدم
+    socket.on('kick-user', (username) => {
+        io.emit('user-kicked', username);
+    });
+
+    // عند قطع الاتصال
     socket.on('disconnect', () => {
         onlineUsersCount = Math.max(0, onlineUsersCount - 1);
         io.emit('update-online', onlineUsersCount);
-    });
-
-    socket.on('chat-message', (data) => {
-        io.emit('chat-message', data);
     });
 });
 
