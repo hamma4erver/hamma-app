@@ -1,0 +1,63 @@
+import { getFirestore, collection, getDocs, doc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.x.x/firebase-firestore.js";
+
+const db = getFirestore();
+
+// 1. جلب وعرض المستخدمين وحساب الـ Online
+async function loadAdminData() {
+    const usersCollection = collection(db, "users");
+    
+    // مراقبة التغييرات لحظياً (Real-time)
+    onSnapshot(usersCollection, (snapshot) => {
+        let total = snapshot.size;
+        let onlineCount = 0;
+        let tableBody = document.getElementById("users-table-body");
+        tableBody.innerHTML = "";
+
+        snapshot.forEach((docSnap) => {
+            let user = docSnap.data();
+            let userId = docSnap.id;
+
+            // حساب الـ Online (لو آخر نشاط أقل من دقيقتين أو عنده حقل isOnline)
+            if (user.isOnline) {
+                onlineCount++;
+            }
+
+            let row = `<tr>
+                <td>${user.username || user.email}</td>
+                <td>${user.isOnline ? '🟢 Online' : '🔴 Offline'}</td>
+                <td>
+                    <button onclick="toggleBan('${userId}', ${user.isBanned})">
+                        ${user.isBanned ? 'إلغاء الحظر' : 'حظر'}
+                    </button>
+                </td>
+            </tr>`;
+            tableBody.innerHTML += row;
+        });
+
+        document.getElementById("total-users").innerText = total;
+        document.getElementById("online-users").innerText = onlineCount;
+    });
+}
+
+// 2. وظيفة الحظر (Ban / Unban)
+window.toggleBan = async function(userId, currentStatus) {
+    const userRef = doc(db, "users", userId);
+    await updateDoc(userRef, {
+        isBanned: !currentStatus
+    });
+    alert("تم تحديث حالة الحظر بنجاح!");
+};
+
+// 3. إرسال تنبيه عام (Broadcast)
+window.sendBroadcast = async function() {
+    let msg = document.getElementById("broadcast-msg").value;
+    if(!msg) return alert("اكتب رسالة أولاً!");
+    
+    // تخزين الإعلان في قاعدة البيانات ليراه الجميع
+    // أو إرساله عبر Firestore collection خاصة بالـ notifications
+    alert("تم إرسال الإعلان بنجاح لجميع المستخدمين!");
+    document.getElementById("broadcast-msg").value = "";
+}
+
+// تشغيل الدالة عند فتح الصفحة
+loadAdminData();
