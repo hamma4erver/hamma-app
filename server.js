@@ -12,12 +12,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const apiKey = process.env.GROQ_API_KEY;
 
-// مسار لوحة التحكم
 app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
-// API الذكاء الاصطناعي (Groq)
 app.post('/api/gemini', async (req, res) => {
     const { prompt } = req.body;
     
@@ -36,9 +34,7 @@ app.post('/api/gemini', async (req, res) => {
             },
             body: JSON.stringify({
                 model: "llama-3.1-8b-instant",
-                messages: [
-                    { role: "user", content: prompt }
-                ]
+                messages: [{ role: "user", content: prompt }]
             })
         });
 
@@ -56,36 +52,53 @@ app.post('/api/gemini', async (req, res) => {
     }
 });
 
-// إدارة الاتصالات والـ Admin Options
+// قائمة الكتم والحظر
+const mutedUsers = new Set();
+const blockedUsers = new Set();
 let onlineUsersCount = 0;
 
 io.on('connection', (socket) => {
     onlineUsersCount++;
     io.emit('update-online', onlineUsersCount);
 
-    // استقبال وإرسال الرسائل العادية
+    // إرسال الرسائل مع التحقق
     socket.on('chat-message', (data) => {
+        if (blockedUsers.has(data.user)) {
+            socket.emit('system-msg', 'You are blocked from sending messages.');
+            return;
+        }
+        if (mutedUsers.has(data.user)) {
+            socket.emit('system-msg', 'You are muted.');
+            return;
+        }
         io.emit('chat-message', data);
     });
 
-    // --- خيارات الأدمن (Admin Options) ---
-    
-    // 1. حذف رسالة
+    // حذف رسالة
     socket.on('delete-message', (msgId) => {
         io.emit('delete-message', msgId);
     });
 
-    // 2. كتم مستخدم
+    // كتم وإلغاء كتم
     socket.on('mute-user', (username) => {
+        mutedUsers.add(username);
         io.emit('user-muted', username);
     });
-
-    // 3. طرد مستخدم
-    socket.on('kick-user', (username) => {
-        io.emit('user-kicked', username);
+    socket.on('unmute-user', (username) => {
+        mutedUsers.delete(username);
+        io.emit('user-unmuted', username);
     });
 
-    // عند قطع الاتصال
+    // حظر وإلغاء حظر
+    socket.on('block-user', (username) => {
+        blockedUsers.add(username);
+        io.emit('user-blocked', username);
+    });
+    socket.on('unblock-user', (username) => {
+        blockedUsers.delete(username);
+        io.emit('user-unblocked', username);
+    });
+
     socket.on('disconnect', () => {
         onlineUsersCount = Math.max(0, onlineUsersCount - 1);
         io.emit('update-online', onlineUsersCount);
