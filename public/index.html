@@ -35,6 +35,26 @@
             50% { background-position: 100% 50%; }
             100% { background-position: 0% 50%; }
         }
+
+        .profile-panel {
+            position: fixed;
+            top: 0;
+            right: -400px;
+            width: 350px;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(15px);
+            box-shadow: -5px 0 25px rgba(0,0,0,0.7);
+            transition: 0.4s ease-in-out;
+            z-index: 1000;
+            padding: 30px;
+            border-left: 1px solid rgba(0, 201, 255, 0.3);
+            display: flex;
+            flex-direction: column;
+        }
+        .profile-panel.open { right: 0; }
+        .profile-panel h3 { color: #00c9ff; margin-bottom: 25px; font-size: 20px; }
+        .close-panel { background: none; color: #94a3b8; font-size: 22px; cursor: pointer; border: none; text-align: right; width: auto; margin-bottom: 20px; }
     </style>
 </head>
 <body>
@@ -87,7 +107,7 @@
         </div>
     </div>
 
-    <!-- 2. PROFILE SETUP SCREEN (NEW) -->
+    <!-- 2. PROFILE SETUP SCREEN -->
     <div id="profile-setup-screen" class="login-container" style="display: none;">
         <div class="login-card" style="background: rgba(20, 20, 30, 0.85); border: 1px solid rgba(0, 201, 255, 0.3);">
             <div class="logo-area">
@@ -107,8 +127,10 @@
 
             <div class="input-group">
                 <i class="fas fa-at input-icon"></i>
-                <input type="text" id="setup-username" placeholder="Username (Optional)">
+                <input type="text" id="setup-username" placeholder="Unique Username">
             </div>
+
+            <p id="setup-error" style="color: #ff4d4d; font-size: 14px; display: none; margin-bottom: 10px;"></p>
 
             <button class="btn-primary" id="btn-save-profile" style="background: linear-gradient(45deg, #00c9ff, #92fe9d); color: #000; font-weight: bold; margin-top: 10px;">
                 <span>Save & Enter</span> <i class="fas fa-arrow-right"></i>
@@ -127,6 +149,10 @@
             <div class="ai-btn" onclick="openAIScreen()">
                 <i class="fas fa-robot"></i> AI
             </div>
+
+            <div class="ai-btn" id="openProfilePanel" style="background: rgba(0, 201, 255, 0.2); border: 1px solid #00c9ff; margin-top: 10px;" title="Profile Settings">
+                <i class="fas fa-user-cog" style="color: #00c9ff;"></i>
+            </div>
             
             <div class="ai-btn" id="btn-logout" style="background: #dc3545; margin-top: 10px; display: none;" title="Logout">
                 <i class="fas fa-sign-out-alt"></i>
@@ -144,6 +170,20 @@
                 <input type="text" id="message" placeholder="Type a message..." onkeydown="checkEnter(event)">
                 <button onclick="sendMessage()" class="send-btn">Enter ↵</button>
             </div>
+        </div>
+
+        <!-- PROFILE PANEL -->
+        <div class="profile-panel" id="profilePanel">
+            <button class="close-panel" id="closeProfilePanel">✕</button>
+            <h3>Profile Settings</h3>
+            <div class="input-group" style="margin-bottom: 20px;">
+                <label style="color: #94a3b8; font-size: 14px; display: block; margin-bottom: 8px;">Change Username</label>
+                <input type="text" id="panelNewUsername" placeholder="Enter new username..." style="width: 100%; padding: 12px; background: rgba(0,0,0,0.5); border: 1px solid rgba(0,201,255,0.3); border-radius: 8px; color: white; outline: none;">
+            </div>
+            <p id="panel-error" style="color: #ff4d4d; font-size: 14px; display: none; margin-bottom: 10px;"></p>
+            <button class="btn-primary" id="btnUpdateUsername" style="background: linear-gradient(45deg, #00c9ff, #92fe9d); color: #000; font-weight: bold;">
+                Save Changes ⚡
+            </button>
         </div>
     </div>
 
@@ -199,13 +239,16 @@
         </div>
     </div>
 
-    <!-- Firebase Script -->
+    <!-- Firebase Script with Firestore -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
         import { 
             getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, 
             signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, updateProfile
         } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+        import { 
+            getFirestore, doc, setDoc, getDoc, deleteDoc 
+        } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyA91YpdPs7LcvOfcidq_AhH2aKfAmJbWQ0",
@@ -219,14 +262,17 @@
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
+        const db = getFirestore(app);
         const provider = new GoogleAuthProvider();
 
         const emailInput = document.getElementById('login-email');
         const passwordInput = document.getElementById('login-password');
         const errorMsg = document.getElementById('auth-error');
+        const setupError = document.getElementById('setup-error');
+        const panelError = document.getElementById('panel-error');
         const logoutBtn = document.getElementById('btn-logout');
 
-        let isRegistering = false; // يمنع الدخول المباشر بعد التسجيل
+        let isRegistering = false;
 
         function showAuthError(msg) {
             errorMsg.style.display = 'block';
@@ -251,21 +297,91 @@
                 });
         });
 
-        document.getElementById('btn-save-profile').addEventListener('click', () => {
+        // حفظ الاسم والتحقق من عدم تكراره
+        document.getElementById('btn-save-profile').addEventListener('click', async () => {
             const nom = document.getElementById('setup-nom').value.trim();
             const prenom = document.getElementById('setup-prenom').value.trim();
             const username = document.getElementById('setup-username').value.trim();
             
-            const finalName = username || `${nom} ${prenom}`.trim() || 'User';
+            const finalName = username || `${nom} ${prenom}`.trim();
+            if(!finalName) {
+                setupError.style.display = 'block';
+                setupError.innerText = "Please enter a valid username.";
+                return;
+            }
 
-            updateProfile(auth.currentUser, {
-                displayName: finalName
-            }).then(() => {
+            const lowerName = finalName.toLowerCase();
+
+            try {
+                // التحقق هل الاسم موجود مسبقاً في القاعدة
+                const usernameRef = doc(db, "usernames", lowerName);
+                const usernameSnap = await getDoc(usernameRef);
+
+                if (usernameSnap.exists()) {
+                    setupError.style.display = 'block';
+                    setupError.innerText = "This username is already taken! Choose another one.";
+                    return;
+                }
+
+                // إذا كان الاسم غير موجود، نقوم بحجزه وحفظه
+                const oldUsername = auth.currentUser.displayName ? auth.currentUser.displayName.toLowerCase() : null;
+                
+                await setDoc(usernameRef, { uid: auth.currentUser.uid });
+                if (oldUsername && oldUsername !== lowerName) {
+                    await deleteDoc(doc(db, "usernames", oldUsername));
+                }
+
+                await updateProfile(auth.currentUser, { displayName: finalName });
+
                 document.getElementById('profile-setup-screen').style.display = 'none';
                 logoutBtn.style.display = 'flex';
                 isRegistering = false;
                 window.proceedToChat(finalName);
-            });
+            } catch (err) {
+                setupError.style.display = 'block';
+                setupError.innerText = "Error checking username.";
+            }
+        });
+
+        // تحديث الاسم من القائمة الجانبية مع التأكد من عدم تكراره
+        document.getElementById('btnUpdateUsername').addEventListener('click', async () => {
+            const newName = document.getElementById('panelNewUsername').value.trim();
+            if(!newName) {
+                panelError.style.display = 'block';
+                panelError.innerText = "Please enter a valid name!";
+                return;
+            }
+
+            const lowerNewName = newName.toLowerCase();
+
+            try {
+                const usernameRef = doc(db, "usernames", lowerNewName);
+                const usernameSnap = await getDoc(usernameRef);
+
+                if (usernameSnap.exists()) {
+                    panelError.style.display = 'block';
+                    panelError.innerText = "This username is already taken!";
+                    return;
+                }
+
+                const oldUsername = auth.currentUser.displayName ? auth.currentUser.displayName.toLowerCase() : null;
+
+                await setDoc(usernameRef, { uid: auth.currentUser.uid });
+                if (oldUsername && oldUsername !== lowerNewName) {
+                    await deleteDoc(doc(db, "usernames", oldUsername));
+                }
+
+                await updateProfile(auth.currentUser, { displayName: newName });
+
+                window.currentUsername = newName;
+                document.getElementById('user-display-tag').innerHTML = window.formatUsername(newName);
+                document.getElementById('profilePanel').classList.remove('open');
+                panelError.style.display = 'none';
+                alert("Username updated successfully!");
+            } catch (err) {
+                panelError.style.display = 'block';
+                panelError.innerText = "Failed to update username.";
+            }
         });
 
         document.getElementById('btn-login').addEventListener('click', () => {
@@ -302,7 +418,7 @@
 
         const chatBox = document.getElementById('chat-box');
         const aiChatBox = document.getElementById('ai-chat-box');
-        let currentUsername = "";
+        window.currentUsername = "";
         let isGuest = false;
 
         function loginAsGuest() {
@@ -311,7 +427,7 @@
             proceedToChat(`Guest_${randomID}`);
         }
 
-        function formatUsername(username) {
+        window.formatUsername = function(username) {
             if (username.toLowerCase() === "hamma" || username.toLowerCase() === "hamma admin") {
                 return `<span class="rainbow-admin-name">${username}</span> <img src="/badge.png" class="admin-badge-img" title="Owner Admin">`;
             }
@@ -319,8 +435,8 @@
         }
 
         window.proceedToChat = function(username) {
-            currentUsername = username;
-            document.getElementById('user-display-tag').innerHTML = formatUsername(username);
+            window.currentUsername = username;
+            document.getElementById('user-display-tag').innerHTML = window.formatUsername(username);
             
             const loginScreen = document.getElementById('login-screen');
             const chatScreen = document.getElementById('chat-screen');
@@ -341,13 +457,21 @@
             document.getElementById('pc-notice-modal').style.display = 'none';
         }
 
+        document.getElementById('openProfilePanel').addEventListener('click', () => {
+            document.getElementById('profilePanel').classList.add('open');
+            document.getElementById('panelNewUsername').value = window.currentUsername;
+        });
+        document.getElementById('closeProfilePanel').addEventListener('click', () => {
+            document.getElementById('profilePanel').classList.remove('open');
+        });
+
         function sendMessage() {
             const msg = document.getElementById('message').value;
             if(msg.trim() !== "") {
                 if (socket && socket.connected) {
-                    socket.emit('chat-message', { user: currentUsername, msg: msg, senderId: socket.id });
+                    socket.emit('chat-message', { user: window.currentUsername, msg: msg, senderId: socket.id });
                 } else {
-                    appendLocalMessage(currentUsername, msg);
+                    appendLocalMessage(window.currentUsername, msg);
                 }
                 document.getElementById('message').value = "";
             }
@@ -361,7 +485,7 @@
             const msgElement = document.createElement('div');
             msgElement.classList.add('msg', 'my-msg');
             msgElement.setAttribute('onclick', `translateMsg(this, "${msg}")`);
-            const formattedUser = formatUsername(user);
+            const formattedUser = window.formatUsername(user);
             msgElement.innerHTML = `<strong>${formattedUser}:</strong> <span class="text-content">${msg}</span> <small class="hint">(Tap to translate)</small>`;
             chatBox.appendChild(msgElement);
             chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
@@ -376,7 +500,7 @@
                     msgElement.classList.add('msg', 'other-msg');
                 }
                 msgElement.setAttribute('onclick', `translateMsg(this, "${data.msg}")`);
-                const formattedUser = formatUsername(data.user);
+                const formattedUser = window.formatUsername(data.user);
                 msgElement.innerHTML = `<strong>${formattedUser}:</strong> <span class="text-content">${data.msg}</span> <small class="hint">(Tap to translate)</small>`;
                 chatBox.appendChild(msgElement);
                 chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
@@ -443,7 +567,7 @@
 
             const userMsgDiv = document.createElement('div');
             userMsgDiv.classList.add('msg', 'my-msg');
-            const formattedUser = formatUsername(currentUsername || 'You');
+            const formattedUser = window.formatUsername(window.currentUsername || 'You');
             userMsgDiv.innerHTML = `<strong>${formattedUser}:</strong> <span class="text-content">${userText}</span>`;
             aiChatBox.appendChild(userMsgDiv);
             inputField.value = "";
