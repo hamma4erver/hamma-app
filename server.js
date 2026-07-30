@@ -11,17 +11,19 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 const apiKey = process.env.GROQ_API_KEY;
+// كود الأدمن الخاص بك
+const ADMIN_SECRET = process.env.ADMIN_SECRET || "1838311070";
 
 app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
+// مسار الذكاء الاصطناعي
 app.post('/api/gemini', async (req, res) => {
     const { prompt } = req.body;
     if (!apiKey) return res.json({ reply: "GROQ_API_KEY is missing on Render." });
 
     try {
-        const fetch = (await import('node-fetch')).default;
         const apiResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: 'POST',
             headers: {
@@ -47,7 +49,7 @@ app.post('/api/gemini', async (req, res) => {
     }
 });
 
-// قوائم الكتم والحظر
+// إدارة الحظر والكتم
 const mutedUsers = new Set();
 const blockedUsers = new Set();
 let onlineUsersCount = 0;
@@ -56,7 +58,6 @@ io.on('connection', (socket) => {
     onlineUsersCount++;
     io.emit('update-online', onlineUsersCount);
 
-    // إرسال الرسائل مع التحقق
     socket.on('chat-message', (data) => {
         if (blockedUsers.has(data.user)) {
             return socket.emit('system-msg', 'أنت محظور من إرسال الرسائل.');
@@ -68,26 +69,33 @@ io.on('connection', (socket) => {
     });
 
     // 1. حذف رسالة
-    socket.on('delete-message', (msgId) => {
+    socket.on('delete-message', ({ msgId, token }) => {
+        if (token !== ADMIN_SECRET) return;
         io.emit('delete-message', msgId);
     });
 
     // 2. كتم / إلغاء كتم
-    socket.on('mute-user', (username) => {
+    socket.on('mute-user', ({ username, token }) => {
+        if (token !== ADMIN_SECRET) return socket.emit('system-msg', 'رمز الأدمن غير صحيح!');
         mutedUsers.add(username);
         io.emit('system-msg', `تم كتم: ${username}`);
     });
-    socket.on('unmute-user', (username) => {
+
+    socket.on('unmute-user', ({ username, token }) => {
+        if (token !== ADMIN_SECRET) return socket.emit('system-msg', 'رمز الأدمن غير صحيح!');
         mutedUsers.delete(username);
         io.emit('system-msg', `تم إلغاء كتم: ${username}`);
     });
 
     // 3. حظر / إلغاء حظر
-    socket.on('block-user', (username) => {
+    socket.on('block-user', ({ username, token }) => {
+        if (token !== ADMIN_SECRET) return socket.emit('system-msg', 'رمز الأدمن غير صحيح!');
         blockedUsers.add(username);
         io.emit('system-msg', `تم حظر: ${username}`);
     });
-    socket.on('unblock-user', (username) => {
+
+    socket.on('unblock-user', ({ username, token }) => {
+        if (token !== ADMIN_SECRET) return socket.emit('system-msg', 'رمز الأدمن غير صحيح!');
         blockedUsers.delete(username);
         io.emit('system-msg', `تم إلغاء حظر: ${username}`);
     });
