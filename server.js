@@ -18,14 +18,10 @@ app.get('/admin', (req, res) => {
 
 app.post('/api/gemini', async (req, res) => {
     const { prompt } = req.body;
-    
-    if (!apiKey) {
-        return res.json({ reply: "GROQ_API_KEY is missing on Render." });
-    }
+    if (!apiKey) return res.json({ reply: "GROQ_API_KEY is missing on Render." });
 
     try {
         const fetch = (await import('node-fetch')).default;
-        
         const apiResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: 'POST',
             headers: {
@@ -39,7 +35,6 @@ app.post('/api/gemini', async (req, res) => {
         });
 
         const data = await apiResponse.json();
-        
         if (data.choices && data.choices[0] && data.choices[0].message) {
             res.json({ reply: data.choices[0].message.content });
         } else if (data.error) {
@@ -52,7 +47,7 @@ app.post('/api/gemini', async (req, res) => {
     }
 });
 
-// قائمة الكتم والحظر
+// قوائم الكتم والحظر
 const mutedUsers = new Set();
 const blockedUsers = new Set();
 let onlineUsersCount = 0;
@@ -64,39 +59,37 @@ io.on('connection', (socket) => {
     // إرسال الرسائل مع التحقق
     socket.on('chat-message', (data) => {
         if (blockedUsers.has(data.user)) {
-            socket.emit('system-msg', 'You are blocked from sending messages.');
-            return;
+            return socket.emit('system-msg', 'أنت محظور من إرسال الرسائل.');
         }
         if (mutedUsers.has(data.user)) {
-            socket.emit('system-msg', 'You are muted.');
-            return;
+            return socket.emit('system-msg', 'تم كتم صوتك، لا يمكنك الإرسال.');
         }
         io.emit('chat-message', data);
     });
 
-    // حذف رسالة
+    // 1. حذف رسالة
     socket.on('delete-message', (msgId) => {
         io.emit('delete-message', msgId);
     });
 
-    // كتم وإلغاء كتم
+    // 2. كتم / إلغاء كتم
     socket.on('mute-user', (username) => {
         mutedUsers.add(username);
-        io.emit('user-muted', username);
+        io.emit('system-msg', `تم كتم: ${username}`);
     });
     socket.on('unmute-user', (username) => {
         mutedUsers.delete(username);
-        io.emit('user-unmuted', username);
+        io.emit('system-msg', `تم إلغاء كتم: ${username}`);
     });
 
-    // حظر وإلغاء حظر
+    // 3. حظر / إلغاء حظر
     socket.on('block-user', (username) => {
         blockedUsers.add(username);
-        io.emit('user-blocked', username);
+        io.emit('system-msg', `تم حظر: ${username}`);
     });
     socket.on('unblock-user', (username) => {
         blockedUsers.delete(username);
-        io.emit('user-unblocked', username);
+        io.emit('system-msg', `تم إلغاء حظر: ${username}`);
     });
 
     socket.on('disconnect', () => {
