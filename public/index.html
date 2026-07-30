@@ -681,6 +681,10 @@
                     }
                 }
             });
+
+            socket.on('system-msg', (msg) => {
+                alert(msg);
+            });
         }
 
         // نافذة التحكم عند النقر على أي رسالة
@@ -718,15 +722,38 @@
         });
 
         // زر حذف الرسالة للمشرفين
-        document.getElementById('btn-msg-delete').addEventListener('click', () => {
+        document.getElementById('btn-msg-delete').addEventListener('click', async () => {
             if (!selectedMsgElem) return;
             const msgId = selectedMsgElem.dataset.id;
-            if (socket && socket.connected) {
-                socket.emit('delete-message', msgId);
-            } else {
-                const textSpan = selectedMsgElem.querySelector('.text-content');
-                textSpan.innerHTML = `<span class="msg-deleted-admin">[🗑️ Deleted]:</span> <span class="msg-deleted-text">${selectedMsgText}</span>`;
-            }
+            try {
+                const idToken = await auth.currentUser.getIdToken();
+                if (socket && socket.connected) {
+                    socket.emit('delete-message', { msgId, idToken });
+                } else {
+                    const textSpan = selectedMsgElem.querySelector('.text-content');
+                    textSpan.innerHTML = `<span class="msg-deleted-admin">[🗑️ Deleted]:</span> <span class="msg-deleted-text">${selectedMsgText}</span>`;
+                }
+            } catch (e) { alert("يجب تسجيل الدخول للحذف."); }
+            closeMsgModal();
+        });
+
+        // زر كتم/إلغاء كتم المستخدم للمشرفين
+        document.getElementById('btn-msg-mute').addEventListener('click', async () => {
+            if (!selectedSenderName) return;
+            try {
+                const idToken = await auth.currentUser.getIdToken();
+                socket.emit('mute-user', { username: selectedSenderName, idToken });
+            } catch (e) { alert("يجب تسجيل الدخول."); }
+            closeMsgModal();
+        });
+
+        // زر حظر/إلغاء حظر المستخدم للمشرفين
+        document.getElementById('btn-msg-ban').addEventListener('click', async () => {
+            if (!selectedSenderName) return;
+            try {
+                const idToken = await auth.currentUser.getIdToken();
+                socket.emit('block-user', { username: selectedSenderName, idToken });
+            } catch (e) { alert("يجب تسجيل الدخول."); }
             closeMsgModal();
         });
 
