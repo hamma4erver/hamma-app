@@ -344,6 +344,7 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
         const provider = new GoogleAuthProvider();
+        window.firebaseAuth = auth;
 
         const emailInput = document.getElementById('login-email');
         const passwordInput = document.getElementById('login-password');
@@ -726,7 +727,7 @@
             if (!selectedMsgElem) return;
             const msgId = selectedMsgElem.dataset.id;
             try {
-                const idToken = await auth.currentUser.getIdToken();
+                const idToken = await window.firebaseAuth.currentUser.getIdToken();
                 if (socket && socket.connected) {
                     socket.emit('delete-message', { msgId, idToken });
                 } else {
@@ -741,7 +742,7 @@
         document.getElementById('btn-msg-mute').addEventListener('click', async () => {
             if (!selectedSenderName) return;
             try {
-                const idToken = await auth.currentUser.getIdToken();
+                const idToken = await window.firebaseAuth.currentUser.getIdToken();
                 socket.emit('mute-user', { username: selectedSenderName, idToken });
             } catch (e) { alert("يجب تسجيل الدخول."); }
             closeMsgModal();
@@ -751,7 +752,7 @@
         document.getElementById('btn-msg-ban').addEventListener('click', async () => {
             if (!selectedSenderName) return;
             try {
-                const idToken = await auth.currentUser.getIdToken();
+                const idToken = await window.firebaseAuth.currentUser.getIdToken();
                 socket.emit('block-user', { username: selectedSenderName, idToken });
             } catch (e) { alert("يجب تسجيل الدخول."); }
             closeMsgModal();
