@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const admin = require('firebase-admin');
 
 const app = express();
 const server = http.createServer(app);
@@ -11,12 +12,40 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 const apiKey = process.env.GROQ_API_KEY;
-// كود الأدمن الخاص بك
-const ADMIN_SECRET = process.env.ADMIN_SECRET || "1838311070";
 
-app.get('/admin', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
-});
+// ==================================================
+// تهيئة Firebase Admin SDK
+// FIREBASE_SERVICE_ACCOUNT لازم يكون JSON كامل (نص واحد) فمتغيرات البيئة
+// ==================================================
+if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
+    console.warn("⚠️ FIREBASE_SERVICE_ACCOUNT is missing! Admin actions will fail.");
+} else {
+    admin.initializeApp({
+        credential: admin.credential.cert(
+            JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
+        )
+    });
+}
+
+const db = admin.apps.length ? admin.firestore() : null;
+
+// ==================================================
+// تتحقق من التوكن وترجع true/false إذا المستخدم admin أو moderator
+// ==================================================
+async function verifyAdmin(idToken) {
+    if (!idToken || !db) return { ok: false };
+    try {
+        const decoded = await admin.auth().verifyIdToken(idToken);
+        const userDoc = await db.collection('users').doc(decoded.uid).get();
+        const role = userDoc.exists ? userDoc.data().role : null;
+        const isOwner = decoded.name === "Hamma" || decoded.name === "Hamma Admin";
+        const isAllowed = role === "admin" || role === "moderator" || isOwner;
+        return { ok: isAllowed, uid: decoded.uid, name: decoded.name };
+    } catch (e) {
+        console.error("Token verification failed:", e.message);
+        return { ok: false };
+    }
+}
 
 // مسار الذكاء الاصطناعي
 app.post('/api/gemini', async (req, res) => {
@@ -69,33 +98,38 @@ io.on('connection', (socket) => {
     });
 
     // 1. حذف رسالة
-    socket.on('delete-message', ({ msgId, token }) => {
-        if (token !== ADMIN_SECRET) return;
+    socket.on('delete-message', async ({ msgId, idToken }) => {
+        const { ok } = await verifyAdmin(idToken);
+        if (!ok) return socket.emit('system-msg', 'ليست لديك صلاحية الحذف.');
         io.emit('delete-message', msgId);
     });
 
     // 2. كتم / إلغاء كتم
-    socket.on('mute-user', ({ username, token }) => {
-        if (token !== ADMIN_SECRET) return socket.emit('system-msg', 'رمز الأدمن غير صحيح!');
+    socket.on('mute-user', async ({ username, idToken }) => {
+        const { ok } = await verifyAdmin(idToken);
+        if (!ok) return socket.emit('system-msg', 'ليست لديك صلاحية الكتم.');
         mutedUsers.add(username);
         io.emit('system-msg', `تم كتم: ${username}`);
     });
 
-    socket.on('unmute-user', ({ username, token }) => {
-        if (token !== ADMIN_SECRET) return socket.emit('system-msg', 'رمز الأدمن غير صحيح!');
+    socket.on('unmute-user', async ({ username, idToken }) => {
+        const { ok } = await verifyAdmin(idToken);
+        if (!ok) return socket.emit('system-msg', 'ليست لديك صلاحية الكتم.');
         mutedUsers.delete(username);
         io.emit('system-msg', `تم إلغاء كتم: ${username}`);
     });
 
     // 3. حظر / إلغاء حظر
-    socket.on('block-user', ({ username, token }) => {
-        if (token !== ADMIN_SECRET) return socket.emit('system-msg', 'رمز الأدمن غير صحيح!');
+    socket.on('block-user', async ({ username, idToken }) => {
+        const { ok } = await verifyAdmin(idToken);
+        if (!ok) return socket.emit('system-msg', 'ليست لديك صلاحية الحظر.');
         blockedUsers.add(username);
         io.emit('system-msg', `تم حظر: ${username}`);
     });
 
-    socket.on('unblock-user', ({ username, token }) => {
-        if (token !== ADMIN_SECRET) return socket.emit('system-msg', 'رمز الأدمن غير صحيح!');
+    socket.on('unblock-user', async ({ username, idToken }) => {
+        const { ok } = await verifyAdmin(idToken);
+        if (!ok) return socket.emit('system-msg', 'ليست لديك صلاحية الحظر.');
         blockedUsers.delete(username);
         io.emit('system-msg', `تم إلغاء حظر: ${username}`);
     });
