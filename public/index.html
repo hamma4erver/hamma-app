@@ -132,6 +132,29 @@
         .banned-overlay i { font-size: 48px; color: #ff4d4d; margin-bottom: 15px; }
         .banned-overlay h2 { color: #ff4d4d; margin-bottom: 10px; }
         .banned-overlay p { color: #94a3b8; max-width: 400px; }
+
+        #restriction-banner {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 16px;
+            margin-bottom: 10px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            backdrop-filter: blur(10px);
+        }
+        #restriction-banner.state-mute {
+            background: rgba(255, 183, 3, 0.12);
+            border: 1px solid rgba(255, 183, 3, 0.4);
+            color: #ffce54;
+        }
+        #restriction-banner.state-ban {
+            background: rgba(214, 40, 40, 0.15);
+            border: 1px solid rgba(214, 40, 40, 0.45);
+            color: #ff6b6b;
+        }
     </style>
 </head>
 <body>
@@ -246,7 +269,9 @@
                 <span id="user-display-tag" class="user-badge"></span>
             </div>
             <div id="chat-box"></div>
-            
+
+            <div id="restriction-banner" style="display: none;"></div>
+
             <div class="input-area">
                 <input type="text" id="message" placeholder="Type a message..." onkeydown="checkEnter(event)">
                 <button onclick="sendMessage()" class="send-btn">Enter ↵</button>
@@ -790,6 +815,7 @@
                 window.mutedMap = new Map((data.muted || []).map(u => [u.username, u.expiresAt]));
                 window.bannedSet = new Set(data.banned || []);
                 updateMsgActionButtons();
+                updateOwnRestrictionStatus();
             });
 
             // نعرف السيرفر باسمنا فور ما ندخل، باش الحظر يتفعل مباشرة إذا لزم
@@ -841,6 +867,61 @@
                 banIcon.className = 'fas fa-ban';
                 banLabel.innerText = 'Ban User';
             }
+        }
+
+        // تحدّث حالة المستخدم نفسه (كتم/حظر) فوق مكان الكتابة، مع عداد تنازلي حي
+        let restrictionCountdownInterval = null;
+        function updateOwnRestrictionStatus() {
+            const banner = document.getElementById('restriction-banner');
+            const msgInput = document.getElementById('message');
+            const sendBtn = document.querySelector('.chat-container .send-btn');
+
+            if (restrictionCountdownInterval) {
+                clearInterval(restrictionCountdownInterval);
+                restrictionCountdownInterval = null;
+            }
+
+            const isBanned = window.bannedSet && window.bannedSet.has(window.currentUsername);
+            const muteExpiresAt = window.mutedMap && window.mutedMap.get(window.currentUsername);
+            const isMuted = muteExpiresAt && muteExpiresAt > Date.now();
+
+            if (isBanned) {
+                banner.className = 'state-ban';
+                banner.style.display = 'flex';
+                banner.innerHTML = `<i class="fas fa-ban"></i> أنت محظور من الكتابة في هذه المحادثة`;
+                msgInput.disabled = true;
+                sendBtn.disabled = true;
+                msgInput.placeholder = 'أنت محظور...';
+                return;
+            }
+
+            if (isMuted) {
+                banner.className = 'state-mute';
+                banner.style.display = 'flex';
+                msgInput.disabled = true;
+                sendBtn.disabled = true;
+                msgInput.placeholder = 'أنت مكتوم مؤقتًا...';
+
+                const tick = () => {
+                    const remainingMs = muteExpiresAt - Date.now();
+                    if (remainingMs <= 0) {
+                        clearInterval(restrictionCountdownInterval);
+                        updateOwnRestrictionStatus();
+                        return;
+                    }
+                    const mins = Math.floor(remainingMs / 60000);
+                    const secs = Math.floor((remainingMs % 60000) / 1000);
+                    banner.innerHTML = `<i class="fas fa-volume-mute"></i> أنت مكتوم — يتبقى ${mins}:${secs.toString().padStart(2, '0')}`;
+                };
+                tick();
+                restrictionCountdownInterval = setInterval(tick, 1000);
+                return;
+            }
+
+            banner.style.display = 'none';
+            msgInput.disabled = false;
+            sendBtn.disabled = false;
+            msgInput.placeholder = 'Type a message...';
         }
 
         // نافذة التحكم عند النقر على أي رسالة
