@@ -83,9 +83,22 @@ const mutedUsers = new Set();
 const blockedUsers = new Set();
 let onlineUsersCount = 0;
 
+function broadcastStatusLists() {
+    io.emit('status-lists', {
+        muted: [...mutedUsers],
+        banned: [...blockedUsers]
+    });
+}
+
 io.on('connection', (socket) => {
     onlineUsersCount++;
     io.emit('update-online', onlineUsersCount);
+
+    // نبعث الحالة الحالية للمستخدم الجديد فور ما يتصل
+    socket.emit('status-lists', {
+        muted: [...mutedUsers],
+        banned: [...blockedUsers]
+    });
 
     socket.on('chat-message', (data) => {
         if (blockedUsers.has(data.user)) {
@@ -110,6 +123,7 @@ io.on('connection', (socket) => {
         if (!ok) return socket.emit('system-msg', 'ليست لديك صلاحية الكتم.');
         mutedUsers.add(username);
         io.emit('system-msg', `تم كتم: ${username}`);
+        broadcastStatusLists();
     });
 
     socket.on('unmute-user', async ({ username, idToken }) => {
@@ -117,6 +131,7 @@ io.on('connection', (socket) => {
         if (!ok) return socket.emit('system-msg', 'ليست لديك صلاحية الكتم.');
         mutedUsers.delete(username);
         io.emit('system-msg', `تم إلغاء كتم: ${username}`);
+        broadcastStatusLists();
     });
 
     // 3. حظر / إلغاء حظر
@@ -125,6 +140,7 @@ io.on('connection', (socket) => {
         if (!ok) return socket.emit('system-msg', 'ليست لديك صلاحية الحظر.');
         blockedUsers.add(username);
         io.emit('system-msg', `تم حظر: ${username}`);
+        broadcastStatusLists();
     });
 
     socket.on('unblock-user', async ({ username, idToken }) => {
@@ -132,6 +148,7 @@ io.on('connection', (socket) => {
         if (!ok) return socket.emit('system-msg', 'ليست لديك صلاحية الحظر.');
         blockedUsers.delete(username);
         io.emit('system-msg', `تم إلغاء حظر: ${username}`);
+        broadcastStatusLists();
     });
 
     socket.on('disconnect', () => {
