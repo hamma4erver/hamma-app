@@ -285,11 +285,11 @@
                 <button class="btn-primary" id="btn-msg-delete" style="background: #e63946;">
                     <i class="fas fa-trash-alt"></i> Delete Message
                 </button>
-                <button class="btn-primary" id="btn-msg-mute" style="background: #ffb703; color: #000;">
-                    <i class="fas fa-volume-mute"></i> Mute / Unmute User
+                <button class="btn-primary" id="btn-msg-mute" style="background: #ffb703; color: #000; transition: background 0.25s ease, color 0.25s ease;">
+                    <i class="fas fa-volume-mute" id="icon-msg-mute" style="margin-right: 6px;"></i><span id="label-msg-mute">Mute User</span>
                 </button>
-                <button class="btn-primary" id="btn-msg-ban" style="background: #d62828;">
-                    <i class="fas fa-ban"></i> Ban / Unban User
+                <button class="btn-primary" id="btn-msg-ban" style="background: #d62828; transition: background 0.25s ease;">
+                    <i class="fas fa-ban" id="icon-msg-ban" style="margin-right: 6px;"></i><span id="label-msg-ban">Ban User</span>
                 </button>
             </div>
 
@@ -686,6 +686,54 @@
             socket.on('system-msg', (msg) => {
                 alert(msg);
             });
+
+            // نستقبل حالة المستخدمين المكتومين/المحظورين ونحدث الأزرار مباشرة
+            window.mutedSet = new Set();
+            window.bannedSet = new Set();
+            socket.on('status-lists', (data) => {
+                window.mutedSet = new Set(data.muted || []);
+                window.bannedSet = new Set(data.banned || []);
+                updateMsgActionButtons();
+            });
+        }
+
+        // تحدّث شكل ونص وأيقونة زرار Mute/Ban حسب الحالة الحالية للمستخدم المختار
+        function updateMsgActionButtons() {
+            if (!selectedSenderName) return;
+
+            const muteBtn = document.getElementById('btn-msg-mute');
+            const muteIcon = document.getElementById('icon-msg-mute');
+            const muteLabel = document.getElementById('label-msg-mute');
+            const isMuted = window.mutedSet && window.mutedSet.has(selectedSenderName);
+
+            if (isMuted) {
+                muteBtn.style.background = '#2ecc71';
+                muteBtn.style.color = '#000';
+                muteIcon.className = 'fas fa-volume-up';
+                muteLabel.innerText = 'Unmute User';
+            } else {
+                muteBtn.style.background = '#ffb703';
+                muteBtn.style.color = '#000';
+                muteIcon.className = 'fas fa-volume-mute';
+                muteLabel.innerText = 'Mute User';
+            }
+
+            const banBtn = document.getElementById('btn-msg-ban');
+            const banIcon = document.getElementById('icon-msg-ban');
+            const banLabel = document.getElementById('label-msg-ban');
+            const isBanned = window.bannedSet && window.bannedSet.has(selectedSenderName);
+
+            if (isBanned) {
+                banBtn.style.background = '#2ecc71';
+                banBtn.style.color = '#000';
+                banIcon.className = 'fas fa-user-check';
+                banLabel.innerText = 'Unban User';
+            } else {
+                banBtn.style.background = '#d62828';
+                banBtn.style.color = '#fff';
+                banIcon.className = 'fas fa-ban';
+                banLabel.innerText = 'Ban User';
+            }
         }
 
         // نافذة التحكم عند النقر على أي رسالة
@@ -699,6 +747,7 @@
 
             if (window.isUserAdminOrMod) {
                 adminActions.style.display = 'flex';
+                updateMsgActionButtons();
             } else {
                 adminActions.style.display = 'none';
             }
@@ -738,22 +787,24 @@
             closeMsgModal();
         });
 
-        // زر كتم/إلغاء كتم المستخدم للمشرفين
+        // زر كتم/إلغاء كتم المستخدم للمشرفين (toggle تلقائي)
         document.getElementById('btn-msg-mute').addEventListener('click', async () => {
             if (!selectedSenderName) return;
             try {
                 const idToken = await window.firebaseAuth.currentUser.getIdToken();
-                socket.emit('mute-user', { username: selectedSenderName, idToken });
+                const isMuted = window.mutedSet && window.mutedSet.has(selectedSenderName);
+                socket.emit(isMuted ? 'unmute-user' : 'mute-user', { username: selectedSenderName, idToken });
             } catch (e) { alert("يجب تسجيل الدخول."); }
             closeMsgModal();
         });
 
-        // زر حظر/إلغاء حظر المستخدم للمشرفين
+        // زر حظر/إلغاء حظر المستخدم للمشرفين (toggle تلقائي)
         document.getElementById('btn-msg-ban').addEventListener('click', async () => {
             if (!selectedSenderName) return;
             try {
                 const idToken = await window.firebaseAuth.currentUser.getIdToken();
-                socket.emit('block-user', { username: selectedSenderName, idToken });
+                const isBanned = window.bannedSet && window.bannedSet.has(selectedSenderName);
+                socket.emit(isBanned ? 'unblock-user' : 'block-user', { username: selectedSenderName, idToken });
             } catch (e) { alert("يجب تسجيل الدخول."); }
             closeMsgModal();
         });
