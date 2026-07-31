@@ -80,6 +80,58 @@
             text-decoration: line-through;
             opacity: 0.6;
         }
+
+        .system-msg-card {
+            align-self: center;
+            max-width: 85%;
+            text-align: center;
+            font-size: 13px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            margin: 4px 0;
+            backdrop-filter: blur(10px);
+            animation: fadeInSystem 0.3s ease;
+        }
+        .system-msg-card.kind-info {
+            background: rgba(0, 201, 255, 0.12);
+            border: 1px solid rgba(0, 201, 255, 0.35);
+            color: #7fd8ff;
+        }
+        .system-msg-card.kind-mute {
+            background: rgba(255, 183, 3, 0.12);
+            border: 1px solid rgba(255, 183, 3, 0.35);
+            color: #ffce54;
+        }
+        .system-msg-card.kind-ban {
+            background: rgba(214, 40, 40, 0.12);
+            border: 1px solid rgba(214, 40, 40, 0.4);
+            color: #ff6b6b;
+        }
+        .system-msg-card.kind-error {
+            background: rgba(255, 77, 77, 0.1);
+            border: 1px solid rgba(255, 77, 77, 0.3);
+            color: #ff8080;
+        }
+        @keyframes fadeInSystem {
+            from { opacity: 0; transform: translateY(-4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .banned-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(5, 5, 10, 0.97);
+            z-index: 5000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 30px;
+        }
+        .banned-overlay i { font-size: 48px; color: #ff4d4d; margin-bottom: 15px; }
+        .banned-overlay h2 { color: #ff4d4d; margin-bottom: 10px; }
+        .banned-overlay p { color: #94a3b8; max-width: 400px; }
     </style>
 </head>
 <body>
@@ -285,9 +337,22 @@
                 <button class="btn-primary" id="btn-msg-delete" style="background: #e63946;">
                     <i class="fas fa-trash-alt"></i> Delete Message
                 </button>
-                <button class="btn-primary" id="btn-msg-mute" style="background: #ffb703; color: #000; transition: background 0.25s ease, color 0.25s ease;">
-                    <i class="fas fa-volume-mute" id="icon-msg-mute" style="margin-right: 6px;"></i><span id="label-msg-mute">Mute User</span>
-                </button>
+
+                <div id="mute-section">
+                    <p id="mute-status-label" style="color: #94a3b8; font-size: 12px; margin: 0 0 6px 2px; display: none;"></p>
+                    <div id="mute-duration-options" style="display: flex; gap: 6px;">
+                        <button class="btn-primary mute-duration-btn" data-minutes="5" style="flex:1; padding: 10px 4px; background: #ffb703; color: #000; font-size: 13px;">
+                            <i class="fas fa-volume-mute"></i> 5m
+                        </button>
+                        <button class="btn-primary mute-duration-btn" data-minutes="15" style="flex:1; padding: 10px 4px; background: #ffb703; color: #000; font-size: 13px;">15m</button>
+                        <button class="btn-primary mute-duration-btn" data-minutes="30" style="flex:1; padding: 10px 4px; background: #ffb703; color: #000; font-size: 13px;">30m</button>
+                        <button class="btn-primary mute-duration-btn" data-minutes="60" style="flex:1; padding: 10px 4px; background: #ffb703; color: #000; font-size: 13px;">1h</button>
+                    </div>
+                    <button class="btn-primary" id="btn-msg-unmute" style="display: none; background: #2ecc71; color: #000;">
+                        <i class="fas fa-volume-up"></i> <span id="label-msg-unmute">Unmute User</span>
+                    </button>
+                </div>
+
                 <button class="btn-primary" id="btn-msg-ban" style="background: #d62828; transition: background 0.25s ease;">
                     <i class="fas fa-ban" id="icon-msg-ban" style="margin-right: 6px;"></i><span id="label-msg-ban">Ban User</span>
                 </button>
@@ -666,6 +731,27 @@
             chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
         }
 
+        // كرت رسالة نظام أنيق يتكتب داخل الشات (بدل alert المزعجة)
+        function appendSystemMessage(text, kind) {
+            const card = document.createElement('div');
+            card.className = `system-msg-card kind-${kind || 'info'}`;
+            card.innerText = text;
+            chatBox.appendChild(card);
+            chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
+        }
+
+        // شاشة كاملة تظهر للمستخدم المحظور
+        function showBannedOverlay(reason) {
+            const overlay = document.createElement('div');
+            overlay.className = 'banned-overlay';
+            overlay.innerHTML = `
+                <i class="fas fa-ban"></i>
+                <h2>تم حظرك من المحادثة</h2>
+                <p>${reason || 'لقد قامت الإدارة بحظرك من هذه المحادثة.'}</p>
+            `;
+            document.body.appendChild(overlay);
+        }
+
         if (socket) {
             socket.on('chat-message', (data) => {
                 appendLocalMessage(data.id || Date.now(), data.user, data.msg, data.senderId === socket.id);
@@ -683,39 +769,60 @@
                 }
             });
 
-            socket.on('system-msg', (msg) => {
-                alert(msg);
+            socket.on('system-msg', (payload) => {
+                // توافقية: السيرفر يبعث { text, kind } توا، بصح نتعامل مع نص فقط احتياطًا
+                if (typeof payload === 'string') {
+                    appendSystemMessage(payload, 'info');
+                } else {
+                    appendSystemMessage(payload.text, payload.kind);
+                }
             });
 
-            // نستقبل حالة المستخدمين المكتومين/المحظورين ونحدث الأزرار مباشرة
-            window.mutedSet = new Set();
+            socket.on('you-are-banned', (data) => {
+                showBannedOverlay(data && data.reason);
+                setTimeout(() => socket.disconnect(), 300);
+            });
+
+            // نستقبل حالة المستخدمين المكتومين (مع وقت الانتهاء)/المحظورين ونحدث الأزرار مباشرة
+            window.mutedMap = new Map();
             window.bannedSet = new Set();
             socket.on('status-lists', (data) => {
-                window.mutedSet = new Set(data.muted || []);
+                window.mutedMap = new Map((data.muted || []).map(u => [u.username, u.expiresAt]));
                 window.bannedSet = new Set(data.banned || []);
                 updateMsgActionButtons();
             });
+
+            // نعرف السيرفر باسمنا فور ما ندخل، باش الحظر يتفعل مباشرة إذا لزم
+            const registerWhenReady = () => {
+                if (window.currentUsername) {
+                    socket.emit('register-user', { username: window.currentUsername });
+                } else {
+                    setTimeout(registerWhenReady, 500);
+                }
+            };
+            socket.on('connect', registerWhenReady);
         }
 
-        // تحدّث شكل ونص وأيقونة زرار Mute/Ban حسب الحالة الحالية للمستخدم المختار
+        // تحدّث شكل ونص وأيقونة أزرار Mute/Ban حسب الحالة الحالية للمستخدم المختار
         function updateMsgActionButtons() {
             if (!selectedSenderName) return;
 
-            const muteBtn = document.getElementById('btn-msg-mute');
-            const muteIcon = document.getElementById('icon-msg-mute');
-            const muteLabel = document.getElementById('label-msg-mute');
-            const isMuted = window.mutedSet && window.mutedSet.has(selectedSenderName);
+            const durationOptions = document.getElementById('mute-duration-options');
+            const unmuteBtn = document.getElementById('btn-msg-unmute');
+            const statusLabel = document.getElementById('mute-status-label');
+            const expiresAt = window.mutedMap && window.mutedMap.get(selectedSenderName);
+            const isMuted = expiresAt && expiresAt > Date.now();
 
             if (isMuted) {
-                muteBtn.style.background = '#2ecc71';
-                muteBtn.style.color = '#000';
-                muteIcon.className = 'fas fa-volume-up';
-                muteLabel.innerText = 'Unmute User';
+                const remaining = Math.max(1, Math.ceil((expiresAt - Date.now()) / 60000));
+                durationOptions.style.display = 'none';
+                unmuteBtn.style.display = 'flex';
+                statusLabel.style.display = 'block';
+                statusLabel.innerText = `مكتوم حاليًا — يتبقى تقريبًا ${remaining} دقيقة`;
             } else {
-                muteBtn.style.background = '#ffb703';
-                muteBtn.style.color = '#000';
-                muteIcon.className = 'fas fa-volume-mute';
-                muteLabel.innerText = 'Mute User';
+                durationOptions.style.display = 'flex';
+                unmuteBtn.style.display = 'none';
+                statusLabel.style.display = 'none';
             }
 
             const banBtn = document.getElementById('btn-msg-ban');
@@ -768,7 +875,7 @@
                 const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ar&dt=t&q=${encodeURIComponent(selectedMsgText)}`);
                 const result = await res.json();
                 textSpan.innerHTML = `${selectedMsgText} <br><span class="translated-text">🔄 ${result[0][0][0]}</span>`;
-            } catch (error) { alert("Translation failed."); }
+            } catch (error) { appendSystemMessage('فشلت الترجمة.', 'error'); }
         });
 
         // زر حذف الرسالة للمشرفين
@@ -783,18 +890,30 @@
                     const textSpan = selectedMsgElem.querySelector('.text-content');
                     textSpan.innerHTML = `<span class="msg-deleted-admin">[🗑️ Deleted]:</span> <span class="msg-deleted-text">${selectedMsgText}</span>`;
                 }
-            } catch (e) { alert("يجب تسجيل الدخول للحذف."); }
+            } catch (e) { appendSystemMessage('يجب تسجيل الدخول للحذف.', 'error'); }
             closeMsgModal();
         });
 
-        // زر كتم/إلغاء كتم المستخدم للمشرفين (toggle تلقائي)
-        document.getElementById('btn-msg-mute').addEventListener('click', async () => {
+        // أزرار مدة الكتم (5 / 15 / 30 / 60 دقيقة)
+        document.querySelectorAll('.mute-duration-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                if (!selectedSenderName) return;
+                const minutes = parseInt(btn.dataset.minutes, 10);
+                try {
+                    const idToken = await window.firebaseAuth.currentUser.getIdToken();
+                    socket.emit('mute-user', { username: selectedSenderName, idToken, minutes });
+                } catch (e) { appendSystemMessage('يجب تسجيل الدخول.', 'error'); }
+                closeMsgModal();
+            });
+        });
+
+        // زر إلغاء الكتم
+        document.getElementById('btn-msg-unmute').addEventListener('click', async () => {
             if (!selectedSenderName) return;
             try {
                 const idToken = await window.firebaseAuth.currentUser.getIdToken();
-                const isMuted = window.mutedSet && window.mutedSet.has(selectedSenderName);
-                socket.emit(isMuted ? 'unmute-user' : 'mute-user', { username: selectedSenderName, idToken });
-            } catch (e) { alert("يجب تسجيل الدخول."); }
+                socket.emit('unmute-user', { username: selectedSenderName, idToken });
+            } catch (e) { appendSystemMessage('يجب تسجيل الدخول.', 'error'); }
             closeMsgModal();
         });
 
@@ -805,7 +924,7 @@
                 const idToken = await window.firebaseAuth.currentUser.getIdToken();
                 const isBanned = window.bannedSet && window.bannedSet.has(selectedSenderName);
                 socket.emit(isBanned ? 'unblock-user' : 'block-user', { username: selectedSenderName, idToken });
-            } catch (e) { alert("يجب تسجيل الدخول."); }
+            } catch (e) { appendSystemMessage('يجب تسجيل الدخول.', 'error'); }
             closeMsgModal();
         });
 
