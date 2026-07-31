@@ -155,6 +155,28 @@
             border: 1px solid rgba(214, 40, 40, 0.45);
             color: #ff6b6b;
         }
+
+        #pinned-message-bar {
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            margin-bottom: 10px;
+            border-radius: 12px;
+            background: rgba(0, 201, 255, 0.08);
+            border: 1px solid rgba(0, 201, 255, 0.3);
+            font-size: 13px;
+            color: #7fd8ff;
+        }
+        #pinned-message-bar .pin-icon { color: #00c9ff; flex-shrink: 0; }
+        #pinned-message-bar .pin-content { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #pinned-message-bar .pin-unpin-btn {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            cursor: pointer;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
     </style>
 </head>
 <body>
@@ -257,6 +279,14 @@
             <div class="ai-btn" id="btn-admin" style="background: rgba(255, 215, 0, 0.2); border: 1px solid #ffd700; margin-top: 10px; display: none;" title="Admin Dashboard">
                 <i class="fas fa-user-shield" style="color: #ffd700;"></i>
             </div>
+
+            <div class="ai-btn" id="btn-clear-chat" style="background: rgba(230, 57, 70, 0.2); border: 1px solid #e63946; margin-top: 10px; display: none;" title="Clear Chat">
+                <i class="fas fa-broom" style="color: #e63946;"></i>
+            </div>
+
+            <div class="ai-btn" id="btn-lock-chat" style="background: rgba(255, 183, 3, 0.2); border: 1px solid #ffb703; margin-top: 10px; display: none;" title="Lock Chat">
+                <i class="fas fa-lock-open" id="icon-lock-chat" style="color: #ffb703;"></i>
+            </div>
             
             <div class="ai-btn" id="btn-logout" style="background: #dc3545; margin-top: 10px; display: none;" title="Logout">
                 <i class="fas fa-sign-out-alt"></i>
@@ -268,6 +298,7 @@
                 <h1 class="chat-title">Just Chatting</h1>
                 <span id="user-display-tag" class="user-badge"></span>
             </div>
+            <div id="pinned-message-bar" style="display: none;"></div>
             <div id="chat-box"></div>
 
             <div id="restriction-banner" style="display: none;"></div>
@@ -380,6 +411,10 @@
 
                 <button class="btn-primary" id="btn-msg-ban" style="background: #d62828; transition: background 0.25s ease;">
                     <i class="fas fa-ban" id="icon-msg-ban" style="margin-right: 6px;"></i><span id="label-msg-ban">Ban User</span>
+                </button>
+
+                <button class="btn-primary" id="btn-msg-pin" style="background: #00c9ff; color: #000;">
+                    <i class="fas fa-thumbtack" id="icon-msg-pin"></i> <span id="label-msg-pin">Pin Message</span>
                 </button>
             </div>
 
@@ -575,7 +610,7 @@
                 let isMod = false;
                 try {
                     const userDoc = await getDoc(doc(db, "users", user.uid));
-                    if (userDoc.exists() && userDoc.data().role === "moderator") {
+                    if (userDoc.exists() && (userDoc.data().role === "moderator" || userDoc.data().role === "admin")) {
                         isMod = true;
                     }
                 } catch(e) {}
@@ -583,6 +618,8 @@
                 if (username.toLowerCase() === "hamma admin" || username.toLowerCase() === "hamma" || isMod) {
                     window.isUserAdminOrMod = true;
                     document.getElementById('btn-admin').style.display = 'flex';
+                    document.getElementById('btn-clear-chat').style.display = 'flex';
+                    document.getElementById('btn-lock-chat').style.display = 'flex';
                 }
                 
                 window.proceedToChat(username);
@@ -598,7 +635,7 @@
             document.getElementById('admin-modal').style.display = 'none';
         };
 
-        // التحديث التلقائي للوحة الإدارة كل 5 ثوانٍ
+        // Auto-refresh the admin dashboard every 5 seconds
         setInterval(() => {
             if (document.getElementById('admin-modal').style.display === 'flex') {
                 loadAdminData();
@@ -617,22 +654,28 @@
                     let userId = docSnap.id;
                     if (u.isOnline) onlineCount++;
 
-                    let isMod = u.role === "moderator";
+                    let isMod = u.role === "moderator" || u.role === "admin";
+                    // The chat ban/mute system is keyed by display name, not by Firestore uid
+                    let displayName = u.username || u.displayName || u.email || 'User';
+                    let isBannedNow = window.bannedSet && window.bannedSet.has(displayName);
+                    let muteExpiry = window.mutedMap && window.mutedMap.get(displayName);
+                    let isMutedNow = muteExpiry && muteExpiry > Date.now();
 
                     tableBody.innerHTML += `
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                             <td style="padding: 10px; color: #fff;">
-                                ${u.username || u.displayName || u.email || 'User'}
+                                ${displayName}
                                 ${isMod ? ' <span style="color:#00c9ff; font-size:12px;">(Moderator)</span>' : ''}
-                                ${u.isMuted ? ' <span style="color:#ffb703; font-size:12px;">(Muted)</span>' : ''}
+                                ${isMutedNow ? ' <span style="color:#ffb703; font-size:12px;">(Muted)</span>' : ''}
+                                ${isBannedNow ? ' <span style="color:#ff4444; font-size:12px;">(Banned)</span>' : ''}
                             </td>
                             <td style="padding: 10px;">${u.isOnline ? '🟢 Online' : '🔴 Offline'}</td>
-                            <td style="padding: 10px; display: flex; gap: 5px;">
-                                <button onclick="toggleBan('${userId}', ${u.isBanned || false})" style="background: ${u.isBanned ? '#28a745' : '#ff4444'}; color: #fff; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer;">
-                                    ${u.isBanned ? 'Unban' : 'Ban'}
+                            <td style="padding: 10px; display: flex; gap: 5px; flex-wrap: wrap;">
+                                <button onclick="window.toggleBanSocket('${displayName}', ${isBannedNow})" style="background: ${isBannedNow ? '#28a745' : '#ff4444'}; color: #fff; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer;">
+                                    ${isBannedNow ? 'Unban' : 'Ban'}
                                 </button>
-                                <button onclick="toggleMute('${userId}', ${u.isMuted || false})" style="background: ${u.isMuted ? '#28a745' : '#ffb703'}; color: #000; font-weight: bold; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer;">
-                                    ${u.isMuted ? 'Unmute' : 'Mute'}
+                                <button onclick="window.toggleMuteSocket('${displayName}', ${isMutedNow})" style="background: ${isMutedNow ? '#28a745' : '#ffb703'}; color: #000; font-weight: bold; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer;">
+                                    ${isMutedNow ? 'Unmute' : 'Mute 15m'}
                                 </button>
                                 <button onclick="toggleModerator('${userId}', '${u.role || 'user'}')" style="background: ${isMod ? '#ffc107' : '#17a2b8'}; color: #000; font-weight: bold; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer;">
                                     ${isMod ? 'Remove Mod' : 'Make Mod 🛡️'}
@@ -646,16 +689,20 @@
             });
         }
 
-        window.toggleBan = async function(userId, currentStatus) {
+        // Ban/unban and mute/unmute from the dashboard now go through the same
+        // real-time socket system used inside the chat (single source of truth)
+        window.toggleBanSocket = async function(username, currentlyBanned) {
             try {
-                await updateDoc(doc(db, "users", userId), { isBanned: !currentStatus });
-            } catch(e) { console.error("Error updating ban", e); }
+                const idToken = await auth.currentUser.getIdToken();
+                window.socket.emit(currentlyBanned ? 'unblock-user' : 'block-user', { username, idToken });
+            } catch (e) { console.error("Error toggling ban", e); }
         };
 
-        window.toggleMute = async function(userId, currentStatus) {
+        window.toggleMuteSocket = async function(username, currentlyMuted) {
             try {
-                await updateDoc(doc(db, "users", userId), { isMuted: !currentStatus });
-            } catch(e) { console.error("Error updating mute", e); }
+                const idToken = await auth.currentUser.getIdToken();
+                window.socket.emit(currentlyMuted ? 'unmute-user' : 'mute-user', { username, idToken, minutes: 15 });
+            } catch (e) { console.error("Error toggling mute", e); }
         };
 
         window.toggleModerator = async function(userId, currentRole) {
@@ -670,7 +717,7 @@
     <script src="/socket.io/socket.io.js"></script>
     <script>
         let socket;
-        try { socket = io(); } catch (e) { console.warn("Socket.io fallback mode."); }
+        try { socket = io(); window.socket = socket; } catch (e) { console.warn("Socket.io fallback mode."); }
 
         const chatBox = document.getElementById('chat-box');
         const aiChatBox = document.getElementById('ai-chat-box');
@@ -724,12 +771,19 @@
             document.getElementById('profilePanel').classList.remove('open');
         });
 
-        function sendMessage() {
+        async function sendMessage() {
             const msg = document.getElementById('message').value;
             if(msg.trim() !== "") {
                 const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                let idToken = null;
+                try {
+                    if (window.firebaseAuth && window.firebaseAuth.currentUser) {
+                        idToken = await window.firebaseAuth.currentUser.getIdToken();
+                    }
+                } catch (e) { /* guest or not logged in, idToken stays null */ }
+
                 if (socket && socket.connected) {
-                    socket.emit('chat-message', { id: msgId, user: window.currentUsername, msg: msg, senderId: socket.id });
+                    socket.emit('chat-message', { id: msgId, user: window.currentUsername, msg: msg, senderId: socket.id, idToken });
                 } else {
                     appendLocalMessage(msgId, window.currentUsername, msg, true);
                 }
@@ -756,7 +810,7 @@
             chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
         }
 
-        // كرت رسالة نظام أنيق يتكتب داخل الشات (بدل alert المزعجة)
+        // A clean system message card appended inside the chat (instead of an annoying alert)
         function appendSystemMessage(text, kind) {
             const card = document.createElement('div');
             card.className = `system-msg-card kind-${kind || 'info'}`;
@@ -765,7 +819,7 @@
             chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
         }
 
-        // شاشة كاملة تظهر للمستخدم المحظور
+        // Full-screen overlay shown to a banned user
         function showBannedOverlay(reason) {
             const overlay = document.createElement('div');
             overlay.className = 'banned-overlay';
@@ -795,7 +849,7 @@
             });
 
             socket.on('system-msg', (payload) => {
-                // توافقية: السيرفر يبعث { text, kind } توا، بصح نتعامل مع نص فقط احتياطًا
+                // Compatibility: the server now sends { text, kind }, but handle plain strings just in case
                 if (typeof payload === 'string') {
                     appendSystemMessage(payload, 'info');
                 } else {
@@ -808,7 +862,7 @@
                 setTimeout(() => socket.disconnect(), 300);
             });
 
-            // نستقبل حالة المستخدمين المكتومين (مع وقت الانتهاء)/المحظورين ونحدث الأزرار مباشرة
+            // Receive the muted (with expiry)/banned users state and update the buttons live
             window.mutedMap = new Map();
             window.bannedSet = new Set();
             socket.on('status-lists', (data) => {
@@ -818,7 +872,7 @@
                 updateOwnRestrictionStatus();
             });
 
-            // نعرف السيرفر باسمنا فور ما ندخل، باش الحظر يتفعل مباشرة إذا لزم
+            // Register our username with the server right away, so bans apply instantly if needed
             const registerWhenReady = () => {
                 if (window.currentUsername) {
                     socket.emit('register-user', { username: window.currentUsername });
@@ -827,9 +881,50 @@
                 }
             };
             socket.on('connect', registerWhenReady);
+
+            // Chat cleared by an admin
+            socket.on('chat-cleared', (data) => {
+                chatBox.innerHTML = '';
+                appendSystemMessage(`🧹 Chat cleared by ${(data && data.by) || 'an admin'}.`, 'info');
+            });
+
+            // Chat lock state changed
+            window.isChatLocked = false;
+            socket.on('chat-lock-status', ({ locked }) => {
+                window.isChatLocked = locked;
+                const lockIcon = document.getElementById('icon-lock-chat');
+                if (lockIcon) lockIcon.className = locked ? 'fas fa-lock' : 'fas fa-lock-open';
+                updateOwnRestrictionStatus();
+            });
+
+            // Pinned message changed
+            socket.on('pinned-message-update', (data) => {
+                renderPinnedMessage(data);
+            });
         }
 
-        // تحدّث شكل ونص وأيقونة أزرار Mute/Ban حسب الحالة الحالية للمستخدم المختار
+        function renderPinnedMessage(data) {
+            const bar = document.getElementById('pinned-message-bar');
+            if (!data) {
+                bar.style.display = 'none';
+                bar.innerHTML = '';
+                return;
+            }
+            bar.style.display = 'flex';
+            const unpinBtn = window.isUserAdminOrMod
+                ? `<button class="pin-unpin-btn" onclick="unpinMessage()" title="Unpin"><i class="fas fa-times"></i></button>`
+                : '';
+            bar.innerHTML = `<i class="fas fa-thumbtack pin-icon"></i><span class="pin-content"><strong>${data.user}:</strong> ${data.text}</span>${unpinBtn}`;
+        }
+
+        async function unpinMessage() {
+            try {
+                const idToken = await window.firebaseAuth.currentUser.getIdToken();
+                socket.emit('unpin-message', { idToken });
+            } catch (e) { appendSystemMessage('You must be logged in.', 'error'); }
+        }
+
+        // Update the Mute/Ban buttons look, label and icon based on the selected user's current state
         function updateMsgActionButtons() {
             if (!selectedSenderName) return;
 
@@ -869,7 +964,7 @@
             }
         }
 
-        // تحدّث حالة المستخدم نفسه (كتم/حظر) فوق مكان الكتابة، مع عداد تنازلي حي
+        // Update our own restriction state (mute/ban) above the input box, with a live countdown
         let restrictionCountdownInterval = null;
         function updateOwnRestrictionStatus() {
             const banner = document.getElementById('restriction-banner');
@@ -918,13 +1013,23 @@
                 return;
             }
 
+            if (window.isChatLocked && !window.isUserAdminOrMod) {
+                banner.className = 'state-ban';
+                banner.style.display = 'flex';
+                banner.innerHTML = `<i class="fas fa-lock"></i> Chat is locked by an admin`;
+                msgInput.disabled = true;
+                sendBtn.disabled = true;
+                msgInput.placeholder = 'Chat is locked...';
+                return;
+            }
+
             banner.style.display = 'none';
             msgInput.disabled = false;
             sendBtn.disabled = false;
             msgInput.placeholder = 'Type a message...';
         }
 
-        // نافذة التحكم عند النقر على أي رسالة
+        // Options popup shown when tapping any message
         function openMsgModal(element, sender, text) {
             selectedMsgElem = element;
             selectedSenderName = sender;
@@ -947,7 +1052,7 @@
             document.getElementById('msg-options-modal').style.display = 'none';
         }
 
-        // زر الترجمة داخل النافذة
+        // Translate button inside the popup
         document.getElementById('btn-msg-translate').addEventListener('click', async () => {
             if (!selectedMsgElem) return;
             closeMsgModal();
@@ -959,7 +1064,7 @@
             } catch (error) { appendSystemMessage('فشلت الترجمة.', 'error'); }
         });
 
-        // زر حذف الرسالة للمشرفين
+        // Delete message button (admins only)
         document.getElementById('btn-msg-delete').addEventListener('click', async () => {
             if (!selectedMsgElem) return;
             const msgId = selectedMsgElem.dataset.id;
@@ -975,7 +1080,7 @@
             closeMsgModal();
         });
 
-        // أزرار مدة الكتم (5 / 15 / 30 / 60 دقيقة)
+        // Mute duration buttons (5 / 15 / 30 / 60 minutes)
         document.querySelectorAll('.mute-duration-btn').forEach(btn => {
             btn.addEventListener('click', async () => {
                 if (!selectedSenderName) return;
@@ -988,7 +1093,7 @@
             });
         });
 
-        // زر إلغاء الكتم
+        // Unmute button
         document.getElementById('btn-msg-unmute').addEventListener('click', async () => {
             if (!selectedSenderName) return;
             try {
@@ -998,7 +1103,7 @@
             closeMsgModal();
         });
 
-        // زر حظر/إلغاء حظر المستخدم للمشرفين (toggle تلقائي)
+        // Ban/unban button (admins only, auto-toggling)
         document.getElementById('btn-msg-ban').addEventListener('click', async () => {
             if (!selectedSenderName) return;
             try {
@@ -1007,6 +1112,34 @@
                 socket.emit(isBanned ? 'unblock-user' : 'block-user', { username: selectedSenderName, idToken });
             } catch (e) { appendSystemMessage('يجب تسجيل الدخول.', 'error'); }
             closeMsgModal();
+        });
+
+        // Pin the selected message so it stays visible at the top of the chat
+        document.getElementById('btn-msg-pin').addEventListener('click', async () => {
+            if (!selectedMsgElem) return;
+            const msgId = selectedMsgElem.dataset.id;
+            try {
+                const idToken = await window.firebaseAuth.currentUser.getIdToken();
+                socket.emit('pin-message', { msgId, user: selectedSenderName, text: selectedMsgText, idToken });
+            } catch (e) { appendSystemMessage('يجب تسجيل الدخول.', 'error'); }
+            closeMsgModal();
+        });
+
+        // Clear the entire chat for everyone (admins only)
+        document.getElementById('btn-clear-chat').addEventListener('click', async () => {
+            if (!confirm('Clear the whole chat for everyone?')) return;
+            try {
+                const idToken = await window.firebaseAuth.currentUser.getIdToken();
+                socket.emit('clear-chat', { idToken });
+            } catch (e) { appendSystemMessage('يجب تسجيل الدخول.', 'error'); }
+        });
+
+        // Lock/unlock the chat so only admins/mods can send messages (admins only)
+        document.getElementById('btn-lock-chat').addEventListener('click', async () => {
+            try {
+                const idToken = await window.firebaseAuth.currentUser.getIdToken();
+                socket.emit(window.isChatLocked ? 'unlock-chat' : 'lock-chat', { idToken });
+            } catch (e) { appendSystemMessage('يجب تسجيل الدخول.', 'error'); }
         });
 
         function changeBg(bg) {
