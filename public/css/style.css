@@ -341,6 +341,21 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 100%;
+    cursor: pointer;
+}
+.reply-quote:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.25);
+}
+
+/* توهج ناعم ومريح للعين كي تكبس على الاقتباس باش يوريك الرسالة الأصلية */
+@keyframes highlightPulse {
+    0%   { box-shadow: 0 0 0 0 rgba(0, 201, 255, 0.45); }
+    70%  { box-shadow: 0 0 0 9px rgba(0, 201, 255, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(0, 201, 255, 0); }
+}
+.msg.highlight-pulse {
+    animation: highlightPulse 1.2s ease-out;
 }
 
 /* شريط معاينة الرد فوق مربع الكتابة */
