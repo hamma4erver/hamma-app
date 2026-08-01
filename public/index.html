@@ -352,8 +352,10 @@
             <div class="input-group" style="margin-bottom: 20px;">
                 <label style="color: #94a3b8; font-size: 14px; display: block; margin-bottom: 8px;">Change Username</label>
                 <input type="text" id="panelNewUsername" placeholder="Enter new username..." style="width: 100%; padding: 12px; background: rgba(0,0,0,0.5); border: 1px solid rgba(0,201,255,0.3); border-radius: 8px; color: white; outline: none;">
+                <p id="panel-cooldown-info" style="color: #94a3b8; font-size: 12px; margin-top: 8px; display: none;"></p>
             </div>
             <p id="panel-error" style="color: #ff4d4d; font-size: 14px; display: none; margin-bottom: 10px;"></p>
+
             <button class="btn-primary" id="btnUpdateUsername" style="background: linear-gradient(45deg, #00c9ff, #92fe9d); color: #000; font-weight: bold;">
                 Save Changes ⚡
             </button>
@@ -509,6 +511,44 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
+
+        // ==================================================
+        // Username change cooldown: each user can only change
+        // their username once every 7 days. The last-change time
+        // is stored on their users/{uid} Firestore doc as
+        // "usernameChangedAt", which is also what the admin/mod
+        // dashboard reads from — so writing the new name there
+        // (see btnUpdateUsername below) is what keeps the
+        // dashboard in sync in real time.
+        // ==================================================
+        const USERNAME_CHANGE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+        function formatRemainingCooldown(ms) {
+            const totalMinutes = Math.max(1, Math.ceil(ms / 60000));
+            const days = Math.floor(totalMinutes / (60 * 24));
+            const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+            const minutes = totalMinutes % 60;
+            if (days > 0) return `${days} day(s)${hours > 0 ? ` ${hours} hour(s)` : ''}`;
+            if (hours > 0) return `${hours} hour(s)${minutes > 0 ? ` ${minutes} minute(s)` : ''}`;
+            return `${minutes} minute(s)`;
+        }
+
+        // Returns { allowed, remainingMs } based on the user's stored usernameChangedAt.
+        async function getUsernameChangeCooldown() {
+            if (!auth.currentUser) return { allowed: true, remainingMs: 0 };
+            try {
+                const userSnap = await getDoc(doc(db, "users", auth.currentUser.uid));
+                const changedAt = userSnap.exists() ? userSnap.data().usernameChangedAt : null;
+                if (!changedAt || typeof changedAt.toMillis !== 'function') return { allowed: true, remainingMs: 0 };
+                const elapsed = Date.now() - changedAt.toMillis();
+                const remainingMs = USERNAME_CHANGE_COOLDOWN_MS - elapsed;
+                return remainingMs > 0 ? { allowed: false, remainingMs } : { allowed: true, remainingMs: 0 };
+            } catch (e) {
+                console.error("Could not check username change cooldown:", e);
+                return { allowed: true, remainingMs: 0 }; // fail open, don't block the user on a read error
+            }
+        }
+
         const provider = new GoogleAuthProvider();
         window.firebaseAuth = auth;
 
@@ -672,9 +712,18 @@
             }
 
             const lowerNewName = newName.toLowerCase();
+            panelError.style.display = 'none';
+
+            // Enforce the once-a-week limit before doing anything else
+            const cooldown = await getUsernameChangeCooldown();
+            if (!cooldown.allowed) {
+                panelError.style.display = 'block';
+                panelError.innerText = `You can only change your username once a week. Try again in ${formatRemainingCooldown(cooldown.remainingMs)}.`;
+                return;
+            }
+
             btn.classList.add('btn-loading');
             btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Searching...`;
-            panelError.style.display = 'none';
 
             try {
                 const usernameRef = doc(db, "usernames", lowerNewName);
@@ -696,10 +745,22 @@
 
                 const previousUsername = window.currentUsername;
                 await updateProfile(auth.currentUser, { displayName: newName });
+
+                // Persist the new name (and the cooldown timestamp) to the user's
+                // Firestore doc — this is the same doc the admin/mod dashboard
+                // listens to (onSnapshot on "users"), so this is what makes the
+                // rename show up there live, instead of only after next login.
+                await setDoc(doc(db, "users", auth.currentUser.uid), {
+                    username: newName,
+                    displayName: newName,
+                    usernameChangedAt: serverTimestamp()
+                }, { merge: true });
+
                 window.currentUsername = newName;
                 document.getElementById('user-display-tag').innerHTML = window.formatUsername(newName);
                 document.getElementById('profilePanel').classList.remove('open');
                 panelError.style.display = 'none';
+                await refreshUsernameCooldownUI();
 
                 // Carry over any active mute/ban from the old name, and re-register
                 // the new one immediately so restrictions can't be evaded by renaming
@@ -994,10 +1055,33 @@
             document.getElementById('pc-notice-modal').style.display = 'none';
         }
 
-        document.getElementById('openProfilePanel').addEventListener('click', () => {
+        document.getElementById('openProfilePanel').addEventListener('click', async () => {
             document.getElementById('profilePanel').classList.add('open');
             document.getElementById('panelNewUsername').value = window.currentUsername;
+            await refreshUsernameCooldownUI();
         });
+
+        // Reflects the 7-day cooldown in the panel: disables the button and
+        // shows how long is left, if the user already changed their name recently.
+        async function refreshUsernameCooldownUI() {
+            const btn = document.getElementById('btnUpdateUsername');
+            const cooldownInfo = document.getElementById('panel-cooldown-info');
+            const { allowed, remainingMs } = await getUsernameChangeCooldown();
+            if (!allowed) {
+                btn.disabled = true;
+                btn.style.opacity = '0.5';
+                btn.style.cursor = 'not-allowed';
+                cooldownInfo.style.display = 'block';
+                cooldownInfo.innerText = `You can change your username again in ${formatRemainingCooldown(remainingMs)}.`;
+            } else {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+                cooldownInfo.style.display = 'none';
+                cooldownInfo.innerText = '';
+            }
+        }
+
         document.getElementById('closeProfilePanel').addEventListener('click', () => {
             document.getElementById('profilePanel').classList.remove('open');
         });
