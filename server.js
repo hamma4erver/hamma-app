@@ -3,6 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const admin = require('firebase-admin');
+const nodemailer = require('nodemailer');
 
 const app = express();
 const server = http.createServer(app);
@@ -28,6 +29,85 @@ if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
 }
 
 const db = admin.apps.length ? admin.firestore() : null;
+
+// ==================================================
+// Email verification (6-digit codes)
+// Requires SMTP env vars: EMAIL_HOST, EMAIL_PORT, EMAIL_USER, EMAIL_PASS
+// (e.g. a Gmail App Password, or a service like Resend/Brevo/Mailgun SMTP)
+// ==================================================
+let mailer = null;
+if (process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+    mailer = nodemailer.createTransport({
+        host: process.env.EMAIL_HOST,
+        port: Number(process.env.EMAIL_PORT) || 587,
+        secure: Number(process.env.EMAIL_PORT) === 465,
+        auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS
+        }
+    });
+} else {
+    console.warn("⚠️ Email SMTP env vars are missing! Verification emails will not be sent.");
+}
+
+const verificationCodes = new Map(); // email -> { code, expiresAt }
+
+function generateCode() {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+app.post('/api/send-verification-code', async (req, res) => {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ success: false, message: 'Email is required.' });
+    if (!mailer) return res.status(500).json({ success: false, message: 'Email service is not configured on the server.' });
+
+    const code = generateCode();
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+    verificationCodes.set(email, { code, expiresAt });
+
+    try {
+        await mailer.sendMail({
+            from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+            to: email,
+            subject: 'Your Hamma Chat verification code',
+            text: `Your verification code is: ${code}\nIt expires in 10 minutes.`,
+            html: `<p>Your verification code is:</p><h2 style="letter-spacing:6px;">${code}</h2><p>It expires in 10 minutes.</p>`
+        });
+        res.json({ success: true });
+    } catch (e) {
+        console.error("Failed to send verification email:", e.message);
+        res.status(500).json({ success: false, message: 'Failed to send verification email.' });
+    }
+});
+
+app.post('/api/verify-code', async (req, res) => {
+    const { email, code } = req.body;
+    if (!email || !code) return res.status(400).json({ success: false, message: 'Email and code are required.' });
+
+    const entry = verificationCodes.get(email);
+    if (!entry) return res.status(400).json({ success: false, message: 'No code was sent to this email, or it already expired.' });
+    if (Date.now() > entry.expiresAt) {
+        verificationCodes.delete(email);
+        return res.status(400).json({ success: false, message: 'This code has expired. Please request a new one.' });
+    }
+    if (entry.code !== String(code).trim()) {
+        return res.status(400).json({ success: false, message: 'Incorrect code.' });
+    }
+
+    verificationCodes.delete(email);
+
+    // Mark the Firebase account as verified, if it exists
+    try {
+        if (db) {
+            const userRecord = await admin.auth().getUserByEmail(email);
+            await admin.auth().updateUser(userRecord.uid, { emailVerified: true });
+        }
+    } catch (e) {
+        console.warn("Could not mark Firebase user as verified:", e.message);
+    }
+
+    res.json({ success: true });
+});
 
 // ==================================================
 // Verifies a Firebase ID token and checks if the user is admin/moderator
