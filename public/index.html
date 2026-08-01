@@ -158,6 +158,16 @@
             border: 1px solid rgba(255, 183, 3, 0.4);
             color: #ffce54;
         }
+        .mute-call-timer {
+            font-family: 'Courier New', monospace;
+            font-weight: 700;
+            font-size: 15px;
+            letter-spacing: 1px;
+            background: rgba(0, 0, 0, 0.25);
+            padding: 2px 8px;
+            border-radius: 6px;
+            margin-left: 4px;
+        }
         #restriction-banner.state-ban {
             background: rgba(214, 40, 40, 0.15);
             border: 1px solid rgba(214, 40, 40, 0.45);
@@ -1233,8 +1243,8 @@
             overlay.className = 'banned-overlay';
             overlay.innerHTML = `
                 <i class="fas fa-ban"></i>
-                <h2>تم حظرك من المحادثة</h2>
-                <p>${reason || 'لقد قامت الإدارة بحظرك من هذه المحادثة.'}</p>
+                <h2>You have been banned from the chat</h2>
+                <p>${reason || 'The admin has banned you from this chat.'}</p>
             `;
             document.body.appendChild(overlay);
         }
@@ -1392,7 +1402,7 @@
                 durationOptions.style.display = 'none';
                 unmuteBtn.style.display = 'flex';
                 statusLabel.style.display = 'block';
-                statusLabel.innerText = `مكتوم حاليًا — يتبقى تقريبًا ${remaining} دقيقة`;
+                statusLabel.innerText = `Muted — about ${remaining} minute(s) remaining`;
             } else {
                 durationOptions.style.display = 'flex';
                 unmuteBtn.style.display = 'none';
@@ -1436,10 +1446,10 @@
             if (isBanned) {
                 banner.className = 'state-ban';
                 banner.style.display = 'flex';
-                banner.innerHTML = `<i class="fas fa-ban"></i> أنت محظور من الكتابة في هذه المحادثة`;
+                banner.innerHTML = `<i class="fas fa-ban"></i> You are banned from writing in this chat`;
                 msgInput.disabled = true;
                 sendBtn.disabled = true;
-                msgInput.placeholder = 'أنت محظور...';
+                msgInput.placeholder = 'You are banned...';
                 return;
             }
 
@@ -1448,7 +1458,7 @@
                 banner.style.display = 'flex';
                 msgInput.disabled = true;
                 sendBtn.disabled = true;
-                msgInput.placeholder = 'أنت مكتوم مؤقتًا...';
+                msgInput.placeholder = 'You are temporarily muted...';
 
                 const tick = () => {
                     const remainingMs = muteExpiresAt - Date.now();
@@ -1459,7 +1469,7 @@
                     }
                     const mins = Math.floor(remainingMs / 60000);
                     const secs = Math.floor((remainingMs % 60000) / 1000);
-                    banner.innerHTML = `<i class="fas fa-volume-mute"></i> أنت مكتوم — يتبقى ${mins}:${secs.toString().padStart(2, '0')}`;
+                    banner.innerHTML = `<i class="fas fa-volume-mute"></i> Muted <span class="mute-call-timer">${mins}:${secs.toString().padStart(2, '0')}</span>`;
                 };
                 tick();
                 restrictionCountdownInterval = setInterval(tick, 1000);
@@ -1517,7 +1527,7 @@
                 const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ar&dt=t&q=${encodeURIComponent(selectedMsgText)}`);
                 const result = await res.json();
                 textSpan.innerHTML = `${selectedMsgText} <br><span class="translated-text">🔄 ${result[0][0][0]}</span>`;
-            } catch (error) { appendSystemMessage('فشلت الترجمة.', 'error'); }
+            } catch (error) { appendSystemMessage('Translation failed.', 'error'); }
         });
 
         // Reply button — available to everyone
@@ -1566,7 +1576,7 @@
                     const textSpan = selectedMsgElem.querySelector('.text-content');
                     textSpan.innerHTML = `<span class="msg-deleted-admin">[🗑️ Deleted]:</span> <span class="msg-deleted-text">${selectedMsgText}</span>`;
                 }
-            } catch (e) { appendSystemMessage('يجب تسجيل الدخول للحذف.', 'error'); }
+            } catch (e) { appendSystemMessage('You must be signed in to delete.', 'error'); }
             closeMsgModal();
         });
 
@@ -1578,7 +1588,7 @@
                 try {
                     const idToken = await window.firebaseAuth.currentUser.getIdToken();
                     socket.emit('mute-user', { username: selectedSenderName, idToken, minutes });
-                } catch (e) { appendSystemMessage('يجب تسجيل الدخول.', 'error'); }
+                } catch (e) { appendSystemMessage('You must be signed in.', 'error'); }
                 closeMsgModal();
             });
         });
@@ -1589,7 +1599,7 @@
             try {
                 const idToken = await window.firebaseAuth.currentUser.getIdToken();
                 socket.emit('unmute-user', { username: selectedSenderName, idToken });
-            } catch (e) { appendSystemMessage('يجب تسجيل الدخول.', 'error'); }
+            } catch (e) { appendSystemMessage('You must be signed in.', 'error'); }
             closeMsgModal();
         });
 
@@ -1600,7 +1610,7 @@
                 const idToken = await window.firebaseAuth.currentUser.getIdToken();
                 const isBanned = window.bannedSet && window.bannedSet.has(selectedSenderName);
                 socket.emit(isBanned ? 'unblock-user' : 'block-user', { username: selectedSenderName, idToken });
-            } catch (e) { appendSystemMessage('يجب تسجيل الدخول.', 'error'); }
+            } catch (e) { appendSystemMessage('You must be signed in.', 'error'); }
             closeMsgModal();
         });
 
@@ -1611,7 +1621,7 @@
             try {
                 const idToken = await window.firebaseAuth.currentUser.getIdToken();
                 socket.emit('pin-message', { msgId, user: selectedSenderName, text: selectedMsgText, idToken });
-            } catch (e) { appendSystemMessage('يجب تسجيل الدخول.', 'error'); }
+            } catch (e) { appendSystemMessage('You must be signed in.', 'error'); }
             closeMsgModal();
         });
 
@@ -1621,7 +1631,7 @@
             try {
                 const idToken = await window.firebaseAuth.currentUser.getIdToken();
                 socket.emit('clear-chat', { idToken });
-            } catch (e) { appendSystemMessage('يجب تسجيل الدخول.', 'error'); }
+            } catch (e) { appendSystemMessage('You must be signed in.', 'error'); }
         });
 
         // Lock/unlock the chat so only admins/mods can send messages (admins only)
@@ -1629,7 +1639,7 @@
             try {
                 const idToken = await window.firebaseAuth.currentUser.getIdToken();
                 socket.emit(window.isChatLocked ? 'unlock-chat' : 'lock-chat', { idToken });
-            } catch (e) { appendSystemMessage('يجب تسجيل الدخول.', 'error'); }
+            } catch (e) { appendSystemMessage('You must be signed in.', 'error'); }
         });
 
         function changeBg(bg) {
