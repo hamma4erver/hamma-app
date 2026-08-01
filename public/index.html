@@ -828,8 +828,12 @@
                 }
                 // Only admins (owners included) can wipe or lock the whole chat —
                 // moderators are limited to mute + pin
-                if (isOwnerOrAdmin) {
+                if (isOwnerOrAdmin || window.isUserModerator) {
                     document.getElementById('btn-clear-chat').style.display = 'flex';
+                }
+                // Only admins (owners included) can lock the whole chat or toggle auto-clear —
+                // moderators are limited to mute + pin + a cooldown-limited clear-chat
+                if (isOwnerOrAdmin) {
                     document.getElementById('btn-lock-chat').style.display = 'flex';
                     document.getElementById('btn-auto-clear').style.display = 'flex';
                 }
@@ -1038,7 +1042,10 @@
             msgElement.dataset.sender = user;
             msgElement.dataset.rawtext = msg;
 
-            msgElement.onclick = () => openMsgModal(msgElement, user, msg);
+            msgElement.onclick = () => {
+                if (msgElement._justDragged) { msgElement._justDragged = false; return; }
+                openMsgModal(msgElement, user, msg);
+            };
 
             const formattedUser = window.formatUsername(user);
             const replyHtml = replyTo
@@ -1047,6 +1054,66 @@
             msgElement.innerHTML = `${replyHtml}<strong>${formattedUser}:</strong> <span class="text-content">${msg}</span>`;
             chatBox.appendChild(msgElement);
             chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
+
+            attachSwipeToReply(msgElement, () => user, () => msg);
+        }
+
+        // Instagram-style swipe: drag a message left/right past a threshold to reply to it
+        function attachSwipeToReply(msgElement, getSender, getText) {
+            const THRESHOLD = 55;
+            const MAX_DRAG = 70;
+            let startX = 0, currentX = 0, dragging = false;
+
+            const iconEl = document.createElement('div');
+            iconEl.className = 'swipe-reply-icon';
+            iconEl.innerHTML = '<i class="fas fa-reply"></i>';
+            msgElement.appendChild(iconEl);
+
+            function pointX(e) { return e.touches ? e.touches[0].clientX : e.clientX; }
+
+            function onDown(e) {
+                if (e.pointerType === 'mouse' && e.button !== 0) return;
+                dragging = true;
+                startX = pointX(e);
+                currentX = 0;
+                msgElement._justDragged = false;
+                msgElement.classList.add('swiping');
+            }
+
+            function onMove(e) {
+                if (!dragging) return;
+                let delta = pointX(e) - startX;
+                if (Math.abs(delta) > MAX_DRAG) delta = MAX_DRAG * Math.sign(delta);
+                currentX = delta;
+                if (Math.abs(delta) > 8) msgElement._justDragged = true;
+
+                msgElement.style.transform = `translateX(${delta}px)`;
+                const progress = Math.min(Math.abs(delta) / THRESHOLD, 1);
+                iconEl.style.opacity = progress;
+                iconEl.style.left = delta > 0 ? '-28px' : '';
+                iconEl.style.right = delta < 0 ? '-28px' : '';
+            }
+
+            function onUp() {
+                if (!dragging) return;
+                dragging = false;
+                msgElement.classList.remove('swiping');
+                msgElement.style.transform = 'translateX(0)';
+                iconEl.style.opacity = 0;
+
+                if (Math.abs(currentX) >= THRESHOLD) {
+                    window.replyingTo = { id: msgElement.dataset.id, user: getSender(), text: getText() };
+                    showReplyPreview();
+                    if (navigator.vibrate) navigator.vibrate(15);
+                }
+                currentX = 0;
+            }
+
+            msgElement.addEventListener('pointerdown', onDown);
+            msgElement.addEventListener('pointermove', onMove);
+            msgElement.addEventListener('pointerup', onUp);
+            msgElement.addEventListener('pointercancel', onUp);
+            msgElement.addEventListener('pointerleave', onUp);
         }
 
         // A clean system message card appended inside the chat (instead of an annoying alert)
@@ -1115,11 +1182,56 @@
             const registerWhenReady = () => {
                 if (window.currentUsername) {
                     socket.emit('register-user', { username: window.currentUsername });
+                    if (window.isUserModerator && window.firebaseAuth.currentUser) {
+                        window.firebaseAuth.currentUser.getIdToken().then(idToken => {
+                            socket.emit('get-clear-cooldown', { idToken });
+                        }).catch(() => {});
+                    }
                 } else {
                     setTimeout(registerWhenReady, 500);
                 }
             };
             socket.on('connect', registerWhenReady);
+
+            // Reflect the moderator's clear-chat cooldown live on the sidebar button
+            let clearCooldownInterval = null;
+            function applyClearCooldown(nextAllowedAt) {
+                const btn = document.getElementById('btn-clear-chat');
+                if (!btn) return;
+                if (clearCooldownInterval) { clearInterval(clearCooldownInterval); clearCooldownInterval = null; }
+
+                if (!nextAllowedAt || nextAllowedAt <= Date.now()) {
+                    btn.classList.remove('on-cooldown');
+                    btn.title = 'Clear Chat';
+                    btn.style.pointerEvents = 'auto';
+                    btn.style.opacity = '1';
+                    return;
+                }
+
+                btn.classList.add('on-cooldown');
+                btn.style.pointerEvents = 'none';
+                btn.style.opacity = '0.5';
+
+                const tick = () => {
+                    const remainingMs = nextAllowedAt - Date.now();
+                    if (remainingMs <= 0) {
+                        applyClearCooldown(null);
+                        return;
+                    }
+                    const mins = Math.floor(remainingMs / 60000);
+                    const secs = Math.floor((remainingMs % 60000) / 1000);
+                    btn.title = `Clear Chat — available in ${mins}:${secs.toString().padStart(2, '0')}`;
+                };
+                tick();
+                clearCooldownInterval = setInterval(tick, 1000);
+            }
+
+            socket.on('clear-chat-result', ({ ok, nextAllowedAt }) => {
+                applyClearCooldown(nextAllowedAt);
+            });
+            socket.on('clear-cooldown-status', ({ nextAllowedAt }) => {
+                applyClearCooldown(nextAllowedAt);
+            });
 
             // Chat cleared by an admin
             socket.on('chat-cleared', (data) => {
