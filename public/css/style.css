@@ -516,16 +516,23 @@ input:focus { outline: none; border-color: #00f2fe; }
         width: 100%; 
         height: 55px; 
         flex-direction: row; 
-        justify-content: center; 
-        padding: 5px 0; 
-        gap: 15px;
+        justify-content: center;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        padding: 5px 8px; 
+        gap: 12px;
         border-right: none; 
         border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        scrollbar-width: none;
     }
+    .sidebar::-webkit-scrollbar { display: none; }
     
     .bg-btn, .ai-btn {
         width: 28px;
         height: 28px;
+        flex-shrink: 0;
     }
 
     .ai-btn {
@@ -723,6 +730,10 @@ button:hover, .send-btn:hover, .ai-btn:hover {
         justify-content: center !important;
         gap: 12px !important;
         flex-shrink: 0 !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        scrollbar-width: none !important;
     }
 
     .chat-container {
@@ -766,7 +777,8 @@ button:hover, .send-btn:hover, .ai-btn:hover {
     html { height: 100% !important; }
     body { height: 100vh !important; height: 100dvh !important; overflow: hidden !important; position: fixed; width: 100%; }
     .main-layout { flex-direction: column !important; height: 100% !important; padding: 8px !important; box-sizing: border-box !important; }
-    .sidebar { flex-direction: row !important; width: 100% !important; height: auto !important; padding: 6px !important; justify-content: center !important; gap: 12px !important; flex-shrink: 0 !important; }
+    .sidebar { flex-direction: row !important; width: 100% !important; height: auto !important; padding: 6px !important; justify-content: center !important; gap: 12px !important; flex-shrink: 0 !important; flex-wrap: nowrap !important; overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; scrollbar-width: none !important; }
+    .sidebar::-webkit-scrollbar { display: none !important; }
     .chat-container { flex: 1 !important; min-height: 0 !important; display: flex !important; flex-direction: column !important; margin: 0 !important; padding: 10px !important; border-radius: 16px !important; }
     #chat-box, #ai-chat-box { flex: 1 !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; margin-bottom: 10px !important; }
     .input-area { flex-shrink: 0 !important; display: flex !important; gap: 8px !important; }
