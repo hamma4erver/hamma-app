@@ -110,21 +110,53 @@ app.post('/api/verify-code', async (req, res) => {
 });
 
 // ==================================================
-// Verifies a Firebase ID token and checks if the user is admin/moderator
+// Verifies a Firebase ID token and returns the caller's effective role.
+// role is one of: "admin", "moderator", or null (regular user / invalid token)
+// The owner accounts are always treated as "admin".
 // ==================================================
-async function verifyAdmin(idToken) {
-    if (!idToken || !db) return { ok: false };
+const OWNER_NAMES = ["hamma", "hamma admin", "othmani hiba"];
+
+async function verifyRole(idToken) {
+    if (!idToken || !db) return { ok: false, role: null };
     try {
         const decoded = await admin.auth().verifyIdToken(idToken);
         const userDoc = await db.collection('users').doc(decoded.uid).get();
-        const role = userDoc.exists ? userDoc.data().role : null;
-        const ownerNames = ["hamma", "hamma admin", "othmani hiba"];
-        const isOwner = decoded.name && ownerNames.includes(decoded.name.toLowerCase());
-        const isAllowed = role === "admin" || role === "moderator" || isOwner;
-        return { ok: isAllowed, uid: decoded.uid, name: decoded.name };
+        const dbRole = userDoc.exists ? userDoc.data().role : null;
+        const isOwner = decoded.name && OWNER_NAMES.includes(decoded.name.toLowerCase());
+
+        let role = null;
+        if (isOwner || dbRole === "admin") role = "admin";
+        else if (dbRole === "moderator") role = "moderator";
+
+        return { ok: role !== null, role, uid: decoded.uid, name: decoded.name };
     } catch (e) {
         console.error("Token verification failed:", e.message);
-        return { ok: false };
+        return { ok: false, role: null };
+    }
+}
+
+// Backwards-compatible helper: true if the caller is admin OR moderator
+async function verifyAdmin(idToken) {
+    const { ok, role, uid, name } = await verifyRole(idToken);
+    return { ok, role, uid, name };
+}
+
+// Looks up the role of a chat username (by Firestore `username`/`displayName` field),
+// so staff-protection rules (e.g. "admins can't ban other admins") can be enforced
+// even though the chat itself only knows people by their display name.
+async function getRoleByUsername(username) {
+    if (!username) return null;
+    if (OWNER_NAMES.includes(username.toLowerCase())) return "admin";
+    if (!db) return null;
+    try {
+        let snap = await db.collection('users').where('username', '==', username).limit(1).get();
+        if (snap.empty) snap = await db.collection('users').where('displayName', '==', username).limit(1).get();
+        if (snap.empty) return null;
+        const role = snap.docs[0].data().role;
+        return role === "admin" ? "admin" : (role === "moderator" ? "moderator" : "user");
+    } catch (e) {
+        console.error("Role lookup failed:", e.message);
+        return null;
     }
 }
 
@@ -169,6 +201,8 @@ const socketUsers = new Map();    // socket.id -> username
 let onlineUsersCount = 0;
 let chatLocked = false;           // when true, only admins/mods can send messages
 let pinnedMessage = null;         // { id, user, text } or null
+let autoClearEnabled = false;     // when true, the chat auto-clears every 5 minutes
+let autoClearTimer = null;
 
 function getStatusLists() {
     // Clean up any expired mutes before broadcasting
@@ -197,6 +231,28 @@ function scheduleAutoUnmute(username, ms) {
     muteTimers.set(username, timer);
 }
 
+function performChatClear(by) {
+    pinnedMessage = null;
+    io.emit('chat-cleared', { by: by || 'Auto-Clear' });
+    io.emit('pinned-message-update', null);
+}
+
+function startAutoClear() {
+    if (autoClearTimer) clearInterval(autoClearTimer);
+    autoClearEnabled = true;
+    autoClearTimer = setInterval(() => {
+        performChatClear('🕐 Auto-Clear (every 5 min)');
+    }, 5 * 60 * 1000);
+    io.emit('auto-clear-status', { enabled: true });
+}
+
+function stopAutoClear() {
+    if (autoClearTimer) clearInterval(autoClearTimer);
+    autoClearTimer = null;
+    autoClearEnabled = false;
+    io.emit('auto-clear-status', { enabled: false });
+}
+
 // Kicks every socket registered under this username (used on ban)
 function kickUserSockets(username, reason) {
     for (const [socketId, uname] of socketUsers.entries()) {
@@ -219,6 +275,7 @@ io.on('connection', (socket) => {
     socket.emit('status-lists', getStatusLists());
     socket.emit('chat-lock-status', { locked: chatLocked });
     socket.emit('pinned-message-update', pinnedMessage);
+    socket.emit('auto-clear-status', { enabled: autoClearEnabled });
 
     // Client registers its username right after entering the chat,
     // so bans can be enforced immediately even for already-connected users
@@ -230,6 +287,40 @@ io.on('connection', (socket) => {
             return;
         }
         socketUsers.set(socket.id, username);
+    });
+
+    // Fired when a logged-in user changes their username from the profile panel.
+    // Without this, renaming was an easy way to escape an active mute/ban
+    // (the moderation state is keyed by username), so we carry the
+    // mute/ban status over from the old name to the new one.
+    socket.on('rename-user', async ({ oldUsername, newUsername, idToken }) => {
+        if (!oldUsername || !newUsername || oldUsername === newUsername) return;
+        try {
+            if (!idToken || !db) return; // require a logged-in user
+            await admin.auth().verifyIdToken(idToken);
+        } catch (e) {
+            return; // invalid token, ignore silently
+        }
+
+        if (blockedUsers.has(oldUsername)) {
+            blockedUsers.delete(oldUsername);
+            blockedUsers.add(newUsername);
+        }
+
+        if (mutedUsers.has(oldUsername)) {
+            const expiresAt = mutedUsers.get(oldUsername);
+            mutedUsers.delete(oldUsername);
+            mutedUsers.set(newUsername, expiresAt);
+            const remainingMs = expiresAt - Date.now();
+            if (remainingMs > 0) scheduleAutoUnmute(newUsername, remainingMs);
+        }
+
+        socketUsers.set(socket.id, newUsername);
+        broadcastStatusLists();
+
+        if (blockedUsers.has(newUsername)) {
+            kickUserSockets(newUsername, 'You have been banned by an admin.');
+        }
     });
 
     socket.on('chat-message', async (data) => {
@@ -250,16 +341,16 @@ io.on('connection', (socket) => {
         io.emit('chat-message', data);
     });
 
-    // Delete a message
+    // Delete a message (admins only)
     socket.on('delete-message', async ({ msgId, idToken }) => {
-        const { ok } = await verifyAdmin(idToken);
-        if (!ok) return socket.emit('system-msg', { text: 'You are not allowed to delete messages.', kind: 'error' });
+        const { ok, role } = await verifyRole(idToken);
+        if (!ok || role !== 'admin') return socket.emit('system-msg', { text: 'You are not allowed to delete messages.', kind: 'error' });
         io.emit('delete-message', msgId);
     });
 
-    // Timed mute (minutes: 5 / 15 / 30 / 60)
+    // Timed mute (minutes: 5 / 15 / 30 / 60) — admins AND moderators are allowed
     socket.on('mute-user', async ({ username, idToken, minutes }) => {
-        const { ok } = await verifyAdmin(idToken);
+        const { ok } = await verifyRole(idToken);
         if (!ok) return socket.emit('system-msg', { text: 'You are not allowed to mute users.', kind: 'error' });
 
         const allowedDurations = [5, 15, 30, 60];
@@ -275,7 +366,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('unmute-user', async ({ username, idToken }) => {
-        const { ok } = await verifyAdmin(idToken);
+        const { ok } = await verifyRole(idToken);
         if (!ok) return socket.emit('system-msg', { text: 'You are not allowed to unmute users.', kind: 'error' });
 
         mutedUsers.delete(username);
@@ -287,10 +378,16 @@ io.on('connection', (socket) => {
         broadcastStatusLists();
     });
 
-    // Permanent ban / unban
+    // Permanent ban (admins only — moderators can only mute/pin)
     socket.on('block-user', async ({ username, idToken }) => {
-        const { ok } = await verifyAdmin(idToken);
-        if (!ok) return socket.emit('system-msg', { text: 'You are not allowed to ban users.', kind: 'error' });
+        const { ok, role } = await verifyRole(idToken);
+        if (!ok || role !== 'admin') return socket.emit('system-msg', { text: 'You are not allowed to ban users.', kind: 'error' });
+
+        // Admins can't ban other admins — only mute them
+        const targetRole = await getRoleByUsername(username);
+        if (targetRole === 'admin') {
+            return socket.emit('system-msg', { text: `🚫 Admins can't ban other admins. You can only mute ${username}.`, kind: 'error' });
+        }
 
         blockedUsers.add(username);
         io.emit('system-msg', { text: `🚫 ${username} has been banned from the chat.`, kind: 'ban' });
@@ -299,44 +396,55 @@ io.on('connection', (socket) => {
     });
 
     socket.on('unblock-user', async ({ username, idToken }) => {
-        const { ok } = await verifyAdmin(idToken);
-        if (!ok) return socket.emit('system-msg', { text: 'You are not allowed to unban users.', kind: 'error' });
+        const { ok, role } = await verifyRole(idToken);
+        if (!ok || role !== 'admin') return socket.emit('system-msg', { text: 'You are not allowed to unban users.', kind: 'error' });
 
         blockedUsers.delete(username);
         io.emit('system-msg', { text: `✅ ${username} has been unbanned.`, kind: 'info' });
         broadcastStatusLists();
     });
 
-    // Clear the entire chat for everyone
+    // Clear the entire chat for everyone (admins only)
     socket.on('clear-chat', async ({ idToken }) => {
-        const { ok, name } = await verifyAdmin(idToken);
-        if (!ok) return socket.emit('system-msg', { text: 'You are not allowed to clear the chat.', kind: 'error' });
-
-        pinnedMessage = null;
-        io.emit('chat-cleared', { by: name || 'Admin' });
-        io.emit('pinned-message-update', null);
+        const { ok, role, name } = await verifyRole(idToken);
+        if (!ok || role !== 'admin') return socket.emit('system-msg', { text: 'You are not allowed to clear the chat.', kind: 'error' });
+        performChatClear(name || 'Admin');
     });
 
-    // Lock / unlock the chat (only admins/mods can send while locked)
+    // Toggle auto-clear (wipes the chat automatically every 5 minutes) — admins only
+    socket.on('toggle-auto-clear', async ({ idToken, enabled }) => {
+        const { ok, role, name } = await verifyRole(idToken);
+        if (!ok || role !== 'admin') return socket.emit('system-msg', { text: 'You are not allowed to change this setting.', kind: 'error' });
+
+        if (enabled) {
+            startAutoClear();
+            io.emit('system-msg', { text: `🕐 Auto-clear enabled by ${name || 'Admin'} — the chat will clear every 5 minutes.`, kind: 'info' });
+        } else {
+            stopAutoClear();
+            io.emit('system-msg', { text: `🕐 Auto-clear disabled by ${name || 'Admin'}.`, kind: 'info' });
+        }
+    });
+
+    // Lock / unlock the chat (admins only; while locked, only admins/mods can send)
     socket.on('lock-chat', async ({ idToken }) => {
-        const { ok } = await verifyAdmin(idToken);
-        if (!ok) return socket.emit('system-msg', { text: 'You are not allowed to lock the chat.', kind: 'error' });
+        const { ok, role } = await verifyRole(idToken);
+        if (!ok || role !== 'admin') return socket.emit('system-msg', { text: 'You are not allowed to lock the chat.', kind: 'error' });
         chatLocked = true;
         io.emit('chat-lock-status', { locked: true });
         io.emit('system-msg', { text: '🔒 The chat has been locked by an admin.', kind: 'ban' });
     });
 
     socket.on('unlock-chat', async ({ idToken }) => {
-        const { ok } = await verifyAdmin(idToken);
-        if (!ok) return socket.emit('system-msg', { text: 'You are not allowed to unlock the chat.', kind: 'error' });
+        const { ok, role } = await verifyRole(idToken);
+        if (!ok || role !== 'admin') return socket.emit('system-msg', { text: 'You are not allowed to unlock the chat.', kind: 'error' });
         chatLocked = false;
         io.emit('chat-lock-status', { locked: false });
         io.emit('system-msg', { text: '🔓 The chat has been unlocked.', kind: 'info' });
     });
 
-    // Pin / unpin a message (the server has no message history, so the client sends the content)
+    // Pin / unpin a message — admins AND moderators are allowed
     socket.on('pin-message', async ({ msgId, user, text, idToken }) => {
-        const { ok } = await verifyAdmin(idToken);
+        const { ok } = await verifyRole(idToken);
         if (!ok) return socket.emit('system-msg', { text: 'You are not allowed to pin messages.', kind: 'error' });
 
         pinnedMessage = { id: msgId, user, text };
@@ -344,7 +452,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('unpin-message', async ({ idToken }) => {
-        const { ok } = await verifyAdmin(idToken);
+        const { ok } = await verifyRole(idToken);
         if (!ok) return socket.emit('system-msg', { text: 'You are not allowed to unpin messages.', kind: 'error' });
 
         pinnedMessage = null;
