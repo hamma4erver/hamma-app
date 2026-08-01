@@ -261,6 +261,7 @@ body {
 
 /* ستايل الميساجات العام — حجم صغير وأنيق ومحترف */
 .msg { 
+    position: relative;
     margin-bottom: 8px; 
     padding: 8px 13px; 
     border-radius: 14px; 
@@ -303,6 +304,29 @@ body {
 }
 
 .msg strong { font-weight: 600; }
+
+/* سحب الرسالة (Swipe) للرد عليها كيما في إنستغرام */
+.msg {
+    touch-action: pan-y;
+}
+.msg.swiping {
+    transition: none !important;
+}
+.swipe-reply-icon {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0;
+    color: #00c9ff;
+    font-size: 15px;
+    pointer-events: none;
+    transition: opacity 0.1s ease;
+}
+
+/* زر مسح الشات وهو في فترة الانتظار (cooldown) بالنسبة للموديراتور */
+#btn-clear-chat.on-cooldown {
+    filter: grayscale(0.6);
+}
 
 /* اقتباس الرد فوق الرسالة */
 .reply-quote {
