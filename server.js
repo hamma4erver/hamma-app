@@ -203,6 +203,8 @@ let chatLocked = false;           // when true, only admins/mods can send messag
 let pinnedMessage = null;         // { id, user, text } or null
 let autoClearEnabled = false;     // when true, the chat auto-clears every 5 minutes
 let autoClearTimer = null;
+const modClearCooldowns = new Map(); // uid -> next-allowed-timestamp (ms) for moderators clearing chat
+const CLEAR_COOLDOWN_MS = 5 * 60 * 1000;
 
 function getStatusLists() {
     // Clean up any expired mutes before broadcasting
@@ -404,11 +406,43 @@ io.on('connection', (socket) => {
         broadcastStatusLists();
     });
 
-    // Clear the entire chat for everyone (admins only)
+    // Clear the entire chat for everyone.
+    // Admins can do this anytime. Moderators can too, but only once every 5 minutes.
     socket.on('clear-chat', async ({ idToken }) => {
-        const { ok, role, name } = await verifyRole(idToken);
-        if (!ok || role !== 'admin') return socket.emit('system-msg', { text: 'You are not allowed to clear the chat.', kind: 'error' });
-        performChatClear(name || 'Admin');
+        const { ok, role, name, uid } = await verifyRole(idToken);
+        if (!ok) return socket.emit('system-msg', { text: 'You are not allowed to clear the chat.', kind: 'error' });
+
+        if (role === 'admin') {
+            performChatClear(name || 'Admin');
+            socket.emit('clear-chat-result', { ok: true, nextAllowedAt: null });
+            return;
+        }
+
+        // role === 'moderator'
+        const now = Date.now();
+        const nextAllowed = modClearCooldowns.get(uid) || 0;
+        if (now < nextAllowed) {
+            socket.emit('clear-chat-result', { ok: false, nextAllowedAt: nextAllowed });
+            const remainingMin = Math.ceil((nextAllowed - now) / 60000);
+            socket.emit('system-msg', { text: `⏳ You can clear the chat again in ~${remainingMin} minute(s).`, kind: 'error' });
+            return;
+        }
+
+        modClearCooldowns.set(uid, now + CLEAR_COOLDOWN_MS);
+        performChatClear(name || 'Moderator');
+        socket.emit('clear-chat-result', { ok: true, nextAllowedAt: now + CLEAR_COOLDOWN_MS });
+    });
+
+    // Lets a moderator (or admin) find out their current clear-chat cooldown,
+    // e.g. right after connecting/refreshing, so the button can show a live countdown.
+    socket.on('get-clear-cooldown', async ({ idToken }) => {
+        const { ok, role, uid } = await verifyRole(idToken);
+        if (!ok) return;
+        if (role === 'admin') return socket.emit('clear-cooldown-status', { nextAllowedAt: null });
+        if (role === 'moderator') {
+            const nextAllowed = modClearCooldowns.get(uid) || 0;
+            return socket.emit('clear-cooldown-status', { nextAllowedAt: nextAllowed > Date.now() ? nextAllowed : null });
+        }
     });
 
     // Toggle auto-clear (wipes the chat automatically every 5 minutes) — admins only
