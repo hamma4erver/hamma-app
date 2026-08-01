@@ -152,6 +152,7 @@
             font-size: 13px;
             font-weight: 600;
             backdrop-filter: blur(10px);
+            flex-shrink: 0;
         }
         #restriction-banner.state-mute {
             background: rgba(255, 183, 3, 0.12);
@@ -351,7 +352,7 @@
 
             <div class="input-area">
                 <input type="text" id="message" placeholder="Type a message..." onkeydown="checkEnter(event)">
-                <button onclick="sendMessage()" class="send-btn">Enter ↵</button>
+                <button onclick="sendMessage()" id="chat-send-btn" class="send-btn">Enter ↵</button>
             </div>
         </div>
 
@@ -1254,12 +1255,14 @@
                 appendLocalMessage(data.id || Date.now(), data.user, data.msg, data.senderId === socket.id, data.replyTo);
             });
 
-            socket.on('delete-message', (msgId) => {
+            socket.on('delete-message', ({ msgId, staffDeleted }) => {
                 const target = document.querySelector(`[data-id="${msgId}"]`);
                 if (target) {
                     const textSpan = target.querySelector('.text-content');
                     if (window.isUserAdminOrMod) {
                         textSpan.innerHTML = `<span class="msg-deleted-admin">[🗑️ Deleted]:</span> <span class="msg-deleted-text">${target.dataset.rawtext}</span>`;
+                    } else if (staffDeleted) {
+                        textSpan.innerHTML = `<i style="color: #94a3b8;">(This message was deleted by an admin)</i>`;
                     } else {
                         textSpan.innerHTML = `<i style="color: #94a3b8;">(This message was deleted)</i>`;
                     }
@@ -1432,7 +1435,7 @@
         function updateOwnRestrictionStatus() {
             const banner = document.getElementById('restriction-banner');
             const msgInput = document.getElementById('message');
-            const sendBtn = document.querySelector('.chat-container .send-btn');
+            const sendBtn = document.getElementById('chat-send-btn');
 
             if (restrictionCountdownInterval) {
                 clearInterval(restrictionCountdownInterval);
@@ -1500,13 +1503,16 @@
 
             document.getElementById('msg-sender-title').innerText = `${sender}'s Message`;
             const adminActions = document.getElementById('admin-msg-actions');
+            const isOwnMessage = sender === window.currentUsername;
 
-            if (window.isUserAdminOrMod) {
+            if (window.isUserAdminOrMod || isOwnMessage) {
                 adminActions.style.display = 'flex';
-                // Moderators can only mute and pin — ban/delete stay admin-only
-                document.getElementById('btn-msg-delete').style.display = window.isUserAdmin ? 'flex' : 'none';
+                // Anyone can delete their own message; admins AND moderators can delete someone else's
+                document.getElementById('btn-msg-delete').style.display = (window.isUserAdminOrMod || isOwnMessage) ? 'flex' : 'none';
+                // Ban stays admin-only
                 document.getElementById('btn-msg-ban').style.display = window.isUserAdmin ? 'flex' : 'none';
-                updateMsgActionButtons();
+                document.getElementById('mute-section').style.display = window.isUserAdminOrMod ? 'block' : 'none';
+                if (window.isUserAdminOrMod) updateMsgActionButtons();
             } else {
                 adminActions.style.display = 'none';
             }
@@ -1564,14 +1570,14 @@
             bar.innerHTML = '';
         }
 
-        // Delete message button (admins only)
+        // Delete message button — everyone can delete their own message; admins can delete anyone's
         document.getElementById('btn-msg-delete').addEventListener('click', async () => {
             if (!selectedMsgElem) return;
             const msgId = selectedMsgElem.dataset.id;
             try {
                 const idToken = await window.firebaseAuth.currentUser.getIdToken();
                 if (socket && socket.connected) {
-                    socket.emit('delete-message', { msgId, idToken });
+                    socket.emit('delete-message', { msgId, idToken, messageSender: selectedSenderName });
                 } else {
                     const textSpan = selectedMsgElem.querySelector('.text-content');
                     textSpan.innerHTML = `<span class="msg-deleted-admin">[🗑️ Deleted]:</span> <span class="msg-deleted-text">${selectedMsgText}</span>`;
