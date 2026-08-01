@@ -460,7 +460,7 @@
             signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, updateProfile
         } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
         import { 
-            getFirestore, doc, setDoc, getDoc, deleteDoc, collection, updateDoc, onSnapshot
+            getFirestore, doc, setDoc, getDoc, deleteDoc, collection, updateDoc, onSnapshot, serverTimestamp
         } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -606,7 +606,8 @@
             signInWithPopup(auth, provider).catch(e => showAuthError(e.message));
         });
 
-        logoutBtn.addEventListener('click', () => {
+        logoutBtn.addEventListener('click', async () => {
+            await markUserOffline();
             signOut(auth).then(() => location.reload());
         });
 
@@ -644,13 +645,31 @@
                 logoutBtn.style.display = 'flex';
                 startRoleSubscription();
                 
+                let existingRole = 'user';
                 let isMod = false;
                 try {
                     const userDoc = await getDoc(doc(db, "users", user.uid));
-                    if (userDoc.exists() && (userDoc.data().role === "moderator" || userDoc.data().role === "admin")) {
+                    if (userDoc.exists() && userDoc.data().role) {
+                        existingRole = userDoc.data().role;
+                    }
+                    if (existingRole === "moderator" || existingRole === "admin") {
                         isMod = true;
                     }
                 } catch(e) {}
+
+                // Create/refresh this user's document, otherwise the admin dashboard has nothing to list
+                try {
+                    await setDoc(doc(db, "users", user.uid), {
+                        username: username,
+                        displayName: username,
+                        email: user.email || null,
+                        role: existingRole,
+                        isOnline: true,
+                        lastSeen: serverTimestamp()
+                    }, { merge: true });
+                } catch (e) { console.error("Could not sync user document:", e); }
+
+                window.currentUserId = user.uid;
 
                 const ownerNames = ["hamma admin", "hamma", "othmani hiba"];
                 if (ownerNames.includes(username.toLowerCase()) || isMod) {
@@ -663,6 +682,15 @@
                 window.proceedToChat(username);
             }
         });
+
+        // Best-effort: mark the user offline on logout and when leaving the page
+        async function markUserOffline() {
+            if (!auth.currentUser) return;
+            try {
+                await setDoc(doc(db, "users", auth.currentUser.uid), { isOnline: false, lastSeen: serverTimestamp() }, { merge: true });
+            } catch (e) { /* ignore */ }
+        }
+        window.addEventListener('beforeunload', () => { markUserOffline(); });
 
         document.getElementById('btn-admin').addEventListener('click', () => {
             document.getElementById('admin-modal').style.display = 'flex';
