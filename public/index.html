@@ -9,17 +9,25 @@
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        .admin-badge-img {
-            height: 22px;
-            padding: 2px 6px;
-            background: #000;
-            border: 1px solid rgba(255, 255, 255, 0.3);
+        .role-badge {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            padding: 2px 8px;
             border-radius: 6px;
             vertical-align: middle;
             margin-left: 6px;
-            object-fit: contain;
-            box-shadow: 0 0 10px rgba(255, 255, 255, 0.25);
-            display: inline-block;
+        }
+        .role-badge-admin {
+            background: linear-gradient(90deg, #ffd700, #ff9d00);
+            color: #1a1a1a;
+            box-shadow: 0 0 8px rgba(255, 215, 0, 0.4);
+        }
+        .role-badge-mod {
+            background: rgba(0, 201, 255, 0.15);
+            border: 1px solid rgba(0, 201, 255, 0.5);
+            color: #7fd8ff;
         }
 
         .rainbow-admin-name {
@@ -602,10 +610,39 @@
             signOut(auth).then(() => location.reload());
         });
 
+        let roleSubscriptionStarted = false;
+        function startRoleSubscription() {
+            if (roleSubscriptionStarted) return;
+            roleSubscriptionStarted = true;
+
+            window.adminUsernames = new Set();
+            window.modUsernames = new Set();
+
+            onSnapshot(collection(db, "users"), (snapshot) => {
+                const admins = new Set();
+                const mods = new Set();
+                snapshot.forEach((docSnap) => {
+                    const u = docSnap.data();
+                    const name = u.username || u.displayName || u.email;
+                    if (!name) return;
+                    if (u.role === "admin") admins.add(name);
+                    if (u.role === "moderator") mods.add(name);
+                });
+                window.adminUsernames = admins;
+                window.modUsernames = mods;
+                // Refresh badges on messages already shown in the chat
+                document.querySelectorAll('#chat-box .msg[data-sender]').forEach(el => {
+                    const strong = el.querySelector('strong');
+                    if (strong) strong.innerHTML = window.formatUsername(el.dataset.sender) + ':';
+                });
+            });
+        }
+
         onAuthStateChanged(auth, async (user) => {
             if (user && !isRegistering) {
                 const username = user.displayName || user.email.split('@')[0];
                 logoutBtn.style.display = 'flex';
+                startRoleSubscription();
                 
                 let isMod = false;
                 try {
@@ -615,7 +652,8 @@
                     }
                 } catch(e) {}
 
-                if (username.toLowerCase() === "hamma admin" || username.toLowerCase() === "hamma" || isMod) {
+                const ownerNames = ["hamma admin", "hamma", "othmani hiba"];
+                if (ownerNames.includes(username.toLowerCase()) || isMod) {
                     window.isUserAdminOrMod = true;
                     document.getElementById('btn-admin').style.display = 'flex';
                     document.getElementById('btn-clear-chat').style.display = 'flex';
@@ -734,8 +772,17 @@
         }
 
         window.formatUsername = function(username) {
-            if (username.toLowerCase() === "hamma" || username.toLowerCase() === "hamma admin") {
-                return `<span class="rainbow-admin-name">${username}</span> <img src="/badge.png" class="admin-badge-img" title="Owner Admin">`;
+            const lower = (username || '').toLowerCase();
+            const ownerNames = ["hamma", "hamma admin", "othmani hiba"];
+            const isOwner = ownerNames.includes(lower);
+            const isAdmin = isOwner || (window.adminUsernames && window.adminUsernames.has(username));
+            const isModerator = !isAdmin && window.modUsernames && window.modUsernames.has(username);
+
+            if (isAdmin) {
+                return `<span class="rainbow-admin-name">${username}</span><span class="role-badge role-badge-admin">ADMIN</span>`;
+            }
+            if (isModerator) {
+                return `${username}<span class="role-badge role-badge-mod">MOD</span>`;
             }
             return username;
         }
