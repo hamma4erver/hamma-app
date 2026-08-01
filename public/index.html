@@ -318,6 +318,10 @@
                 <i class="fas fa-broom" style="color: #e63946;"></i>
             </div>
 
+            <div class="ai-btn" id="btn-auto-clear" style="background: rgba(148, 163, 184, 0.15); border: 1px solid #94a3b8; margin-top: 10px; display: none;" title="Auto-Clear every 5 min: OFF">
+                <i class="fas fa-clock" id="icon-auto-clear" style="color: #94a3b8;"></i>
+            </div>
+
             <div class="ai-btn" id="btn-lock-chat" style="background: rgba(255, 183, 3, 0.2); border: 1px solid #ffb703; margin-top: 10px; display: none;" title="Lock Chat">
                 <i class="fas fa-lock-open" id="icon-lock-chat" style="color: #ffb703;"></i>
             </div>
@@ -336,6 +340,8 @@
             <div id="chat-box"></div>
 
             <div id="restriction-banner" style="display: none;"></div>
+
+            <div id="reply-preview-bar" style="display: none;"></div>
 
             <div class="input-area">
                 <input type="text" id="message" placeholder="Type a message..." onkeydown="checkEnter(event)">
@@ -421,6 +427,10 @@
             
             <button class="btn-primary" id="btn-msg-translate" style="margin-bottom: 10px; background: #334155;">
                 <i class="fas fa-language"></i> Translate Message
+            </button>
+
+            <button class="btn-primary" id="btn-msg-reply" style="margin-bottom: 10px; background: #475569;">
+                <i class="fas fa-reply"></i> Reply
             </button>
 
             <div id="admin-msg-actions" style="display: none; flex-direction: column; gap: 10px;">
@@ -597,7 +607,17 @@
                 const data = await res.json();
                 if (data.success) {
                     document.getElementById('email-verify-screen').style.display = 'none';
-                    document.getElementById('profile-setup-screen').style.display = 'flex';
+                    try { if (auth.currentUser) await auth.currentUser.reload(); } catch (e) { /* ignore */ }
+
+                    if (auth.currentUser && auth.currentUser.displayName) {
+                        // Existing account that just needed (re-)verification — go straight to chat
+                        isRegistering = false;
+                        logoutBtn.style.display = 'flex';
+                        window.proceedToChat(auth.currentUser.displayName);
+                    } else {
+                        // Brand-new registration — still needs to pick a username
+                        document.getElementById('profile-setup-screen').style.display = 'flex';
+                    }
                 } else {
                     errorEl.style.display = 'block';
                     errorEl.innerText = data.message || 'Incorrect code.';
@@ -678,11 +698,23 @@
                     await deleteDoc(doc(db, "usernames", oldUsername));
                 }
 
+                const previousUsername = window.currentUsername;
                 await updateProfile(auth.currentUser, { displayName: newName });
                 window.currentUsername = newName;
                 document.getElementById('user-display-tag').innerHTML = window.formatUsername(newName);
                 document.getElementById('profilePanel').classList.remove('open');
                 panelError.style.display = 'none';
+
+                // Carry over any active mute/ban from the old name, and re-register
+                // the new one immediately so restrictions can't be evaded by renaming
+                if (window.socket && window.socket.connected && previousUsername && previousUsername !== newName) {
+                    try {
+                        const idToken = await auth.currentUser.getIdToken();
+                        window.socket.emit('rename-user', { oldUsername: previousUsername, newUsername: newName, idToken });
+                        window.socket.emit('register-user', { username: newName });
+                    } catch (e) { /* ignore, best-effort */ }
+                }
+
                 alert("Username updated successfully!");
             } catch (err) {
                 panelError.style.display = 'block';
@@ -739,6 +771,21 @@
 
         onAuthStateChanged(auth, async (user) => {
             if (user && !isRegistering) {
+                // Refresh the user's data from Firebase so we see the real, current
+                // emailVerified flag — otherwise a stale cached value lets an
+                // unverified account slip straight into the chat on page refresh.
+                try { await user.reload(); } catch (e) { /* ignore, fall back to cached value */ }
+
+                const usesPassword = user.providerData.some(p => p.providerId === 'password');
+                if (usesPassword && !user.emailVerified) {
+                    window.pendingVerificationEmail = user.email;
+                    document.getElementById('login-screen').style.display = 'none';
+                    document.getElementById('profile-setup-screen').style.display = 'none';
+                    document.getElementById('verify-email-display').innerText = user.email;
+                    document.getElementById('email-verify-screen').style.display = 'flex';
+                    return;
+                }
+
                 const username = user.displayName || user.email.split('@')[0];
                 logoutBtn.style.display = 'flex';
                 startRoleSubscription();
@@ -770,13 +817,23 @@
                 window.currentUserId = user.uid;
 
                 const ownerNames = ["hamma admin", "hamma", "othmani hiba"];
-                if (ownerNames.includes(username.toLowerCase()) || isMod) {
+                const isOwnerOrAdmin = ownerNames.includes(username.toLowerCase()) || existingRole === "admin";
+                window.isUserAdmin = isOwnerOrAdmin;
+                window.isUserModerator = !isOwnerOrAdmin && existingRole === "moderator";
+                window.currentUserRole = isOwnerOrAdmin ? 'admin' : (window.isUserModerator ? 'moderator' : null);
+
+                if (isOwnerOrAdmin || window.isUserModerator) {
                     window.isUserAdminOrMod = true;
                     document.getElementById('btn-admin').style.display = 'flex';
+                }
+                // Only admins (owners included) can wipe or lock the whole chat —
+                // moderators are limited to mute + pin
+                if (isOwnerOrAdmin) {
                     document.getElementById('btn-clear-chat').style.display = 'flex';
                     document.getElementById('btn-lock-chat').style.display = 'flex';
+                    document.getElementById('btn-auto-clear').style.display = 'flex';
                 }
-                
+
                 window.proceedToChat(username);
             }
         });
@@ -835,15 +892,17 @@
                             </td>
                             <td style="padding: 10px;">${u.isOnline ? '🟢 Online' : '🔴 Offline'}</td>
                             <td style="padding: 10px; display: flex; gap: 5px; flex-wrap: wrap;">
+                                ${window.isUserAdmin ? `
                                 <button onclick="window.toggleBanSocket('${displayName}', ${isBannedNow})" style="background: ${isBannedNow ? '#28a745' : '#ff4444'}; color: #fff; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer;">
                                     ${isBannedNow ? 'Unban' : 'Ban'}
-                                </button>
+                                </button>` : ''}
                                 <button onclick="window.toggleMuteSocket('${displayName}', ${isMutedNow})" style="background: ${isMutedNow ? '#28a745' : '#ffb703'}; color: #000; font-weight: bold; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer;">
                                     ${isMutedNow ? 'Unmute' : 'Mute 15m'}
                                 </button>
+                                ${window.isUserAdmin ? `
                                 <button onclick="toggleModerator('${userId}', '${u.role || 'user'}')" style="background: ${isMod ? '#ffc107' : '#17a2b8'}; color: #000; font-weight: bold; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer;">
                                     ${isMod ? 'Remove Mod' : 'Make Mod 🛡️'}
-                                </button>
+                                </button>` : ''}
                             </td>
                         </tr>`;
                 });
@@ -955,12 +1014,16 @@
                     }
                 } catch (e) { /* guest or not logged in, idToken stays null */ }
 
+                const payload = { id: msgId, user: window.currentUsername, msg: msg, senderId: socket.id, idToken };
+                if (window.replyingTo) payload.replyTo = window.replyingTo;
+
                 if (socket && socket.connected) {
-                    socket.emit('chat-message', { id: msgId, user: window.currentUsername, msg: msg, senderId: socket.id, idToken });
+                    socket.emit('chat-message', payload);
                 } else {
-                    appendLocalMessage(msgId, window.currentUsername, msg, true);
+                    appendLocalMessage(msgId, window.currentUsername, msg, true, payload.replyTo);
                 }
                 document.getElementById('message').value = "";
+                cancelReply();
             }
         }
 
@@ -968,7 +1031,7 @@
             if (event.key === "Enter") sendMessage();
         }
 
-        function appendLocalMessage(id, user, msg, isSelf) {
+        function appendLocalMessage(id, user, msg, isSelf, replyTo) {
             const msgElement = document.createElement('div');
             msgElement.classList.add('msg', isSelf ? 'my-msg' : 'other-msg');
             msgElement.dataset.id = id;
@@ -978,7 +1041,10 @@
             msgElement.onclick = () => openMsgModal(msgElement, user, msg);
 
             const formattedUser = window.formatUsername(user);
-            msgElement.innerHTML = `<strong>${formattedUser}:</strong> <span class="text-content">${msg}</span>`;
+            const replyHtml = replyTo
+                ? `<div class="reply-quote"><i class="fas fa-reply"></i> <strong>${replyTo.user}:</strong> ${(replyTo.text || '').slice(0, 80)}</div>`
+                : '';
+            msgElement.innerHTML = `${replyHtml}<strong>${formattedUser}:</strong> <span class="text-content">${msg}</span>`;
             chatBox.appendChild(msgElement);
             chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
         }
@@ -1006,7 +1072,7 @@
 
         if (socket) {
             socket.on('chat-message', (data) => {
-                appendLocalMessage(data.id || Date.now(), data.user, data.msg, data.senderId === socket.id);
+                appendLocalMessage(data.id || Date.now(), data.user, data.msg, data.senderId === socket.id, data.replyTo);
             });
 
             socket.on('delete-message', (msgId) => {
@@ -1074,7 +1140,27 @@
             socket.on('pinned-message-update', (data) => {
                 renderPinnedMessage(data);
             });
+
+            // Auto-clear (every 5 min) status changed
+            window.isAutoClearEnabled = false;
+            socket.on('auto-clear-status', ({ enabled }) => {
+                window.isAutoClearEnabled = enabled;
+                const btn = document.getElementById('btn-auto-clear');
+                const icon = document.getElementById('icon-auto-clear');
+                if (!btn || !icon) return;
+                btn.title = `Auto-Clear every 5 min: ${enabled ? 'ON' : 'OFF'}`;
+                icon.style.color = enabled ? '#92fe9d' : '#94a3b8';
+                btn.style.borderColor = enabled ? '#92fe9d' : '#94a3b8';
+            });
         }
+
+        // Toggle the "auto-clear every 5 min" feature (admins only)
+        document.getElementById('btn-auto-clear').addEventListener('click', async () => {
+            try {
+                const idToken = await window.firebaseAuth.currentUser.getIdToken();
+                socket.emit('toggle-auto-clear', { idToken, enabled: !window.isAutoClearEnabled });
+            } catch (e) { appendSystemMessage('يجب تسجيل الدخول.', 'error'); }
+        });
 
         function renderPinnedMessage(data) {
             const bar = document.getElementById('pinned-message-bar');
@@ -1213,6 +1299,9 @@
 
             if (window.isUserAdminOrMod) {
                 adminActions.style.display = 'flex';
+                // Moderators can only mute and pin — ban/delete stay admin-only
+                document.getElementById('btn-msg-delete').style.display = window.isUserAdmin ? 'flex' : 'none';
+                document.getElementById('btn-msg-ban').style.display = window.isUserAdmin ? 'flex' : 'none';
                 updateMsgActionButtons();
             } else {
                 adminActions.style.display = 'none';
@@ -1236,6 +1325,40 @@
                 textSpan.innerHTML = `${selectedMsgText} <br><span class="translated-text">🔄 ${result[0][0][0]}</span>`;
             } catch (error) { appendSystemMessage('فشلت الترجمة.', 'error'); }
         });
+
+        // Reply button — available to everyone
+        document.getElementById('btn-msg-reply').addEventListener('click', () => {
+            if (!selectedMsgElem) return;
+            window.replyingTo = {
+                id: selectedMsgElem.dataset.id,
+                user: selectedSenderName,
+                text: selectedMsgText
+            };
+            showReplyPreview();
+            closeMsgModal();
+        });
+
+        function showReplyPreview() {
+            const bar = document.getElementById('reply-preview-bar');
+            if (!window.replyingTo) { bar.style.display = 'none'; return; }
+            const snippet = window.replyingTo.text.length > 60
+                ? window.replyingTo.text.slice(0, 60) + '…'
+                : window.replyingTo.text;
+            bar.innerHTML = `
+                <i class="fas fa-reply reply-preview-icon"></i>
+                <div class="reply-preview-content"><strong>${window.replyingTo.user}</strong><span>${snippet}</span></div>
+                <button class="reply-preview-cancel" onclick="cancelReply()"><i class="fas fa-times"></i></button>
+            `;
+            bar.style.display = 'flex';
+            document.getElementById('message').focus();
+        }
+
+        function cancelReply() {
+            window.replyingTo = null;
+            const bar = document.getElementById('reply-preview-bar');
+            bar.style.display = 'none';
+            bar.innerHTML = '';
+        }
 
         // Delete message button (admins only)
         document.getElementById('btn-msg-delete').addEventListener('click', async () => {
