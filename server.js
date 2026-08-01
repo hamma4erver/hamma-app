@@ -324,11 +324,20 @@ io.on('connection', (socket) => {
         io.emit('chat-message', data);
     });
 
-    // Delete a message (admins only)
-    socket.on('delete-message', async ({ msgId, idToken }) => {
-        const { ok, role } = await verifyRole(idToken);
-        if (!ok || role !== 'admin') return socket.emit('system-msg', { text: 'You are not allowed to delete messages.', kind: 'error' });
-        io.emit('delete-message', msgId);
+    // Delete a message — the message's own sender can delete it, and so can
+    // an admin or moderator (same staff tier that can already mute/pin).
+    // Regular viewers are only told a message was "deleted by an admin" when staff did it
+    // (never which admin/moderator), so the client can tell that apart from a self-delete.
+    socket.on('delete-message', async ({ msgId, idToken, messageSender }) => {
+        const { role, name } = await verifyRole(idToken);
+        const isStaff = role === 'admin' || role === 'moderator';
+        const isOwner = !!messageSender && !!name && messageSender.toLowerCase() === name.toLowerCase();
+
+        if (!isOwner && !isStaff) {
+            return socket.emit('system-msg', { text: 'You are not allowed to delete this message.', kind: 'error' });
+        }
+
+        io.emit('delete-message', { msgId, staffDeleted: isStaff && !isOwner });
     });
 
     // Timed mute (minutes: 5 / 15 / 30 / 60) — admins AND moderators are allowed
