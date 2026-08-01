@@ -268,6 +268,32 @@
         </div>
     </div>
 
+    <!-- 2.5 EMAIL VERIFICATION SCREEN (6-digit code) -->
+    <div id="email-verify-screen" class="login-container" style="display: none;">
+        <div class="login-card" style="background: rgba(20, 20, 30, 0.85); border: 1px solid rgba(0, 201, 255, 0.3);">
+            <div class="logo-area">
+                <h2 style="color: #00c9ff; text-shadow: 0 0 10px rgba(0,201,255,0.5); margin-bottom: 5px;">Verify Your Email</h2>
+                <p class="subtitle" style="margin-bottom: 5px;">We sent a 6-digit code to</p>
+                <p id="verify-email-display" style="color: #92fe9d; font-weight: bold; margin-bottom: 20px;"></p>
+            </div>
+
+            <div class="input-group">
+                <i class="fas fa-key input-icon"></i>
+                <input type="text" id="verify-code-input" maxlength="6" inputmode="numeric" placeholder="Enter 6-digit code" style="text-align: center; letter-spacing: 8px; font-size: 18px;">
+            </div>
+
+            <p id="verify-error" style="color: #ff4d4d; font-size: 14px; display: none; margin-bottom: 10px;"></p>
+            <p id="verify-success" style="color: #92fe9d; font-size: 14px; display: none; margin-bottom: 10px;"></p>
+
+            <button class="btn-primary" id="btn-verify-code" style="background: linear-gradient(45deg, #00c9ff, #92fe9d); color: #000; font-weight: bold; margin-bottom: 10px;">
+                <span>Verify</span> <i class="fas fa-check"></i>
+            </button>
+            <button class="btn-secondary" id="btn-resend-code">
+                <i class="fas fa-redo"></i> Resend Code
+            </button>
+        </div>
+    </div>
+
     <!-- 3. MAIN PUBLIC CHAT SCREEN -->
     <div id="chat-screen" class="main-layout" style="display: none;">
         <div class="sidebar">
@@ -457,7 +483,8 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
         import { 
             getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, 
-            signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, updateProfile
+            signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, updateProfile,
+            setPersistence, browserSessionPersistence
         } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
         import { 
             getFirestore, doc, setDoc, getDoc, deleteDoc, collection, updateDoc, onSnapshot, serverTimestamp
@@ -478,6 +505,11 @@
         const db = getFirestore(app);
         const provider = new GoogleAuthProvider();
         window.firebaseAuth = auth;
+
+        // Use per-tab (sessionStorage) persistence instead of the default shared
+        // (localStorage) one, so logging into a different account in a new tab
+        // no longer logs out the account signed in on other tabs
+        setPersistence(auth, browserSessionPersistence).catch(e => console.warn("Could not set auth persistence:", e));
 
         const emailInput = document.getElementById('login-email');
         const passwordInput = document.getElementById('login-password');
@@ -500,14 +532,80 @@
             if(!email || !password) return showAuthError("Please enter email and password.");
             isRegistering = true; 
             createUserWithEmailAndPassword(auth, email, password)
-                .then(() => {
+                .then(async () => {
+                    window.pendingVerificationEmail = email;
                     document.getElementById('login-screen').style.display = 'none';
-                    document.getElementById('profile-setup-screen').style.display = 'flex';
+                    document.getElementById('verify-email-display').innerText = email;
+                    document.getElementById('email-verify-screen').style.display = 'flex';
+                    await sendVerificationCode(email);
                 })
                 .catch(e => {
                     isRegistering = false;
                     showAuthError(e.message);
                 });
+        });
+
+        // Sends (or resends) the 6-digit verification code to the given email
+        async function sendVerificationCode(email) {
+            const errorEl = document.getElementById('verify-error');
+            const successEl = document.getElementById('verify-success');
+            errorEl.style.display = 'none';
+            successEl.style.display = 'none';
+            try {
+                const res = await fetch('/api/send-verification-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    successEl.style.display = 'block';
+                    successEl.innerText = 'A new code has been sent.';
+                } else {
+                    errorEl.style.display = 'block';
+                    errorEl.innerText = data.message || 'Could not send the code.';
+                }
+            } catch (e) {
+                errorEl.style.display = 'block';
+                errorEl.innerText = 'Network error while sending the code.';
+            }
+        }
+
+        document.getElementById('btn-resend-code').addEventListener('click', () => {
+            if (window.pendingVerificationEmail) sendVerificationCode(window.pendingVerificationEmail);
+        });
+
+        document.getElementById('btn-verify-code').addEventListener('click', async () => {
+            const code = document.getElementById('verify-code-input').value.trim();
+            const errorEl = document.getElementById('verify-error');
+            const successEl = document.getElementById('verify-success');
+            errorEl.style.display = 'none';
+            successEl.style.display = 'none';
+
+            if (!code || code.length !== 6) {
+                errorEl.style.display = 'block';
+                errorEl.innerText = 'Please enter the 6-digit code.';
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/verify-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: window.pendingVerificationEmail, code })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('email-verify-screen').style.display = 'none';
+                    document.getElementById('profile-setup-screen').style.display = 'flex';
+                } else {
+                    errorEl.style.display = 'block';
+                    errorEl.innerText = data.message || 'Incorrect code.';
+                }
+            } catch (e) {
+                errorEl.style.display = 'block';
+                errorEl.innerText = 'Network error while verifying the code.';
+            }
         });
 
         document.getElementById('btn-save-profile').addEventListener('click', async () => {
