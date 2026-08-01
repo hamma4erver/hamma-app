@@ -196,6 +196,17 @@
             font-size: 14px;
             flex-shrink: 0;
         }
+
+        .msg-time {
+            display: inline-block;
+            font-size: 10.5px;
+            font-weight: 400;
+            color: rgba(255, 255, 255, 0.38);
+            margin-left: 8px;
+            letter-spacing: 0.2px;
+            vertical-align: middle;
+            user-select: none;
+        }
     </style>
 </head>
 <body>
@@ -1108,13 +1119,14 @@
                     }
                 } catch (e) { /* guest or not logged in, idToken stays null */ }
 
-                const payload = { id: msgId, user: window.currentUsername, msg: msg, senderId: socket.id, idToken };
+                const sentAt = Date.now();
+                const payload = { id: msgId, user: window.currentUsername, msg: msg, senderId: socket.id, idToken, time: sentAt };
                 if (window.replyingTo) payload.replyTo = window.replyingTo;
 
                 if (socket && socket.connected) {
                     socket.emit('chat-message', payload);
                 } else {
-                    appendLocalMessage(msgId, window.currentUsername, msg, true, payload.replyTo);
+                    appendLocalMessage(msgId, window.currentUsername, msg, true, payload.replyTo, sentAt);
                 }
                 document.getElementById('message').value = "";
                 cancelReply();
@@ -1125,7 +1137,28 @@
             if (event.key === "Enter") sendMessage();
         }
 
-        function appendLocalMessage(id, user, msg, isSelf, replyTo) {
+        // Instagram-style relative time: "Just now", "5m", "3h", "2d", then a short date
+        function formatRelativeTime(timestamp) {
+            if (!timestamp) return '';
+            const diffMs = Date.now() - timestamp;
+            const diffMin = Math.floor(diffMs / 60000);
+            if (diffMin < 1) return 'Just now';
+            if (diffMin < 60) return `${diffMin}m`;
+            const diffHr = Math.floor(diffMin / 60);
+            if (diffHr < 24) return `${diffHr}h`;
+            const diffDay = Math.floor(diffHr / 24);
+            if (diffDay < 7) return `${diffDay}d`;
+            return new Date(timestamp).toLocaleDateString([], { day: '2-digit', month: 'short' });
+        }
+
+        // Keeps every visible message's relative time label fresh (e.g. "Just now" -> "1m")
+        setInterval(() => {
+            document.querySelectorAll('#chat-box .msg-time[data-time]').forEach(el => {
+                el.innerText = formatRelativeTime(Number(el.dataset.time));
+            });
+        }, 30000);
+
+        function appendLocalMessage(id, user, msg, isSelf, replyTo, time) {
             const msgElement = document.createElement('div');
             msgElement.classList.add('msg', isSelf ? 'my-msg' : 'other-msg');
             msgElement.dataset.id = id;
@@ -1134,14 +1167,16 @@
 
             msgElement.onclick = () => {
                 if (msgElement._justDragged) { msgElement._justDragged = false; return; }
-                openMsgModal(msgElement, user, msg);
+                openMsgModal(msgElement, user, msgElement.dataset.rawtext);
             };
 
             const formattedUser = window.formatUsername(user);
             const replyHtml = replyTo
                 ? `<div class="reply-quote" data-jump-id="${replyTo.id}"><i class="fas fa-reply"></i> <strong>${replyTo.user}:</strong> ${(replyTo.text || '').slice(0, 80)}</div>`
                 : '';
-            msgElement.innerHTML = `${replyHtml}<strong>${formattedUser}:</strong> <span class="text-content">${msg}</span>`;
+            const sentAt = time || Date.now();
+            const timeHtml = `<span class="msg-time" data-time="${sentAt}">${formatRelativeTime(sentAt)}</span>`;
+            msgElement.innerHTML = `${replyHtml}<strong>${formattedUser}:</strong> <span class="text-content">${msg}</span>${timeHtml}`;
             chatBox.appendChild(msgElement);
             chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
 
@@ -1155,7 +1190,7 @@
                 });
             }
 
-            attachSwipeToReply(msgElement, () => user, () => msg);
+            attachSwipeToReply(msgElement, () => user, () => msgElement.dataset.rawtext);
         }
 
         // Scrolls to the original message a reply points to, and gives it a soft, eye-friendly glow
@@ -1252,7 +1287,7 @@
 
         if (socket) {
             socket.on('chat-message', (data) => {
-                appendLocalMessage(data.id || Date.now(), data.user, data.msg, data.senderId === socket.id, data.replyTo);
+                appendLocalMessage(data.id || Date.now(), data.user, data.msg, data.senderId === socket.id, data.replyTo, data.time);
             });
 
             socket.on('delete-message', ({ msgId, staffDeleted }) => {
