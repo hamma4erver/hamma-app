@@ -38,7 +38,8 @@ async function verifyAdmin(idToken) {
         const decoded = await admin.auth().verifyIdToken(idToken);
         const userDoc = await db.collection('users').doc(decoded.uid).get();
         const role = userDoc.exists ? userDoc.data().role : null;
-        const isOwner = decoded.name === "Hamma" || decoded.name === "Hamma Admin";
+        const ownerNames = ["hamma", "hamma admin", "othmani hiba"];
+        const isOwner = decoded.name && ownerNames.includes(decoded.name.toLowerCase());
         const isAllowed = role === "admin" || role === "moderator" || isOwner;
         return { ok: isAllowed, uid: decoded.uid, name: decoded.name };
     } catch (e) {
