@@ -201,8 +201,6 @@ const socketUsers = new Map();    // socket.id -> username
 let onlineUsersCount = 0;
 let chatLocked = false;           // when true, only admins/mods can send messages
 let pinnedMessage = null;         // { id, user, text } or null
-let autoClearEnabled = false;     // when true, the chat auto-clears every 5 minutes
-let autoClearTimer = null;
 const modClearCooldowns = new Map(); // uid -> next-allowed-timestamp (ms) for moderators clearing chat
 const CLEAR_COOLDOWN_MS = 5 * 60 * 1000;
 
@@ -235,24 +233,8 @@ function scheduleAutoUnmute(username, ms) {
 
 function performChatClear(by) {
     pinnedMessage = null;
-    io.emit('chat-cleared', { by: by || 'Auto-Clear' });
+    io.emit('chat-cleared', { by: by || 'Admin' });
     io.emit('pinned-message-update', null);
-}
-
-function startAutoClear() {
-    if (autoClearTimer) clearInterval(autoClearTimer);
-    autoClearEnabled = true;
-    autoClearTimer = setInterval(() => {
-        performChatClear('🕐 Auto-Clear (every 5 min)');
-    }, 5 * 60 * 1000);
-    io.emit('auto-clear-status', { enabled: true });
-}
-
-function stopAutoClear() {
-    if (autoClearTimer) clearInterval(autoClearTimer);
-    autoClearTimer = null;
-    autoClearEnabled = false;
-    io.emit('auto-clear-status', { enabled: false });
 }
 
 // Kicks every socket registered under this username (used on ban)
@@ -277,7 +259,6 @@ io.on('connection', (socket) => {
     socket.emit('status-lists', getStatusLists());
     socket.emit('chat-lock-status', { locked: chatLocked });
     socket.emit('pinned-message-update', pinnedMessage);
-    socket.emit('auto-clear-status', { enabled: autoClearEnabled });
 
     // Client registers its username right after entering the chat,
     // so bans can be enforced immediately even for already-connected users
@@ -442,20 +423,6 @@ io.on('connection', (socket) => {
         if (role === 'moderator') {
             const nextAllowed = modClearCooldowns.get(uid) || 0;
             return socket.emit('clear-cooldown-status', { nextAllowedAt: nextAllowed > Date.now() ? nextAllowed : null });
-        }
-    });
-
-    // Toggle auto-clear (wipes the chat automatically every 5 minutes) — admins only
-    socket.on('toggle-auto-clear', async ({ idToken, enabled }) => {
-        const { ok, role, name } = await verifyRole(idToken);
-        if (!ok || role !== 'admin') return socket.emit('system-msg', { text: 'You are not allowed to change this setting.', kind: 'error' });
-
-        if (enabled) {
-            startAutoClear();
-            io.emit('system-msg', { text: `🕐 Auto-clear enabled by ${name || 'Admin'} — the chat will clear every 5 minutes.`, kind: 'info' });
-        } else {
-            stopAutoClear();
-            io.emit('system-msg', { text: `🕐 Auto-clear disabled by ${name || 'Admin'}.`, kind: 'info' });
         }
     });
 
