@@ -318,10 +318,6 @@
                 <i class="fas fa-broom" style="color: #e63946;"></i>
             </div>
 
-            <div class="ai-btn" id="btn-auto-clear" style="background: rgba(148, 163, 184, 0.15); border: 1px solid #94a3b8; margin-top: 10px; display: none;" title="Auto-Clear every 5 min: OFF">
-                <i class="fas fa-clock" id="icon-auto-clear" style="color: #94a3b8;"></i>
-            </div>
-
             <div class="ai-btn" id="btn-lock-chat" style="background: rgba(255, 183, 3, 0.2); border: 1px solid #ffb703; margin-top: 10px; display: none;" title="Lock Chat">
                 <i class="fas fa-lock-open" id="icon-lock-chat" style="color: #ffb703;"></i>
             </div>
@@ -831,11 +827,10 @@
                 if (isOwnerOrAdmin || window.isUserModerator) {
                     document.getElementById('btn-clear-chat').style.display = 'flex';
                 }
-                // Only admins (owners included) can lock the whole chat or toggle auto-clear —
+                // Only admins (owners included) can lock the whole chat —
                 // moderators are limited to mute + pin + a cooldown-limited clear-chat
                 if (isOwnerOrAdmin) {
                     document.getElementById('btn-lock-chat').style.display = 'flex';
-                    document.getElementById('btn-auto-clear').style.display = 'flex';
                 }
 
                 window.proceedToChat(username);
@@ -1049,13 +1044,36 @@
 
             const formattedUser = window.formatUsername(user);
             const replyHtml = replyTo
-                ? `<div class="reply-quote"><i class="fas fa-reply"></i> <strong>${replyTo.user}:</strong> ${(replyTo.text || '').slice(0, 80)}</div>`
+                ? `<div class="reply-quote" data-jump-id="${replyTo.id}"><i class="fas fa-reply"></i> <strong>${replyTo.user}:</strong> ${(replyTo.text || '').slice(0, 80)}</div>`
                 : '';
             msgElement.innerHTML = `${replyHtml}<strong>${formattedUser}:</strong> <span class="text-content">${msg}</span>`;
             chatBox.appendChild(msgElement);
             chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
 
+            // Tapping the quoted snippet jumps to & softly highlights the original message,
+            // instead of opening the options menu for this message
+            const quoteEl = msgElement.querySelector('.reply-quote');
+            if (quoteEl) {
+                quoteEl.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    jumpToMessage(quoteEl.dataset.jumpId);
+                });
+            }
+
             attachSwipeToReply(msgElement, () => user, () => msg);
+        }
+
+        // Scrolls to the original message a reply points to, and gives it a soft, eye-friendly glow
+        // so it's clear which message someone replied to
+        function jumpToMessage(id) {
+            if (!id) return;
+            const target = chatBox.querySelector(`[data-id="${id}"]`);
+            if (!target) return;
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            target.classList.remove('highlight-pulse');
+            void target.offsetWidth; // restart the animation if clicked again
+            target.classList.add('highlight-pulse');
+            setTimeout(() => target.classList.remove('highlight-pulse'), 1300);
         }
 
         // Instagram-style swipe: drag a message left/right past a threshold to reply to it
@@ -1252,27 +1270,7 @@
             socket.on('pinned-message-update', (data) => {
                 renderPinnedMessage(data);
             });
-
-            // Auto-clear (every 5 min) status changed
-            window.isAutoClearEnabled = false;
-            socket.on('auto-clear-status', ({ enabled }) => {
-                window.isAutoClearEnabled = enabled;
-                const btn = document.getElementById('btn-auto-clear');
-                const icon = document.getElementById('icon-auto-clear');
-                if (!btn || !icon) return;
-                btn.title = `Auto-Clear every 5 min: ${enabled ? 'ON' : 'OFF'}`;
-                icon.style.color = enabled ? '#92fe9d' : '#94a3b8';
-                btn.style.borderColor = enabled ? '#92fe9d' : '#94a3b8';
-            });
         }
-
-        // Toggle the "auto-clear every 5 min" feature (admins only)
-        document.getElementById('btn-auto-clear').addEventListener('click', async () => {
-            try {
-                const idToken = await window.firebaseAuth.currentUser.getIdToken();
-                socket.emit('toggle-auto-clear', { idToken, enabled: !window.isAutoClearEnabled });
-            } catch (e) { appendSystemMessage('يجب تسجيل الدخول.', 'error'); }
-        });
 
         function renderPinnedMessage(data) {
             const bar = document.getElementById('pinned-message-bar');
