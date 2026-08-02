@@ -1,11 +1,17 @@
-/* أساسيات الموقع والمظهر الفضائي */
-body { 
-    background: #03030c; 
-    color: white; 
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-    display: flex; 
-    height: 100dvh; 
-    margin: 0; 
+/* =====================================================================
+   ملف الستايل — تم تنظيفه ودمج القواعد المكررة (نفس المظهر، كود أنظف)
+   ===================================================================== */
+
+/* ================= أساسيات عامة ================= */
+* { box-sizing: border-box; }
+
+body {
+    background: #03030c;
+    color: white;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    height: 100dvh;
+    margin: 0;
     overflow: hidden;
     direction: ltr;
     -webkit-font-smoothing: antialiased;
@@ -26,15 +32,14 @@ body {
     background: rgba(255, 255, 255, 0.03);
     backdrop-filter: blur(25px);
     -webkit-backdrop-filter: blur(25px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     padding: 30px;
     border-radius: 24px;
     width: 90%;
     max-width: 360px;
     text-align: center;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 25px rgba(0, 201, 255, 0.15);
     animation: floatingCard 4s ease-in-out infinite alternate;
-    box-sizing: border-box;
 }
 
 @keyframes floatingCard {
@@ -42,10 +47,7 @@ body {
     to { transform: translateY(-10px); }
 }
 
-.logo-area {
-    position: relative;
-    margin-bottom: 30px;
-}
+.logo-area { position: relative; margin-bottom: 30px; }
 
 .glow-orb {
     position: absolute;
@@ -77,10 +79,7 @@ body {
     text-transform: uppercase;
 }
 
-.input-group {
-    position: relative;
-    margin-bottom: 20px;
-}
+.input-group { position: relative; margin-bottom: 20px; }
 
 .input-icon {
     position: absolute;
@@ -97,8 +96,7 @@ body {
     padding: 14px 14px 14px 45px;
     border-radius: 12px;
     font-size: 15px;
-    box-sizing: border-box;
-    transition: all 0.3s ease;
+    transition: border-color 0.25s ease, background 0.25s ease, box-shadow 0.25s ease;
 }
 
 .input-group input:focus {
@@ -108,13 +106,14 @@ body {
     box-shadow: 0 0 15px rgba(0, 242, 254, 0.2);
 }
 
+/* ================= أزرار مشتركة ================= */
 .btn-primary, .btn-secondary {
     width: 100%;
     padding: 14px;
     border-radius: 12px;
     font-weight: bold;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease, background 0.2s ease;
     border: none;
     margin-bottom: 12px;
     font-size: 15px;
@@ -126,16 +125,15 @@ body {
     box-shadow: 0 4px 15px rgba(0, 242, 254, 0.3);
 }
 
-.btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 242, 254, 0.5);
-}
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 242, 254, 0.5); }
+.btn-primary:active { transform: translateY(0); }
 
 .btn-secondary {
     background: rgba(255, 255, 255, 0.05);
     color: #ccc;
     border: 1px solid rgba(255, 255, 255, 0.08);
 }
+.btn-secondary:hover { background: rgba(255, 255, 255, 0.08); }
 
 .divider {
     display: flex;
@@ -154,10 +152,7 @@ body {
     margin: 0 10px;
 }
 
-.social-login {
-    display: flex;
-    gap: 12px;
-}
+.social-login { display: flex; gap: 12px; }
 
 .social-btn {
     flex: 1;
@@ -172,118 +167,140 @@ body {
     align-items: center;
     justify-content: center;
     gap: 8px;
+    transition: background 0.2s ease;
 }
+.social-btn:hover { background: rgba(255, 255, 255, 0.06); }
 
 /* ================= ستايل الشات الرئيسي ================= */
-.main-layout {
-    display: flex;
-    width: 100vw;
-    height: 100dvh;
-}
+.main-layout { display: flex; width: 100vw; height: 100dvh; }
 
 /* Sidebar في الديسكتوب */
-.sidebar { 
-    width: 70px; 
-    background: #090913; 
-    display: flex; 
-    flex-direction: column; 
-    align-items: center; 
-    padding-top: 20px; 
-    gap: 15px; 
+.sidebar {
+    width: 70px;
+    background: #090913;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 20px;
+    gap: 15px;
     z-index: 10;
     border-right: 1px solid rgba(255, 255, 255, 0.05);
-    box-sizing: border-box;
 }
 
-.bg-btn { 
-    width: 35px; 
-    height: 35px; 
-    border-radius: 50%; 
-    cursor: pointer; 
-    border: 2px solid #222; 
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+.bg-btn {
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid #222;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
-
 .bg-btn:hover { transform: scale(1.15); }
 
 /* حاوية الشات */
-.chat-container { 
-    flex: 1; 
-    display: flex; 
-    flex-direction: column; 
-    padding: 20px; 
-    box-sizing: border-box;
+.chat-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
     height: 100%;
-    overflow: hidden; 
+    overflow: hidden;
+    box-shadow: 0 0 25px rgba(0, 201, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .chat-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    position: relative;
+    width: 100%;
     margin-bottom: 15px;
-    flex-shrink: 0; 
+    padding: 5px 10px;
+    gap: 10px;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
 }
 
 .chat-title {
-    font-size: 22px;
-    color: #00f2fe;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
     margin: 0;
+    font-size: clamp(14px, 3.5vw, 22px);
+    color: #00f2fe;
     text-shadow: 0 0 10px rgba(0, 242, 254, 0.5);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .user-badge {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
     background: rgba(0, 242, 254, 0.1);
     border: 1px solid rgba(0, 242, 254, 0.2);
     padding: 6px 12px;
     border-radius: 20px;
-    font-size: 13px;
+    font-size: clamp(12px, 3vw, 15px);
     color: #00f2fe;
 }
 
-#chat-box { 
-    flex: 1; 
-    overflow-y: auto; 
+#user-display-tag { position: absolute; right: 15px; }
+
+#chat-box {
+    flex: 1;
+    overflow-y: auto;
     scroll-behavior: smooth;
-    background: rgba(0, 0, 0, 0.4); 
-    padding: 15px; 
-    border-radius: 20px; 
-    margin-bottom: 15px; 
-    backdrop-filter: blur(20px); 
+    background: rgba(0, 0, 0, 0.4);
+    padding: 15px;
+    border-radius: 20px;
+    margin-bottom: 15px;
+    backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.05); 
+    border: 1px solid rgba(255, 255, 255, 0.05);
     display: flex;
-    flex-direction: column; 
+    flex-direction: column;
 }
 
 #chat-box::-webkit-scrollbar { width: 5px; }
 #chat-box::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
 
-/* ستايل الميساجات العام — حجم صغير وأنيق ومحترف */
-.msg { 
+/* ================= الرسائل — حجم صغير، أنيق، مريح للعين ================= */
+.msg {
     position: relative;
-    margin-bottom: 8px; 
-    padding: 8px 13px; 
-    border-radius: 14px; 
-    word-break: break-word; 
+    margin-bottom: 8px;
+    padding: 8px 13px;
+    border-radius: 14px;
+    word-break: break-word;
     max-width: 68%;
     cursor: pointer;
     font-weight: 400;
     font-size: 14px;
     line-height: 1.45;
-    transition: background 0.2s, transform 0.15s;
-    animation: slideIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    touch-action: pan-y;
+    transition: background 0.2s ease, transform 0.15s ease;
+    animation: msgFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+@keyframes msgFadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.msg.swiping { transition: none !important; }
+
+.msg strong { font-weight: 600; }
 
 /* ميساجاتي أنا (تدرج بنفسجي غامق ومريح للعين) */
 .my-msg {
     align-self: flex-end;
     background: linear-gradient(135deg, #4e148c, #854dff);
     color: white;
-    border-bottom-right-radius: 4px; 
+    border-bottom-right-radius: 4px;
     box-shadow: 0 2px 8px rgba(133, 77, 255, 0.25);
 }
-
 .my-msg:hover {
     background: linear-gradient(135deg, #3c0d6e, #713be6);
     transform: translateY(-1px);
@@ -294,24 +311,15 @@ body {
     align-self: flex-start;
     background: linear-gradient(135deg, #0082c8, #00c9ff);
     color: white;
-    border-bottom-left-radius: 4px; 
+    border-bottom-left-radius: 4px;
     box-shadow: 0 2px 8px rgba(0, 201, 255, 0.25);
 }
-
 .other-msg:hover {
     background: linear-gradient(135deg, #006fa1, #00b4e6);
     transform: translateY(-1px);
 }
 
-.msg strong { font-weight: 600; }
-
 /* سحب الرسالة (Swipe) للرد عليها كيما في إنستغرام */
-.msg {
-    touch-action: pan-y;
-}
-.msg.swiping {
-    transition: none !important;
-}
 .swipe-reply-icon {
     position: absolute;
     top: 50%;
@@ -323,12 +331,7 @@ body {
     transition: opacity 0.1s ease;
 }
 
-/* زر مسح الشات وهو في فترة الانتظار (cooldown) بالنسبة للموديراتور */
-#btn-clear-chat.on-cooldown {
-    filter: grayscale(0.6);
-}
-
-/* اقتباس الرد فوق الرسالة */
+/* اقتباس الرد فوق الرسالة — قابل للنقر للقفز للرسالة الأصلية */
 .reply-quote {
     font-size: 12px;
     opacity: 0.85;
@@ -342,11 +345,9 @@ body {
     text-overflow: ellipsis;
     max-width: 100%;
     cursor: pointer;
+    transition: background 0.2s ease, opacity 0.2s ease;
 }
-.reply-quote:hover {
-    opacity: 1;
-    background: rgba(0, 0, 0, 0.25);
-}
+.reply-quote:hover { opacity: 1; background: rgba(0, 0, 0, 0.25); }
 
 /* توهج ناعم ومريح للعين كي تكبس على الاقتباس باش يوريك الرسالة الأصلية */
 @keyframes highlightPulse {
@@ -354,9 +355,7 @@ body {
     70%  { box-shadow: 0 0 0 9px rgba(0, 201, 255, 0); }
     100% { box-shadow: 0 0 0 0 rgba(0, 201, 255, 0); }
 }
-.msg.highlight-pulse {
-    animation: highlightPulse 1.2s ease-out;
-}
+.msg.highlight-pulse { animation: highlightPulse 1.2s ease-out; }
 
 /* شريط معاينة الرد فوق مربع الكتابة */
 #reply-preview-bar {
@@ -386,7 +385,12 @@ body {
     cursor: pointer;
     font-size: 14px;
     flex-shrink: 0;
+    transition: color 0.2s ease;
 }
+.reply-preview-cancel:hover { color: #e2e8f0; }
+
+/* زر مسح الشات وهو في فترة الانتظار (cooldown) بالنسبة للموديراتور */
+#btn-clear-chat.on-cooldown { filter: grayscale(0.6); }
 
 .hint { font-size: 10px; color: rgba(255, 255, 255, 0.7); display: block; margin-top: 4px; }
 
@@ -402,56 +406,47 @@ body {
     border-radius: 8px;
 }
 
-@keyframes slideIn {
-    from { opacity: 0; transform: translateY(12px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-.input-area { 
-    display: flex; 
-    gap: 10px; 
+/* ================= مربع الكتابة ================= */
+.input-area {
+    display: flex;
+    gap: 10px;
     width: 100%;
-    box-sizing: border-box;
-    flex-shrink: 0; 
+    flex-shrink: 0;
 }
 
-input { 
-    background: #090915; 
-    border: 1px solid rgba(255,255,255,0.08); 
-    color: white; 
-    padding: 14px; 
-    border-radius: 12px; 
-    font-size: 16px; 
-    box-sizing: border-box;
-    transition: border-color 0.25s;
+input {
+    background: #090915;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: white;
+    padding: 14px;
+    border-radius: 12px;
+    font-size: 16px;
+    transition: border-color 0.25s ease;
 }
-
 input:focus { outline: none; border-color: #00f2fe; }
 
 #message { flex: 1; }
 
-.send-btn { 
+.send-btn {
     background: linear-gradient(45deg, #00f2fe, #4facfe);
-    border: none; 
+    border: none;
     color: white;
-    padding: 0 24px; 
-    border-radius: 12px; 
-    font-weight: bold; 
-    cursor: pointer; 
+    padding: 0 24px;
+    border-radius: 12px;
+    font-weight: bold;
+    cursor: pointer;
     box-shadow: 0 4px 15px rgba(0, 242, 254, 0.3);
-    transition: transform 0.1s;
+    transition: transform 0.15s ease, box-shadow 0.2s ease;
 }
-
+.send-btn:hover { box-shadow: 0 6px 18px rgba(0, 242, 254, 0.45); }
 .send-btn:active { transform: scale(0.96); }
 
-/* ================= ستايل زر فقاعة الـ AI والنافذة الخاصة بها ================= */
-
-/* زر الـ AI على شكل فقاعة دائرية بجانب أزرار الخلفيات */
-.ai-btn { 
-    width: 35px; 
-    height: 35px; 
-    border-radius: 50%; 
-    cursor: pointer; 
+/* ================= زر فقاعة الـ AI ونافذتها ================= */
+.ai-btn {
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    cursor: pointer;
     background: linear-gradient(135deg, #667eea, #764ba2); /* بنفسجي هادئ ومريح للعين */
     border: 2px solid rgba(255, 255, 255, 0.2);
     display: flex;
@@ -461,26 +456,16 @@ input:focus { outline: none; border-color: #00f2fe; }
     font-size: 10px;
     font-weight: bold;
     box-shadow: 0 4px 15px rgba(118, 75, 162, 0.4);
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    animation: aiPulse 2s infinite alternate; /* تأثير النبض الهادئ */
-    box-sizing: border-box;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: aiPulse 2.2s ease-in-out infinite alternate; /* تأثير نبض هادئ */
 }
+.ai-btn:hover { transform: scale(1.15); }
 
-.ai-btn:hover { 
-    transform: scale(1.15); 
-}
-
-/* تأثير نبض هادئ ومريح للعين لفقاعة الـ AI */
 @keyframes aiPulse {
-    0% {
-        box-shadow: 0 0 8px rgba(118, 75, 162, 0.5);
-    }
-    100% {
-        box-shadow: 0 0 18px rgba(118, 75, 162, 0.9);
-    }
+    0%   { box-shadow: 0 0 8px rgba(118, 75, 162, 0.5); }
+    100% { box-shadow: 0 0 18px rgba(118, 75, 162, 0.9); }
 }
 
-/* نافذة محادثة الـ AI */
 .ai-chat-modal {
     position: fixed;
     bottom: 85px;
@@ -490,15 +475,14 @@ input:focus { outline: none; border-color: #00f2fe; }
     background: rgba(10, 10, 25, 0.95);
     backdrop-filter: blur(25px);
     -webkit-backdrop-filter: blur(25px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 20px;
     display: none; /* تظهر فقط عند النقر */
     flex-direction: column;
     padding: 15px;
     z-index: 99;
-    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6);
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6), 0 0 25px rgba(0, 201, 255, 0.15);
     animation: aiSlideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-sizing: border-box;
 }
 
 @keyframes aiSlideUp {
@@ -506,73 +490,161 @@ input:focus { outline: none; border-color: #00f2fe; }
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* ================= التجاوب الذكي مع التليفونات ================= */
-@media (max-width: 600px) {
-    .main-layout {
-        flex-direction: column; 
+/* ================= شارة الأدمن واسم قوس قزح ================= */
+.admin-badge-img {
+    height: 1.3em;
+    width: auto;
+    max-width: 32px;
+    padding: 1px 4px;
+    background: #000;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    object-fit: contain;
+    vertical-align: middle;
+    margin-left: 5px;
+    box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
+    display: inline-block;
+}
+
+.rainbow-admin-name {
+    background: linear-gradient(270deg, #00c9ff, #92fe9d, #ffd700, #ff758c);
+    background-size: 800% 800%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: smoothRainbow 8s ease infinite;
+    font-weight: bold;
+}
+
+@keyframes smoothRainbow {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* ================= نوافذ منبثقة (Modals) ================= */
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(10px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+.modal-card {
+    background: rgba(18, 22, 36, 0.95);
+    border: 1px solid rgba(0, 201, 255, 0.3);
+    box-shadow: 0 0 35px rgba(0, 201, 255, 0.25);
+    border-radius: 20px;
+    padding: 25px;
+    max-width: 360px;
+    width: 85%;
+    text-align: center;
+    color: #ffffff;
+}
+.modal-card h3 { color: #00c9ff; margin-bottom: 10px; font-size: 20px; }
+.modal-card p { font-size: 14px; color: #cbd5e1; line-height: 1.5; margin-bottom: 20px; }
+
+.modal-buttons { display: flex; gap: 12px; justify-content: center; }
+.modal-btn {
+    flex: 1;
+    padding: 10px 18px;
+    border-radius: 12px;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+}
+.modal-btn:hover { transform: translateY(-1px); }
+.modal-btn.confirm { background: linear-gradient(135deg, #00c9ff, #92fe9d); color: #000; }
+.modal-btn.cancel { background: rgba(255, 255, 255, 0.1); color: #fff; border: 1px solid rgba(255, 255, 255, 0.2); }
+
+/* ================= تأثير التحميل للأزرار ================= */
+.btn-loading { opacity: 0.7; pointer-events: none; position: relative; }
+.fa-spin { animation: fa-spin 1s infinite linear; }
+@keyframes fa-spin {
+    0%   { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* =====================================================================
+   التجاوب مع الهواتف — بلوك واحد نظيف بدل 3 بلوكات مكررة
+   ===================================================================== */
+@media (max-width: 768px) {
+    html { height: 100%; }
+
+    body {
+        height: 100vh;
+        height: -webkit-fill-available;
+        height: 100dvh;
+        overflow: hidden;
+        position: fixed;
+        width: 100%;
     }
-    
-    .sidebar { 
-        width: 100%; 
-        height: 55px; 
-        flex-direction: row; 
+
+    .main-layout {
+        flex-direction: column;
+        height: 100%;
+        padding: 8px;
+        padding-bottom: max(10px, env(safe-area-inset-bottom));
+    }
+
+    .sidebar {
+        flex-direction: row;
+        width: 100%;
+        height: auto;
+        padding: 6px;
         justify-content: center;
+        gap: 12px;
+        flex-shrink: 0;
         flex-wrap: nowrap;
         overflow-x: auto;
-        overflow-y: hidden;
         -webkit-overflow-scrolling: touch;
-        padding: 5px 8px; 
-        gap: 12px;
-        border-right: none; 
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         scrollbar-width: none;
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     }
     .sidebar::-webkit-scrollbar { display: none; }
-    
-    .bg-btn, .ai-btn {
-        width: 28px;
-        height: 28px;
-        flex-shrink: 0;
+
+    .bg-btn, .ai-btn { width: 28px; height: 28px; flex-shrink: 0; }
+    .ai-btn { font-size: 8px; }
+
+    .chat-container {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        margin: 0;
+        padding: 10px;
+        border-radius: 16px;
     }
 
-    .ai-btn {
-        font-size: 8px;
-    }
-    
-    .chat-container { 
-        height: calc(100dvh - 55px); 
-        padding: 10px 10px 15px 10px; 
-    }
+    .chat-header { margin-bottom: 10px; }
+    .chat-title { font-size: 18px; }
+    .user-badge { font-size: 11px; padding: 4px 10px; }
 
-    .chat-header {
+    #chat-box, #ai-chat-box {
+        flex: 1;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch; /* سلاسة التمرير في آيفون */
         margin-bottom: 10px;
     }
 
-    .chat-title {
-        font-size: 18px;
-    }
+    .input-area { flex-shrink: 0; display: flex; gap: 8px; }
 
-    .user-badge {
-        font-size: 11px;
-        padding: 4px 10px;
-    }
-
-    #chat-box {
-        margin-bottom: 10px; 
-    }
-
-    .input-area {
-        gap: 6px;
-    }
-
-    input {
-        padding: 11px;
-        font-size: 14px;
+    /* حماية من التكبير التلقائي المزعج في آيفون عند التركيز على الكتابة */
+    input[type="text"], #ai-message-input {
+        font-size: 16px;
+        padding: 10px 14px;
     }
 
     .send-btn {
-        padding: 0 14px;
+        padding: 0 16px;
         font-size: 14px;
+        height: 44px;
+        white-space: nowrap;
     }
 
     /* تعديل مكان نافذة الـ AI على الهواتف لتظهر بشكل متناسق في المنتصف */
@@ -582,356 +654,4 @@ input:focus { outline: none; border-color: #00f2fe; }
         width: 90%;
         height: 70vh;
     }
-}
-.chat-header {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    position: relative;
-    width: 100%;
-}
-
-.chat-title {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    margin: 0;
-}
-.chat-header {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    position: relative;
-    width: 100%;
-}
-
-.chat-title {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    margin: 0;
-}
-
-#user-display-tag {
-    position: absolute;
-    right: 15px;
-}
-#ai-screen .chat-header {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    position: relative;
-    width: 100%;
-}
-
-#ai-screen .chat-title {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    margin: 0;
-}
-
-#ai-screen .user-badge {
-    position: absolute;
-    right: 15px;
-}
-.chat-container, .login-card, #ai-chat-box {
-    box-shadow: 0 0 25px rgba(0, 201, 255, 0.15) !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-}
-
-.msg {
-    animation: fadeIn 0.4s ease-out forwards;
-}
-
-button, .send-btn, .ai-btn {
-    transition: all 0.3s ease !important;
-}
-
-button:hover, .send-btn:hover, .ai-btn:hover {
-    transform: translateY(-3px) !important;
-    box-shadow: 0 8px 20px rgba(0, 201, 255, 0.4) !important;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-/* تجاوب خاص بالشاشات الهواتف */
-@media (max-width: 768px) {
-    .main-layout {
-        flex-direction: column;
-        height: 100vh;
-    }
-
-    .sidebar {
-        flex-direction: row;
-        width: 100%;
-        height: auto;
-        padding: 8px;
-        justify-content: center;
-        gap: 10px;
-    }
-
-    .chat-container {
-        flex: 1;
-        border-radius: 15px;
-        margin: 5px;
-        height: calc(100vh - 70px);
-    }
-
-    .chat-title {
-        font-size: 18px !important;
-    }
-
-    .input-area {
-        gap: 8px;
-        padding: 8px;
-    }
-
-    input[type="text"] {
-        font-size: 14px !important;
-        padding: 12px 14px !important;
-    }
-
-    .send-btn {
-        padding: 0 16px !important;
-        font-size: 14px !important;
-    }
-}
-/* تجاوب شامل ومثالي لجميع هواتف أندرويد وآيفون (Android & iOS) */
-@media (max-width: 768px) {
-    html {
-        height: 100% !important;
-    }
-
-    body {
-        height: 100vh !important;
-        height: -webkit-fill-available !important;
-        height: 100dvh !important;
-        overflow: hidden !important;
-        position: fixed;
-        width: 100%;
-    }
-
-    .main-layout {
-        flex-direction: column !important;
-        height: 100% !important;
-        padding: 8px !important;
-        box-sizing: border-box !important;
-        padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
-    }
-
-    .sidebar {
-        flex-direction: row !important;
-        width: 100% !important;
-        height: auto !important;
-        padding: 6px !important;
-        justify-content: center !important;
-        gap: 12px !important;
-        flex-shrink: 0 !important;
-        flex-wrap: nowrap !important;
-        overflow-x: auto !important;
-        -webkit-overflow-scrolling: touch !important;
-        scrollbar-width: none !important;
-    }
-
-    .chat-container {
-        flex: 1 !important;
-        min-height: 0 !important;
-        display: flex !important;
-        flex-direction: column !important;
-        margin: 0 !important;
-        padding: 10px !important;
-        border-radius: 16px !important;
-    }
-
-    #chat-box, #ai-chat-box {
-        flex: 1 !important;
-        overflow-y: auto !important;
-        -webkit-overflow-scrolling: touch !important; /* سلاسة التمرير في آيفون */
-        margin-bottom: 10px !important;
-    }
-
-    .input-area {
-        flex-shrink: 0 !important;
-        display: flex !important;
-        gap: 8px !important;
-    }
-
-    /* حماية من التكبير التلقائي المزعج في آيفون عند التركيز على الكتابة */
-    input[type="text"], #ai-message-input {
-        font-size: 16px !important;
-        padding: 10px 14px !important;
-    }
-
-    .send-btn {
-        padding: 0 16px !important;
-        font-size: 14px !important;
-        height: 44px !important;
-        white-space: nowrap !important;
-    }
-}
-/* تجاوب الشاشات وتنسيق العناوين والنافذة */
-@media (max-width: 768px) {
-    html { height: 100% !important; }
-    body { height: 100vh !important; height: 100dvh !important; overflow: hidden !important; position: fixed; width: 100%; }
-    .main-layout { flex-direction: column !important; height: 100% !important; padding: 8px !important; box-sizing: border-box !important; }
-    .sidebar { flex-direction: row !important; width: 100% !important; height: auto !important; padding: 6px !important; justify-content: center !important; gap: 12px !important; flex-shrink: 0 !important; flex-wrap: nowrap !important; overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; scrollbar-width: none !important; }
-    .sidebar::-webkit-scrollbar { display: none !important; }
-    .chat-container { flex: 1 !important; min-height: 0 !important; display: flex !important; flex-direction: column !important; margin: 0 !important; padding: 10px !important; border-radius: 16px !important; }
-    #chat-box, #ai-chat-box { flex: 1 !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; margin-bottom: 10px !important; }
-    .input-area { flex-shrink: 0 !important; display: flex !important; gap: 8px !important; }
-    input[type="text"], #ai-message-input { font-size: 16px !important; padding: 10px 14px !important; }
-    .send-btn { padding: 0 16px !important; font-size: 14px !important; height: 44px !important; white-space: nowrap !important; }
-}
-
-.chat-header { display: flex; justify-content: center; align-items: center; position: relative; width: 100%; }
-.chat-title { position: absolute; left: 50%; transform: translateX(-50%); margin: 0; text-align: center; }
-#user-display-tag, #ai-screen .user-badge { position: absolute; right: 15px; }
-
-.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(10px); display: flex; justify-content: center; align-items: center; z-index: 9999; }
-.modal-card { background: rgba(18, 22, 36, 0.95); border: 1px solid rgba(0, 201, 255, 0.3); box-shadow: 0 0 35px rgba(0, 201, 255, 0.25); border-radius: 20px; padding: 25px; max-width: 360px; width: 85%; text-align: center; color: #ffffff; }
-.modal-card h3 { color: #00c9ff; margin-bottom: 10px; font-size: 20px; }
-.modal-card p { font-size: 14px; color: #cbd5e1; line-height: 1.5; margin-bottom: 20px; }
-.modal-buttons { display: flex; gap: 12px; justify-content: center; }
-.modal-btn { flex: 1; padding: 10px 18px; border-radius: 12px; border: none; font-weight: bold; cursor: pointer; }
-.modal-btn.confirm { background: linear-gradient(135deg, #00c9ff, #92fe9d); color: #000; }
-.modal-btn.cancel { background: rgba(255, 255, 255, 0.1); color: #fff; border: 1px solid rgba(255, 255, 255, 0.2); }
-/* شارة الأدمن الفخمة */
-.admin-badge-img {
-    width: 22px;
-    height: 22px;
-    vertical-align: middle;
-    margin-left: 5px;
-    border-radius: 50%;
-    box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
-    display: inline-block;
-}
-
-/* تأثير اسمك اللي يتغير لونه بطريقة مريحة وفخمة */
-.rainbow-admin-name {
-    background: linear-gradient(270deg, #00c9ff, #92fe9d, #ffd700, #ff758c);
-    background-size: 800% 800%;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    animation: smoothRainbow 8s ease infinite;
-    font-weight: bold;
-}
-
-@keyframes smoothRainbow {
-    0% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-    100% { background-position: 0% 50%; }
-}
-/* تنسيق الشارة المستطيلة Cute */
-.admin-badge-img {
-    height: 22px;
-    padding: 2px 8px;
-    background: rgba(0, 0, 0, 0.8);
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    border-radius: 6px;
-    vertical-align: middle;
-    margin-left: 6px;
-    object-fit: contain;
-    box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
-    display: inline-block;
-}
-
-/* تأثير اسمك اللي يتغير لونه بطريقة مريحة وفخمة */
-.rainbow-admin-name {
-    background: linear-gradient(270deg, #00c9ff, #92fe9d, #ffd700, #ff758c);
-    background-size: 800% 800%;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    animation: smoothRainbow 8s ease infinite;
-    font-weight: bold;
-}
-
-@keyframes smoothRainbow {
-    0% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-    100% { background-position: 0% 50%; }
-}
-.admin-badge-img {
-    height: 16px;
-    padding: 1px 3px;
-    background: #000;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 4px;
-    vertical-align: middle;
-    margin-left: 4px;
-    object-fit: contain;
-    box-shadow: 0 0 6px rgba(255, 255, 255, 0.2);
-    display: inline-block;
-}ss
-.admin-badge-img {
-    height: 15px;                  /* الطول الصغير والمناسب */
-    width: auto;                   /* العرض يتكيف وحدو باش تبقى الصورة متناسقة */
-    padding: 1px 4px;
-    background: #000;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 4px;
-    vertical-align: middle;        /* تخليهم في خط واحد مقابلين بعضهم بالزبط */
-    margin-left: 5px;
-    object-fit: contain;
-    box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
-    display: inline-block;
-}
-.admin-badge-img {
-    width: 65px; /* يمكنك تعديل هذا الرقم لزيادة أو تقليل العرض حسب رغبتك */
-    height: 15px;
-    object-fit: cover;
-    border-radius: 4px;
-    vertical-align: middle;
-    margin-left: 5px;
-    display: inline-block;
-}
-.chat-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    width: 100%;
-    padding: 5px 10px;
-    box-sizing: border-box;
-    gap: 10px;
-    flex-wrap: nowrap;
-}
-
-.chat-title {
-    font-size: clamp(14px, 3.5vw, 18px);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.user-badge {
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-    font-size: clamp(12px, 3vw, 15px);
-}
-
-.admin-badge-img {
-    height: 1.3em;
-    width: auto;
-    max-width: 32px;
-    object-fit: contain;
-    border-radius: 4px;
-    vertical-align: middle;
-    margin-left: 5px;
-    display: inline-block;
-}
-/* تأثير التحميل للزر */
-.btn-loading {
-    opacity: 0.7;
-    pointer-events: none;
-    position: relative;
-}
-.fa-spin {
-    animation: fa-spin 1s infinite linear;
-}
-@keyframes fa-spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
 }
