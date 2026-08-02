@@ -324,6 +324,17 @@ io.on('connection', (socket) => {
         io.emit('chat-message', data);
     });
 
+    // Relay typing status to everyone else (Instagram-style "X is typing…" indicator)
+    socket.on('typing', ({ username }) => {
+        if (!username) return;
+        socket.broadcast.emit('user-typing', { username });
+    });
+
+    socket.on('stop-typing', ({ username }) => {
+        if (!username) return;
+        socket.broadcast.emit('user-stop-typing', { username });
+    });
+
     // Delete a message — the message's own sender can delete it, and so can
     // an admin or moderator (same staff tier that can already mute/pin).
     // Regular viewers are only told a message was "deleted by an admin" when staff did it
