@@ -6,6 +6,16 @@
     <title>Hamma Chat</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="icon" type="image/png" href="favicon.png">
+
+    <!-- PWA: makes the app installable on phones (Android "Install app" / iOS "Add to Home Screen") -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#00c9ff">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Hamma">
+    <meta name="mobile-web-app-capable" content="yes">
+
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -355,6 +365,10 @@
             <div class="ai-btn" id="btn-lock-chat" style="background: rgba(255, 183, 3, 0.2); border: 1px solid #ffb703; margin-top: 10px; display: none;" title="Lock Chat">
                 <i class="fas fa-lock-open" id="icon-lock-chat" style="color: #ffb703;"></i>
             </div>
+
+            <div class="ai-btn" id="btn-install-app" style="background: rgba(146, 254, 157, 0.2); border: 1px solid #92fe9d; margin-top: 10px; display: none;" title="Install App">
+                <i class="fas fa-download" style="color: #92fe9d;"></i>
+            </div>
             
             <div class="ai-btn" id="btn-logout" style="background: #dc3545; margin-top: 10px; display: none;" title="Logout">
                 <i class="fas fa-sign-out-alt"></i>
@@ -518,6 +532,16 @@
             <p>Open this site on PC for better resolution and the best chatting experience!</p>
             <div class="modal-buttons">
                 <button class="modal-btn confirm" style="width: 100%; font-size: 15px;" onclick="closePcNotice()">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="chat-rules-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-card">
+            <h3><i class="fas fa-scroll"></i> Chat Rules</h3>
+            <p style="font-size: 18px; font-weight: bold; margin: 10px 0;">¡no rules e rojla hiya rules!</p>
+            <div class="modal-buttons">
+                <button class="modal-btn confirm" style="width: 100%; font-size: 15px;" onclick="closeChatRulesModal()">Got it</button>
             </div>
         </div>
     </div>
@@ -1090,6 +1114,35 @@
         function closePcNotice() {
             document.getElementById('pc-notice-modal').style.display = 'none';
         }
+
+        // ===== Weekly chat rules reminder =====
+        // Shows the rules card once per calendar week, the first time the user
+        // taps/focuses the message input that week (stored per-device in localStorage).
+        function getISOWeekKey(date) {
+            const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+            const dayNum = d.getUTCDay() || 7;
+            d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+            const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+            const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+            return `${d.getUTCFullYear()}-W${weekNo}`;
+        }
+
+        function maybeShowWeeklyChatRules() {
+            try {
+                const currentWeek = getISOWeekKey(new Date());
+                const lastShownWeek = localStorage.getItem('hammaRulesLastShownWeek');
+                if (lastShownWeek !== currentWeek) {
+                    document.getElementById('chat-rules-modal').style.display = 'flex';
+                    localStorage.setItem('hammaRulesLastShownWeek', currentWeek);
+                }
+            } catch (e) { /* localStorage unavailable, skip silently */ }
+        }
+
+        function closeChatRulesModal() {
+            document.getElementById('chat-rules-modal').style.display = 'none';
+        }
+
+        document.getElementById('message').addEventListener('focus', maybeShowWeeklyChatRules, { once: false });
 
         document.getElementById('user-display-tag').addEventListener('click', async () => {
             document.getElementById('profilePanel').classList.add('open');
@@ -1836,6 +1889,40 @@
             }
             aiChatBox.scrollTop = aiChatBox.scrollHeight;
         }
+    </script>
+
+    <!-- PWA: service worker registration + install prompt handling -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').catch(err => {
+                    console.warn('Service worker registration failed:', err);
+                });
+            });
+        }
+
+        // Android/Chrome fire this when the app becomes installable; we capture it
+        // and show our own "Install App" button instead of the default mini-bar.
+        let deferredInstallPrompt = null;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredInstallPrompt = e;
+            const btn = document.getElementById('btn-install-app');
+            if (btn) btn.style.display = 'flex';
+        });
+
+        document.getElementById('btn-install-app').addEventListener('click', async () => {
+            if (!deferredInstallPrompt) return;
+            deferredInstallPrompt.prompt();
+            await deferredInstallPrompt.userChoice;
+            deferredInstallPrompt = null;
+            document.getElementById('btn-install-app').style.display = 'none';
+        });
+
+        window.addEventListener('appinstalled', () => {
+            const btn = document.getElementById('btn-install-app');
+            if (btn) btn.style.display = 'none';
+        });
     </script>
 </body>
 </html>
