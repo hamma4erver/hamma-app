@@ -196,6 +196,33 @@
             font-size: 14px;
             flex-shrink: 0;
         }
+
+        #typing-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 14px;
+            font-size: 12.5px;
+            color: #94a3b8;
+            font-style: italic;
+        }
+        .typing-dots {
+            display: inline-flex;
+            gap: 3px;
+        }
+        .typing-dots span {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: #00c9ff;
+            animation: typingBounce 1.2s infinite ease-in-out;
+        }
+        .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+        @keyframes typingBounce {
+            0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+            30% { transform: translateY(-4px); opacity: 1; }
+        }
     </style>
 </head>
 <body>
@@ -317,10 +344,6 @@
                 <i class="fas fa-robot"></i> AI
             </div>
 
-            <div class="ai-btn" id="openProfilePanel" style="background: rgba(0, 201, 255, 0.2); border: 1px solid #00c9ff; margin-top: 10px;" title="Profile Settings">
-                <i class="fas fa-user-cog" style="color: #00c9ff;"></i>
-            </div>
-
             <div class="ai-btn" id="btn-admin" style="background: rgba(255, 215, 0, 0.2); border: 1px solid #ffd700; margin-top: 10px; display: none;" title="Admin Dashboard">
                 <i class="fas fa-user-shield" style="color: #ffd700;"></i>
             </div>
@@ -341,7 +364,7 @@
         <div class="chat-container">
             <div class="chat-header">
                 <h1 class="chat-title">Just Chatting</h1>
-                <span id="user-display-tag" class="user-badge"></span>
+                <span id="user-display-tag" class="user-badge" style="cursor: pointer;" title="Profile Settings"></span>
             </div>
             <div id="pinned-message-bar" style="display: none;"></div>
             <div id="chat-box"></div>
@@ -349,6 +372,8 @@
             <div id="restriction-banner" style="display: none;"></div>
 
             <div id="reply-preview-bar" style="display: none;"></div>
+
+            <div id="typing-indicator" style="display: none;"></div>
 
             <div class="input-area">
                 <input type="text" id="message" placeholder="Type a message..." onkeydown="checkEnter(event)">
@@ -1066,7 +1091,7 @@
             document.getElementById('pc-notice-modal').style.display = 'none';
         }
 
-        document.getElementById('openProfilePanel').addEventListener('click', async () => {
+        document.getElementById('user-display-tag').addEventListener('click', async () => {
             document.getElementById('profilePanel').classList.add('open');
             document.getElementById('panelNewUsername').value = window.currentUsername;
             await refreshUsernameCooldownUI();
@@ -1118,11 +1143,56 @@
                 }
                 document.getElementById('message').value = "";
                 cancelReply();
+                stopTyping();
             }
         }
 
         function checkEnter(event) {
             if (event.key === "Enter") sendMessage();
+        }
+
+        // ===== Typing indicator (Instagram-style) =====
+        let typingEmitTimeout = null;
+        let isCurrentlyTyping = false;
+
+        function notifyTyping() {
+            if (!socket || !socket.connected || !window.currentUsername) return;
+            if (!isCurrentlyTyping) {
+                isCurrentlyTyping = true;
+                socket.emit('typing', { username: window.currentUsername });
+            }
+            clearTimeout(typingEmitTimeout);
+            typingEmitTimeout = setTimeout(stopTyping, 2500);
+        }
+
+        function stopTyping() {
+            if (isCurrentlyTyping && socket && socket.connected) {
+                socket.emit('stop-typing', { username: window.currentUsername });
+            }
+            isCurrentlyTyping = false;
+            clearTimeout(typingEmitTimeout);
+        }
+
+        document.getElementById('message').addEventListener('input', notifyTyping);
+
+        const typingUsers = new Set();
+        const typingTimeouts = new Map();
+
+        function renderTypingIndicator() {
+            const el = document.getElementById('typing-indicator');
+            const names = [...typingUsers];
+            if (names.length === 0) {
+                el.style.display = 'none';
+                el.innerHTML = '';
+                return;
+            }
+            const label = names.length === 1
+                ? `${names[0]} is typing`
+                : names.length === 2
+                    ? `${names[0]} and ${names[1]} are typing`
+                    : `${names.length} people are typing`;
+            el.innerHTML = `${label}<span class="typing-dots"><span></span><span></span><span></span></span>`;
+            el.style.display = 'flex';
         }
 
         function appendLocalMessage(id, user, msg, isSelf, replyTo) {
@@ -1215,9 +1285,13 @@
                 iconEl.style.opacity = 0;
 
                 if (Math.abs(currentX) >= THRESHOLD) {
-                    window.replyingTo = { id: msgElement.dataset.id, user: getSender(), text: getText() };
-                    showReplyPreview();
-                    if (navigator.vibrate) navigator.vibrate(15);
+                    if (msgElement.dataset.deleted === 'true') {
+                        appendSystemMessage('Cannot reply to a deleted message.', 'error');
+                    } else {
+                        window.replyingTo = { id: msgElement.dataset.id, user: getSender(), text: getText() };
+                        showReplyPreview();
+                        if (navigator.vibrate) navigator.vibrate(15);
+                    }
                 }
                 currentX = 0;
             }
@@ -1253,11 +1327,37 @@
         if (socket) {
             socket.on('chat-message', (data) => {
                 appendLocalMessage(data.id || Date.now(), data.user, data.msg, data.senderId === socket.id, data.replyTo);
+                // A message arriving from someone means they're done typing
+                if (data.user) {
+                    typingUsers.delete(data.user);
+                    clearTimeout(typingTimeouts.get(data.user));
+                    renderTypingIndicator();
+                }
+            });
+
+            socket.on('user-typing', ({ username }) => {
+                if (!username || username === window.currentUsername) return;
+                typingUsers.add(username);
+                renderTypingIndicator();
+                clearTimeout(typingTimeouts.get(username));
+                // Safety net in case a stop-typing event is lost
+                typingTimeouts.set(username, setTimeout(() => {
+                    typingUsers.delete(username);
+                    renderTypingIndicator();
+                }, 4000));
+            });
+
+            socket.on('user-stop-typing', ({ username }) => {
+                if (!username) return;
+                typingUsers.delete(username);
+                clearTimeout(typingTimeouts.get(username));
+                renderTypingIndicator();
             });
 
             socket.on('delete-message', ({ msgId, staffDeleted }) => {
                 const target = document.querySelector(`[data-id="${msgId}"]`);
                 if (target) {
+                    target.dataset.deleted = 'true';
                     const textSpan = target.querySelector('.text-content');
                     if (window.isUserAdminOrMod) {
                         textSpan.innerHTML = `<span class="msg-deleted-admin">[🗑️ Deleted]:</span> <span class="msg-deleted-text">${target.dataset.rawtext}</span>`;
@@ -1517,6 +1617,12 @@
                 adminActions.style.display = 'none';
             }
 
+            const replyBtn = document.getElementById('btn-msg-reply');
+            const isDeleted = element.dataset.deleted === 'true';
+            replyBtn.disabled = isDeleted;
+            replyBtn.style.opacity = isDeleted ? '0.4' : '1';
+            replyBtn.style.cursor = isDeleted ? 'not-allowed' : 'pointer';
+
             document.getElementById('msg-options-modal').style.display = 'flex';
         }
 
@@ -1539,6 +1645,11 @@
         // Reply button — available to everyone
         document.getElementById('btn-msg-reply').addEventListener('click', () => {
             if (!selectedMsgElem) return;
+            if (selectedMsgElem.dataset.deleted === 'true') {
+                appendSystemMessage('Cannot reply to a deleted message.', 'error');
+                closeMsgModal();
+                return;
+            }
             window.replyingTo = {
                 id: selectedMsgElem.dataset.id,
                 user: selectedSenderName,
