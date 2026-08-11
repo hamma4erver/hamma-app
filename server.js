@@ -353,7 +353,7 @@ io.on('connection', (socket) => {
         if (!isSelf && isStaff && !isOwner) {
             const senderRole = await getRoleByUsername(messageSender);
             if (senderRole === 'admin') {
-                return socket.emit('system-msg', { text: `🚫 Only Hamma Admin / Othmani Hiba can delete an admin's message.`, kind: 'error' });
+                return socket.emit('system-msg', { text: `🚫 Can't delete an admin's message.`, kind: 'error' });
             }
         }
 
@@ -395,15 +395,8 @@ io.on('connection', (socket) => {
     // Unmuting a moderator is reserved for the owners (Hamma Admin / Othmani Hiba) —
     // a regular admin can't lift a moderator's mute.
     socket.on('unmute-user', async ({ username, idToken }) => {
-        const { ok, isOwner } = await verifyRole(idToken);
+        const { ok } = await verifyRole(idToken);
         if (!ok) return socket.emit('system-msg', { text: 'You are not allowed to unmute users.', kind: 'error' });
-
-        if (!isOwner) {
-            const targetRole = await getRoleByUsername(username);
-            if (targetRole === 'moderator') {
-                return socket.emit('system-msg', { text: `🚫 Only Hamma Admin / Othmani Hiba can unmute a moderator.`, kind: 'error' });
-            }
-        }
 
         mutedUsers.delete(username);
         if (muteTimers.has(username)) {
