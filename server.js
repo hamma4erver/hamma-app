@@ -203,6 +203,8 @@ let chatLocked = false;           // when true, only admins/mods can send messag
 let pinnedMessage = null;         // { id, user, text } or null
 const modClearCooldowns = new Map(); // uid -> next-allowed-timestamp (ms) for moderators clearing chat
 const CLEAR_COOLDOWN_MS = 5 * 60 * 1000;
+const modUnmuteCooldowns = new Map(); // uid -> next-allowed-timestamp (ms) for moderators unmuting someone
+const UNMUTE_COOLDOWN_MS = 5 * 60 * 1000;
 
 function getStatusLists() {
     // Clean up any expired mutes before broadcasting
@@ -395,8 +397,18 @@ io.on('connection', (socket) => {
     // Unmuting a moderator is reserved for the owners (Hamma Admin / Othmani Hiba) —
     // a regular admin can't lift a moderator's mute.
     socket.on('unmute-user', async ({ username, idToken }) => {
-        const { ok } = await verifyRole(idToken);
+        const { ok, role, uid } = await verifyRole(idToken);
         if (!ok) return socket.emit('system-msg', { text: 'You are not allowed to unmute users.', kind: 'error' });
+
+        if (role === 'moderator') {
+            const now = Date.now();
+            const nextAllowed = modUnmuteCooldowns.get(uid) || 0;
+            if (now < nextAllowed) {
+                const remainingMin = Math.ceil((nextAllowed - now) / 60000);
+                return socket.emit('system-msg', { text: `⏳ You can unmute again in ~${remainingMin} minute(s).`, kind: 'error' });
+            }
+            modUnmuteCooldowns.set(uid, now + UNMUTE_COOLDOWN_MS);
+        }
 
         mutedUsers.delete(username);
         if (muteTimers.has(username)) {
