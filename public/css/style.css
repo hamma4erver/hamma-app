@@ -5,6 +5,11 @@
 /* ================= أساسيات عامة ================= */
 * { box-sizing: border-box; }
 
+html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent; /* بلا فلاش أبيض مزعج كي تلمس فالهاتف */
+}
+
 body {
     background: #03030c;
     color: white;
@@ -15,6 +20,12 @@ body {
     overflow: hidden;
     direction: ltr;
     -webkit-font-smoothing: antialiased;
+}
+
+/* شريط تمرير رفيع وهادئ لأي عنصر قابل للتمرير فالتطبيق (Firefox) */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
 }
 
 /* ================= ستايل الـ LOGIN ================= */
@@ -264,8 +275,11 @@ body {
     flex-direction: column;
 }
 
-#chat-box::-webkit-scrollbar { width: 5px; }
-#chat-box::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
+#chat-box::-webkit-scrollbar, .ai-chat-modal *::-webkit-scrollbar { width: 5px; }
+#chat-box::-webkit-scrollbar-thumb, .ai-chat-modal *::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+}
 
 /* ================= الرسائل — حجم صغير، أنيق، مريح للعين ================= */
 .msg {
@@ -279,8 +293,11 @@ body {
     font-weight: 400;
     font-size: 14px;
     line-height: 1.45;
+    letter-spacing: 0.1px;
     touch-action: pan-y;
-    transition: background 0.2s ease, transform 0.15s ease;
+    transition: background 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 0.25s ease;
     animation: msgFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -298,12 +315,13 @@ body {
     align-self: flex-end;
     background: linear-gradient(135deg, #4e148c, #854dff);
     color: white;
-    border-bottom-right-radius: 4px;
-    box-shadow: 0 2px 8px rgba(133, 77, 255, 0.25);
+    border-bottom-right-radius: 6px;
+    box-shadow: 0 2px 6px rgba(133, 77, 255, 0.2);
 }
 .my-msg:hover {
     background: linear-gradient(135deg, #3c0d6e, #713be6);
     transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(133, 77, 255, 0.28);
 }
 
 /* ميساجات صحابي (تدرج أزرق/سيان هادئ ورائع للعين) */
@@ -311,12 +329,13 @@ body {
     align-self: flex-start;
     background: linear-gradient(135deg, #0082c8, #00c9ff);
     color: white;
-    border-bottom-left-radius: 4px;
-    box-shadow: 0 2px 8px rgba(0, 201, 255, 0.25);
+    border-bottom-left-radius: 6px;
+    box-shadow: 0 2px 6px rgba(0, 201, 255, 0.2);
 }
 .other-msg:hover {
     background: linear-gradient(135deg, #006fa1, #00b4e6);
     transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(0, 201, 255, 0.28);
 }
 
 /* سحب الرسالة (Swipe) للرد عليها كيما في إنستغرام */
@@ -421,9 +440,13 @@ input {
     padding: 14px;
     border-radius: 12px;
     font-size: 16px;
-    transition: border-color 0.25s ease;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease;
 }
-input:focus { outline: none; border-color: #00f2fe; }
+input:focus {
+    outline: none;
+    border-color: #00f2fe;
+    box-shadow: 0 0 12px rgba(0, 242, 254, 0.18);
+}
 
 #message { flex: 1; }
 
@@ -457,13 +480,13 @@ input:focus { outline: none; border-color: #00f2fe; }
     font-weight: bold;
     box-shadow: 0 4px 15px rgba(118, 75, 162, 0.4);
     transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    animation: aiPulse 2.2s ease-in-out infinite alternate; /* تأثير نبض هادئ */
+    animation: aiPulse 2.8s ease-in-out infinite alternate; /* تأثير نبض هادئ */
 }
 .ai-btn:hover { transform: scale(1.15); }
 
 @keyframes aiPulse {
-    0%   { box-shadow: 0 0 8px rgba(118, 75, 162, 0.5); }
-    100% { box-shadow: 0 0 18px rgba(118, 75, 162, 0.9); }
+    0%   { box-shadow: 0 0 6px rgba(118, 75, 162, 0.4); }
+    100% { box-shadow: 0 0 14px rgba(118, 75, 162, 0.7); }
 }
 
 .ai-chat-modal {
