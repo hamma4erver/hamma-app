@@ -552,7 +552,7 @@
         import { 
             getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, 
             signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, updateProfile,
-            setPersistence, browserSessionPersistence
+            setPersistence, browserLocalPersistence
         } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
         import { 
             getFirestore, doc, setDoc, getDoc, deleteDoc, collection, updateDoc, onSnapshot, serverTimestamp
@@ -612,10 +612,11 @@
         const provider = new GoogleAuthProvider();
         window.firebaseAuth = auth;
 
-        // Use per-tab (sessionStorage) persistence instead of the default shared
-        // (localStorage) one, so logging into a different account in a new tab
-        // no longer logs out the account signed in on other tabs
-        setPersistence(auth, browserSessionPersistence).catch(e => console.warn("Could not set auth persistence:", e));
+        // Persist the login across browser restarts (like a normal site) instead of
+        // wiping it out per-tab. A rolling 7-day "remember me" window is enforced
+        // further down: if the person hasn't opened the app in 7+ days, they're
+        // signed out and asked to log in again; using the app resets the clock.
+        setPersistence(auth, browserLocalPersistence).catch(e => console.warn("Could not set auth persistence:", e));
 
         const emailInput = document.getElementById('login-email');
         const passwordInput = document.getElementById('login-password');
@@ -625,6 +626,7 @@
         const logoutBtn = document.getElementById('btn-logout');
 
         let isRegistering = false;
+        let freshSignInAttempt = false; // true right when the person clicks Login/Google — skips the 7-day staleness check
         window.isUserAdminOrMod = false;
 
         function showAuthError(msg) {
@@ -846,15 +848,18 @@
             const email = emailInput.value.trim();
             const password = passwordInput.value;
             if(!email || !password) return showAuthError("Please enter email and password.");
+            freshSignInAttempt = true;
             signInWithEmailAndPassword(auth, email, password).catch(e => showAuthError("Invalid credentials."));
         });
 
         document.getElementById('btn-google').addEventListener('click', () => {
+            freshSignInAttempt = true;
             signInWithPopup(auth, provider).catch(e => showAuthError(e.message));
         });
 
         logoutBtn.addEventListener('click', async () => {
             await markUserOffline();
+            localStorage.removeItem('hamma_last_active');
             signOut(auth).then(() => location.reload());
         });
 
@@ -888,6 +893,22 @@
 
         onAuthStateChanged(auth, async (user) => {
             if (user && !isRegistering) {
+                // Rolling 7-day "remember me": a deliberate login always goes through.
+                // An auto-restored session (browser was closed and reopened) is only
+                // honored if the app was used within the last 7 days — otherwise we
+                // sign out and show the login screen again, like a real site would.
+                const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+                if (freshSignInAttempt) {
+                    freshSignInAttempt = false;
+                } else {
+                    const lastActive = parseInt(localStorage.getItem('hamma_last_active') || '0', 10);
+                    if (!lastActive || (Date.now() - lastActive) > SESSION_MAX_AGE_MS) {
+                        localStorage.removeItem('hamma_last_active');
+                        await signOut(auth);
+                        return; // onAuthStateChanged fires again with user = null
+                    }
+                }
+
                 // Refresh the user's data from Firebase so we see the real, current
                 // emailVerified flag — otherwise a stale cached value lets an
                 // unverified account slip straight into the chat on page refresh.
@@ -1093,6 +1114,10 @@
         }
 
         window.proceedToChat = function(username) {
+            // Every successful entry (fresh login or restored session) resets the
+            // 7-day "remember me" clock — the week only starts counting once the app goes unused.
+            localStorage.setItem('hamma_last_active', Date.now().toString());
+
             window.currentUsername = username;
             document.getElementById('user-display-tag').innerHTML = window.formatUsername(username);
             
@@ -1891,7 +1916,7 @@
         }
     </script>
 
-    <!-- PWA: service worker registration + install prompt handling -->
+    <!-- PWA: service worker registration + install prompt handling (Android + iOS) -->
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
@@ -1900,6 +1925,9 @@
                 });
             });
         }
+
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+        const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
 
         // Android/Chrome fire this when the app becomes installable; we capture it
         // and show our own "Install App" button instead of the default mini-bar.
@@ -1911,12 +1939,44 @@
             if (btn) btn.style.display = 'flex';
         });
 
+        // Safari on iOS never fires beforeinstallprompt (Apple doesn't support it),
+        // so we show the button ourselves and explain the manual steps instead.
+        if (isIOS && !isStandalone) {
+            const btn = document.getElementById('btn-install-app');
+            if (btn) btn.style.display = 'flex';
+        }
+
+        function showIosInstallModal() {
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay';
+            overlay.innerHTML = `
+                <div class="modal-card">
+                    <h3>📲 Install Hamma</h3>
+                    <p>
+                        1. Tap the <strong>Share</strong> button <i class="fas fa-arrow-up-from-bracket"></i> in Safari's toolbar<br>
+                        2. Scroll down and tap <strong>Add to Home Screen</strong><br>
+                        3. Tap <strong>Add</strong> — that's it!
+                    </p>
+                    <div class="modal-buttons">
+                        <button class="modal-btn confirm" id="btn-ios-install-ok">Got it</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+            document.getElementById('btn-ios-install-ok').addEventListener('click', () => overlay.remove());
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+        }
+
         document.getElementById('btn-install-app').addEventListener('click', async () => {
-            if (!deferredInstallPrompt) return;
-            deferredInstallPrompt.prompt();
-            await deferredInstallPrompt.userChoice;
-            deferredInstallPrompt = null;
-            document.getElementById('btn-install-app').style.display = 'none';
+            if (deferredInstallPrompt) {
+                deferredInstallPrompt.prompt();
+                await deferredInstallPrompt.userChoice;
+                deferredInstallPrompt = null;
+                document.getElementById('btn-install-app').style.display = 'none';
+                return;
+            }
+            if (isIOS) {
+                showIosInstallModal();
+            }
         });
 
         window.addEventListener('appinstalled', () => {
