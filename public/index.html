@@ -1920,8 +1920,27 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js').catch(err => {
+                navigator.serviceWorker.register('/sw.js').then((registration) => {
+                    // Every deploy changes sw.js's bytes, which is how the browser
+                    // notices there's a new version. We nudge that check along instead
+                    // of waiting for the browser's own (slow, once-a-day-ish) schedule —
+                    // once on load, then again whenever the tab regains focus.
+                    registration.update();
+                    document.addEventListener('visibilitychange', () => {
+                        if (document.visibilityState === 'visible') registration.update();
+                    });
+                }).catch(err => {
                     console.warn('Service worker registration failed:', err);
+                });
+
+                // Once the new service worker takes over (sw.js already calls
+                // skipWaiting + clients.claim), reload so people land on the new
+                // version automatically instead of needing to refresh by hand.
+                let alreadyRefreshed = false;
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (alreadyRefreshed) return;
+                    alreadyRefreshed = true;
+                    location.reload();
                 });
             });
         }
