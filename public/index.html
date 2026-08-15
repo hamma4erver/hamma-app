@@ -389,7 +389,21 @@
 
             <div id="typing-indicator" style="display: none;"></div>
 
+            <div id="sticker-picker" style="display: none;"></div>
+            <div id="voice-recording-bar" style="display: none;"></div>
+            <div id="upload-progress-bar" style="display: none;"></div>
+
             <div class="input-area">
+                <input type="file" id="media-file-input" accept="image/*,video/*" style="display:none;">
+                <button type="button" id="btn-attach" class="icon-btn" title="Send a photo or video">
+                    <i class="fas fa-paperclip"></i>
+                </button>
+                <button type="button" id="btn-sticker" class="icon-btn" title="Stickers">
+                    <i class="fas fa-face-smile"></i>
+                </button>
+                <button type="button" id="btn-voice" class="icon-btn" title="Hold to record a voice message">
+                    <i class="fas fa-microphone"></i>
+                </button>
                 <input type="text" id="message" placeholder="Type a message..." onkeydown="checkEnter(event)">
                 <button onclick="sendMessage()" id="chat-send-btn" class="send-btn">Enter ↵</button>
             </div>
@@ -557,6 +571,9 @@
         import { 
             getFirestore, doc, setDoc, getDoc, deleteDoc, collection, updateDoc, onSnapshot, serverTimestamp
         } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+        import {
+            getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL
+        } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-storage.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyA91YpdPs7LcvOfcidq_AhH2aKfAmJbWQ0",
@@ -571,6 +588,7 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
+        const storage = getStorage(app);
 
         // ==================================================
         // Username change cooldown: each user can only change
@@ -1204,30 +1222,175 @@
             document.getElementById('profilePanel').classList.remove('open');
         });
 
+        async function getIdTokenSafe() {
+            try {
+                if (window.firebaseAuth && window.firebaseAuth.currentUser) {
+                    return await window.firebaseAuth.currentUser.getIdToken();
+                }
+            } catch (e) { /* guest or not logged in, idToken stays null */ }
+            return null;
+        }
+
+        // Shared send path for text, photos/videos, voice notes, and stickers —
+        // "extra" carries whichever of {msg, mediaType, mediaUrl, sticker} applies.
+        async function sendChatPayload(extra) {
+            const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+            const idToken = await getIdTokenSafe();
+            const payload = Object.assign({ id: msgId, user: window.currentUsername, msg: '', senderId: socket.id, idToken }, extra);
+            if (window.replyingTo) payload.replyTo = window.replyingTo;
+
+            if (socket && socket.connected) {
+                socket.emit('chat-message', payload);
+            } else {
+                appendLocalMessage(msgId, window.currentUsername, payload.msg, true, payload.replyTo, payload.mediaType, payload.mediaUrl, payload.sticker);
+            }
+            cancelReply();
+        }
+
         async function sendMessage() {
             const msg = document.getElementById('message').value;
             if(msg.trim() !== "") {
-                const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-                let idToken = null;
-                try {
-                    if (window.firebaseAuth && window.firebaseAuth.currentUser) {
-                        idToken = await window.firebaseAuth.currentUser.getIdToken();
-                    }
-                } catch (e) { /* guest or not logged in, idToken stays null */ }
-
-                const payload = { id: msgId, user: window.currentUsername, msg: msg, senderId: socket.id, idToken };
-                if (window.replyingTo) payload.replyTo = window.replyingTo;
-
-                if (socket && socket.connected) {
-                    socket.emit('chat-message', payload);
-                } else {
-                    appendLocalMessage(msgId, window.currentUsername, msg, true, payload.replyTo);
-                }
+                await sendChatPayload({ msg });
                 document.getElementById('message').value = "";
-                cancelReply();
                 stopTyping();
             }
         }
+
+        // ===== Photos & videos (Firebase Storage, 50MB max) =====
+        const MAX_MEDIA_BYTES = 50 * 1024 * 1024;
+
+        function showUploadProgress(pct) {
+            const bar = document.getElementById('upload-progress-bar');
+            bar.style.display = 'flex';
+            bar.innerHTML = `<div class="upload-progress-track"><div class="upload-progress-fill" style="width:${pct}%"></div></div><span>Uploading… ${pct}%</span>`;
+        }
+        function hideUploadProgress() {
+            const bar = document.getElementById('upload-progress-bar');
+            bar.style.display = 'none';
+            bar.innerHTML = '';
+        }
+
+        async function uploadAndSendMedia(file, mediaType) {
+            if (!file || !window.currentUsername) return;
+            if (file.size > MAX_MEDIA_BYTES) {
+                appendSystemMessage(`⚠️ "${file.name}" is too big — 50MB max.`, 'error');
+                return;
+            }
+
+            const uid = (window.firebaseAuth && window.firebaseAuth.currentUser) ? window.firebaseAuth.currentUser.uid : 'guest';
+            const safeName = file.name.replace(/[^a-zA-Z0-9_.\-]/g, '_');
+            const path = `chat-media/${uid}/${Date.now()}-${safeName}`;
+            const fileRef = storageRef(storage, path);
+            const uploadTask = uploadBytesResumable(fileRef, file);
+
+            showUploadProgress(0);
+            uploadTask.on('state_changed',
+                (snapshot) => {
+                    const pct = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+                    showUploadProgress(pct);
+                },
+                (error) => {
+                    hideUploadProgress();
+                    appendSystemMessage('⚠️ Upload failed: ' + error.message, 'error');
+                },
+                async () => {
+                    hideUploadProgress();
+                    const url = await getDownloadURL(uploadTask.snapshot.ref);
+                    await sendChatPayload({ mediaType, mediaUrl: url });
+                }
+            );
+        }
+
+        document.getElementById('btn-attach').addEventListener('click', () => {
+            document.getElementById('media-file-input').click();
+        });
+        document.getElementById('media-file-input').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const mediaType = file.type.startsWith('video/') ? 'video' : 'image';
+            uploadAndSendMedia(file, mediaType);
+            e.target.value = '';
+        });
+
+        // ===== Voice messages (hold the mic button to record) =====
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let recordingStartedAt = 0;
+        let recordingTimerInterval = null;
+        let cancelNextRecording = false;
+
+        function updateRecordingTimer() {
+            const bar = document.getElementById('voice-recording-bar');
+            const secs = Math.floor((Date.now() - recordingStartedAt) / 1000);
+            const mm = String(Math.floor(secs / 60)).padStart(2, '0');
+            const ss = String(secs % 60).padStart(2, '0');
+            bar.innerHTML = `<i class="fas fa-microphone recording-dot"></i><span>Recording ${mm}:${ss}</span><button type="button" onclick="window.cancelVoiceRecording()"><i class="fas fa-trash"></i></button>`;
+        }
+        function showRecordingBar() {
+            document.getElementById('voice-recording-bar').style.display = 'flex';
+            updateRecordingTimer();
+            recordingTimerInterval = setInterval(updateRecordingTimer, 500);
+        }
+        function hideRecordingBar() {
+            clearInterval(recordingTimerInterval);
+            document.getElementById('voice-recording-bar').style.display = 'none';
+        }
+
+        async function startVoiceRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') return;
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                recordedChunks = [];
+                cancelNextRecording = false;
+                mediaRecorder = new MediaRecorder(stream);
+                mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
+                mediaRecorder.onstop = async () => {
+                    stream.getTracks().forEach(t => t.stop());
+                    hideRecordingBar();
+                    if (cancelNextRecording) { cancelNextRecording = false; recordedChunks = []; return; }
+                    const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+                    if (blob.size < 800) return; // too short — likely an accidental tap
+                    const file = new File([blob], `voice-${Date.now()}.webm`, { type: 'audio/webm' });
+                    await uploadAndSendMedia(file, 'audio');
+                };
+                mediaRecorder.start();
+                recordingStartedAt = Date.now();
+                showRecordingBar();
+                voiceBtn.classList.add('recording');
+            } catch (e) {
+                appendSystemMessage('⚠️ Microphone access is needed to send a voice message.', 'error');
+            }
+        }
+        function stopVoiceRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+            voiceBtn.classList.remove('recording');
+        }
+        window.cancelVoiceRecording = function() {
+            cancelNextRecording = true;
+            stopVoiceRecording();
+        };
+
+        const voiceBtn = document.getElementById('btn-voice');
+        voiceBtn.addEventListener('mousedown', startVoiceRecording);
+        voiceBtn.addEventListener('mouseup', stopVoiceRecording);
+        voiceBtn.addEventListener('mouseleave', () => { if (mediaRecorder && mediaRecorder.state === 'recording') stopVoiceRecording(); });
+        voiceBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startVoiceRecording(); }, { passive: false });
+        voiceBtn.addEventListener('touchend', (e) => { e.preventDefault(); stopVoiceRecording(); });
+
+        // ===== Stickers (quick-tap emoji set) =====
+        const STICKER_SET = ['😂','❤️','🔥','👍','😍','😢','🎉','👏','😮','🙏','💯','😎','🤣','😭','🥳','😡','🤔','👀','💀','🙌','✨','🥰','😴','🤝','🎂','🍕','⚽','🐐'];
+
+        function toggleStickerPicker() {
+            const picker = document.getElementById('sticker-picker');
+            if (picker.style.display === 'flex') { picker.style.display = 'none'; return; }
+            picker.innerHTML = STICKER_SET.map(e => `<button type="button" class="sticker-option" onclick="window.sendSticker('${e}')">${e}</button>`).join('');
+            picker.style.display = 'flex';
+        }
+        window.sendSticker = async function(emoji) {
+            document.getElementById('sticker-picker').style.display = 'none';
+            await sendChatPayload({ mediaType: 'sticker', sticker: emoji });
+        };
+        document.getElementById('btn-sticker').addEventListener('click', toggleStickerPicker);
 
         function checkEnter(event) {
             if (event.key === "Enter") sendMessage();
@@ -1277,9 +1440,11 @@
             el.style.display = 'flex';
         }
 
-        function appendLocalMessage(id, user, msg, isSelf, replyTo) {
+        function appendLocalMessage(id, user, msg, isSelf, replyTo, mediaType, mediaUrl, sticker) {
             const msgElement = document.createElement('div');
             msgElement.classList.add('msg', isSelf ? 'my-msg' : 'other-msg');
+            if (mediaType) msgElement.classList.add('msg-media');
+            if (mediaType === 'sticker') msgElement.classList.add('msg-sticker');
             msgElement.dataset.id = id;
             msgElement.dataset.sender = user;
             msgElement.dataset.rawtext = msg;
@@ -1293,7 +1458,21 @@
             const replyHtml = replyTo
                 ? `<div class="reply-quote" data-jump-id="${replyTo.id}"><i class="fas fa-reply"></i> <strong>${replyTo.user}:</strong> ${(replyTo.text || '').slice(0, 80)}</div>`
                 : '';
-            msgElement.innerHTML = `${replyHtml}<strong>${formattedUser}:</strong> <span class="text-content">${msg}</span>`;
+
+            let bodyHtml;
+            if (mediaType === 'sticker' && sticker) {
+                bodyHtml = `<span class="sticker-emoji">${sticker}</span>`;
+            } else if (mediaType === 'image' && mediaUrl) {
+                bodyHtml = `<img src="${mediaUrl}" class="chat-media-img" loading="lazy" alt="photo" onclick="event.stopPropagation(); window.open('${mediaUrl}', '_blank')">`;
+            } else if (mediaType === 'video' && mediaUrl) {
+                bodyHtml = `<video src="${mediaUrl}" class="chat-media-video" controls preload="metadata" onclick="event.stopPropagation()"></video>`;
+            } else if (mediaType === 'audio' && mediaUrl) {
+                bodyHtml = `<div class="voice-msg"><i class="fas fa-microphone"></i><audio src="${mediaUrl}" controls onclick="event.stopPropagation()"></audio></div>`;
+            } else {
+                bodyHtml = `<strong>${formattedUser}:</strong> <span class="text-content">${msg}</span>`;
+            }
+
+            msgElement.innerHTML = `${replyHtml}${bodyHtml}`;
             chatBox.appendChild(msgElement);
             chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
 
@@ -1408,7 +1587,7 @@
 
         if (socket) {
             socket.on('chat-message', (data) => {
-                appendLocalMessage(data.id || Date.now(), data.user, data.msg, data.senderId === socket.id, data.replyTo);
+                appendLocalMessage(data.id || Date.now(), data.user, data.msg, data.senderId === socket.id, data.replyTo, data.mediaType, data.mediaUrl, data.sticker);
                 // A message arriving from someone means they're done typing
                 if (data.user) {
                     typingUsers.delete(data.user);
