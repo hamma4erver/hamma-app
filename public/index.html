@@ -18,6 +18,19 @@
 
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Real viewport height fallback: some Android WebViews (the kind embedded inside
+         other apps) don't fully support 100dvh and mis-measure the screen height, which
+         is what pushes the message input bar off the bottom of the screen. This computes
+         the ACTUAL visible height in JS and exposes it as --real-vh for CSS to fall back on. -->
+    <script>
+        function hammaSetRealVh() {
+            document.documentElement.style.setProperty('--real-vh', (window.innerHeight * 0.01) + 'px');
+        }
+        hammaSetRealVh();
+        window.addEventListener('resize', hammaSetRealVh);
+        window.addEventListener('orientationchange', () => setTimeout(hammaSetRealVh, 100));
+    </script>
     <style>
         .role-badge {
             display: inline-block;
@@ -1991,3 +2004,241 @@
                 if (socket && socket.connected) {
                     socket.emit('delete-message', { msgId, idToken, messageSender: selectedSenderName });
                 } else {
+                    selectedMsgElem.dataset.deleted = 'true';
+                    const contentEl = selectedMsgElem.querySelector('.msg-content');
+                    if (contentEl) contentEl.innerHTML = `<i style="color: #94a3b8;">(This message was deleted)</i>`;
+                }
+            } catch (e) { appendSystemMessage('You must be signed in to delete.', 'error'); }
+            closeMsgModal();
+        });
+
+        // Mute duration buttons (5 / 15 / 30 / 60 minutes)
+        document.querySelectorAll('.mute-duration-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                if (!selectedSenderName) return;
+                const minutes = parseInt(btn.dataset.minutes, 10);
+                try {
+                    const idToken = await window.firebaseAuth.currentUser.getIdToken();
+                    socket.emit('mute-user', { username: selectedSenderName, idToken, minutes });
+                } catch (e) { appendSystemMessage('You must be signed in.', 'error'); }
+                closeMsgModal();
+            });
+        });
+
+        // Unmute button
+        document.getElementById('btn-msg-unmute').addEventListener('click', async () => {
+            if (!selectedSenderName) return;
+            try {
+                const idToken = await window.firebaseAuth.currentUser.getIdToken();
+                socket.emit('unmute-user', { username: selectedSenderName, idToken });
+            } catch (e) { appendSystemMessage('You must be signed in.', 'error'); }
+            closeMsgModal();
+        });
+
+        // Ban/unban button (admins only, auto-toggling)
+        document.getElementById('btn-msg-ban').addEventListener('click', async () => {
+            if (!selectedSenderName) return;
+            try {
+                const idToken = await window.firebaseAuth.currentUser.getIdToken();
+                const isBanned = window.bannedSet && window.bannedSet.has(selectedSenderName);
+                socket.emit(isBanned ? 'unblock-user' : 'block-user', { username: selectedSenderName, idToken });
+            } catch (e) { appendSystemMessage('You must be signed in.', 'error'); }
+            closeMsgModal();
+        });
+
+        // Pin the selected message so it stays visible at the top of the chat
+        document.getElementById('btn-msg-pin').addEventListener('click', async () => {
+            if (!selectedMsgElem) return;
+            const msgId = selectedMsgElem.dataset.id;
+            try {
+                const idToken = await window.firebaseAuth.currentUser.getIdToken();
+                socket.emit('pin-message', { msgId, user: selectedSenderName, text: selectedMsgText, idToken });
+            } catch (e) { appendSystemMessage('You must be signed in.', 'error'); }
+            closeMsgModal();
+        });
+
+        // Clear the entire chat for everyone (admins only)
+        document.getElementById('btn-clear-chat').addEventListener('click', async () => {
+            if (!confirm('Clear the whole chat for everyone?')) return;
+            try {
+                const idToken = await window.firebaseAuth.currentUser.getIdToken();
+                socket.emit('clear-chat', { idToken });
+            } catch (e) { appendSystemMessage('You must be signed in.', 'error'); }
+        });
+
+        // Lock/unlock the chat so only admins/mods can send messages (admins only)
+        document.getElementById('btn-lock-chat').addEventListener('click', async () => {
+            try {
+                const idToken = await window.firebaseAuth.currentUser.getIdToken();
+                socket.emit(window.isChatLocked ? 'unlock-chat' : 'lock-chat', { idToken });
+            } catch (e) { appendSystemMessage('You must be signed in.', 'error'); }
+        });
+
+        function changeBg(bg) {
+            document.body.style.transition = "background 0.5s ease";
+            document.body.style.background = bg;
+        }
+
+        function openAIScreen() {
+            if (isGuest) {
+                document.getElementById('ai-notice-modal').style.display = 'flex';
+                return;
+            }
+            document.getElementById('chat-screen').style.display = 'none';
+            const aiScreen = document.getElementById('ai-screen');
+            aiScreen.style.display = 'flex';
+            document.getElementById('ai-message-input').focus();
+        }
+
+        function closeNoticeModal() {
+            document.getElementById('ai-notice-modal').style.display = 'none';
+        }
+
+        function goToLogin() {
+            closeNoticeModal();
+            document.getElementById('chat-screen').style.display = 'none';
+            document.getElementById('ai-screen').style.display = 'none';
+            const loginScreen = document.getElementById('login-screen');
+            loginScreen.style.display = 'flex';
+            loginScreen.style.opacity = '1';
+            loginScreen.style.transform = 'scale(1)';
+        }
+
+        function backToChat() {
+            document.getElementById('ai-screen').style.display = 'none';
+            document.getElementById('chat-screen').style.display = 'flex';
+        }
+
+        function checkAIEnter(event) {
+            if (event.key === "Enter") sendToAI();
+        }
+
+        async function sendToAI() {
+            const inputField = document.getElementById('ai-message-input');
+            const userText = inputField.value.trim();
+            if (userText === "") return;
+
+            const userMsgDiv = document.createElement('div');
+            userMsgDiv.classList.add('msg', 'my-msg');
+            const formattedUser = window.formatUsername(window.currentUsername || 'You');
+            userMsgDiv.innerHTML = `<strong>${formattedUser}:</strong> <span class="text-content">${userText}</span>`;
+            aiChatBox.appendChild(userMsgDiv);
+            inputField.value = "";
+            aiChatBox.scrollTop = aiChatBox.scrollHeight;
+
+            const typingDiv = document.createElement('div');
+            typingDiv.classList.add('msg', 'other-msg');
+            typingDiv.style.opacity = '0.7';
+            typingDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content"><i>Thinking... ⚡</i></span>`;
+            aiChatBox.appendChild(typingDiv);
+            aiChatBox.scrollTop = aiChatBox.scrollHeight;
+
+            try {
+                const res = await fetch('/api/gemini', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: userText })
+                });
+                const data = await res.json();
+                typingDiv.remove();
+
+                const aiMsgDiv = document.createElement('div');
+                aiMsgDiv.classList.add('msg', 'other-msg');
+                aiMsgDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">${data.reply}</span>`;
+                aiChatBox.appendChild(aiMsgDiv);
+            } catch (error) {
+                typingDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">Error connecting to server.</span>`;
+            }
+            aiChatBox.scrollTop = aiChatBox.scrollHeight;
+        }
+    </script>
+
+    <!-- PWA: service worker registration + install prompt handling (Android + iOS) -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').then((registration) => {
+                    // Every deploy changes sw.js's bytes, which is how the browser
+                    // notices there's a new version. We nudge that check along instead
+                    // of waiting for the browser's own (slow, once-a-day-ish) schedule —
+                    // once on load, then again whenever the tab regains focus.
+                    registration.update();
+                    document.addEventListener('visibilitychange', () => {
+                        if (document.visibilityState === 'visible') registration.update();
+                    });
+                }).catch(err => {
+                    console.warn('Service worker registration failed:', err);
+                });
+
+                // Once the new service worker takes over (sw.js already calls
+                // skipWaiting + clients.claim), reload so people land on the new
+                // version automatically instead of needing to refresh by hand.
+                let alreadyRefreshed = false;
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (alreadyRefreshed) return;
+                    alreadyRefreshed = true;
+                    location.reload();
+                });
+            });
+        }
+
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+        const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+
+        // Android/Chrome fire this when the app becomes installable; we capture it
+        // and show our own "Install App" button instead of the default mini-bar.
+        let deferredInstallPrompt = null;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredInstallPrompt = e;
+            const btn = document.getElementById('btn-install-app');
+            if (btn) btn.style.display = 'flex';
+        });
+
+        // Safari on iOS never fires beforeinstallprompt (Apple doesn't support it),
+        // so we show the button ourselves and explain the manual steps instead.
+        if (isIOS && !isStandalone) {
+            const btn = document.getElementById('btn-install-app');
+            if (btn) btn.style.display = 'flex';
+        }
+
+        function showIosInstallModal() {
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay';
+            overlay.innerHTML = `
+                <div class="modal-card">
+                    <h3>📲 Install Hamma</h3>
+                    <p>
+                        1. Tap the <strong>Share</strong> button <i class="fas fa-arrow-up-from-bracket"></i> in Safari's toolbar<br>
+                        2. Scroll down and tap <strong>Add to Home Screen</strong><br>
+                        3. Tap <strong>Add</strong> — that's it!
+                    </p>
+                    <div class="modal-buttons">
+                        <button class="modal-btn confirm" id="btn-ios-install-ok">Got it</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+            document.getElementById('btn-ios-install-ok').addEventListener('click', () => overlay.remove());
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+        }
+
+        document.getElementById('btn-install-app').addEventListener('click', async () => {
+            if (deferredInstallPrompt) {
+                deferredInstallPrompt.prompt();
+                await deferredInstallPrompt.userChoice;
+                deferredInstallPrompt = null;
+                document.getElementById('btn-install-app').style.display = 'none';
+                return;
+            }
+            if (isIOS) {
+                showIosInstallModal();
+            }
+        });
+
+        window.addEventListener('appinstalled', () => {
+            const btn = document.getElementById('btn-install-app');
+            if (btn) btn.style.display = 'none';
+        });
+    </script>
+</body>
+</html>
