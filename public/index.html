@@ -571,9 +571,6 @@
         import { 
             getFirestore, doc, setDoc, getDoc, deleteDoc, collection, updateDoc, onSnapshot, serverTimestamp
         } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
-        import {
-            getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL
-        } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-storage.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyA91YpdPs7LcvOfcidq_AhH2aKfAmJbWQ0",
@@ -588,7 +585,6 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const storage = getStorage(app);
 
         // ==================================================
         // Username change cooldown: each user can only change
@@ -1256,8 +1252,10 @@
             }
         }
 
-        // ===== Photos & videos (Firebase Storage, 50MB max) =====
+        // ===== Photos & videos (Cloudinary, unsigned upload, 50MB max) =====
         const MAX_MEDIA_BYTES = 50 * 1024 * 1024;
+        const CLOUDINARY_CLOUD_NAME = 'awyxkuzz';
+        const CLOUDINARY_UPLOAD_PRESET = 'preset';
 
         function showUploadProgress(pct) {
             const bar = document.getElementById('upload-progress-bar');
@@ -1277,28 +1275,43 @@
                 return;
             }
 
-            const uid = (window.firebaseAuth && window.firebaseAuth.currentUser) ? window.firebaseAuth.currentUser.uid : 'guest';
-            const safeName = file.name.replace(/[^a-zA-Z0-9_.\-]/g, '_');
-            const path = `chat-media/${uid}/${Date.now()}-${safeName}`;
-            const fileRef = storageRef(storage, path);
-            const uploadTask = uploadBytesResumable(fileRef, file);
+            const resourceType = mediaType === 'video' ? 'video' : mediaType === 'audio' ? 'video' : 'image';
+            // Cloudinary's free unsigned uploads route audio through the "video" resource type
+            const endpoint = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`;
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
 
             showUploadProgress(0);
-            uploadTask.on('state_changed',
-                (snapshot) => {
-                    const pct = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-                    showUploadProgress(pct);
-                },
-                (error) => {
-                    hideUploadProgress();
-                    appendSystemMessage('⚠️ Upload failed: ' + error.message, 'error');
-                },
-                async () => {
-                    hideUploadProgress();
-                    const url = await getDownloadURL(uploadTask.snapshot.ref);
-                    await sendChatPayload({ mediaType, mediaUrl: url });
-                }
-            );
+
+            try {
+                const url = await new Promise((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', endpoint, true);
+                    xhr.upload.onprogress = (e) => {
+                        if (e.lengthComputable) {
+                            showUploadProgress(Math.round((e.loaded / e.total) * 100));
+                        }
+                    };
+                    xhr.onload = () => {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            const data = JSON.parse(xhr.responseText);
+                            resolve(data.secure_url);
+                        } else {
+                            reject(new Error('Cloudinary upload failed (' + xhr.status + ')'));
+                        }
+                    };
+                    xhr.onerror = () => reject(new Error('Network error during upload'));
+                    xhr.send(formData);
+                });
+
+                hideUploadProgress();
+                await sendChatPayload({ mediaType, mediaUrl: url });
+            } catch (error) {
+                hideUploadProgress();
+                appendSystemMessage('⚠️ Upload failed: ' + error.message, 'error');
+            }
         }
 
         document.getElementById('btn-attach').addEventListener('click', () => {
