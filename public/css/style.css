@@ -645,8 +645,17 @@ input:focus {
     }
 
     .chat-header { margin-bottom: 10px; }
-    .chat-title { font-size: 18px; }
+    .chat-title {
+        position: static;      /* was absolutely centered — collided with the username on narrow screens */
+        left: auto;
+        transform: none;
+        text-align: left;
+        flex: 1;
+        min-width: 0;          /* lets text-overflow ellipsis actually kick in inside a flex item */
+        font-size: 18px;
+    }
     .user-badge { font-size: 11px; padding: 4px 10px; }
+    #user-display-tag { position: static; right: auto; flex-shrink: 0; }
 
     #chat-box, #ai-chat-box {
         flex: 1;
