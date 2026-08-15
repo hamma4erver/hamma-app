@@ -214,7 +214,10 @@ function getStatusLists() {
     }
     return {
         muted: [...mutedUsers.entries()].map(([username, expiresAt]) => ({ username, expiresAt })),
-        banned: [...blockedUsers]
+        banned: [...blockedUsers],
+        // The real source of truth for "online" — an actual live socket connection,
+        // not a Firestore flag that mobile browsers often fail to clear on close/backgrounding.
+        online: [...new Set(socketUsers.values())]
     };
 }
 
@@ -272,6 +275,7 @@ io.on('connection', (socket) => {
             return;
         }
         socketUsers.set(socket.id, username);
+        broadcastStatusLists();
     });
 
     // Fired when a logged-in user changes their username from the profile panel.
@@ -522,6 +526,7 @@ io.on('connection', (socket) => {
         socketUsers.delete(socket.id);
         onlineUsersCount = Math.max(0, onlineUsersCount - 1);
         io.emit('update-online', onlineUsersCount);
+        broadcastStatusLists();
     });
 });
 
