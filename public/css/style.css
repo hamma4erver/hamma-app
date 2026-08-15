@@ -449,6 +449,15 @@ body {
     flex-shrink: 0;
 }
 
+/* صف أزرار الإرفاق/الملصقات/الصوت — فوق بار الكتابة، على اليسار */
+.media-actions-row {
+    display: flex;
+    justify-content: flex-start;
+    gap: 8px;
+    margin-bottom: 8px;
+    flex-shrink: 0;
+}
+
 /* أزرار الإرفاق/الملصقات/الصوت بجانب مربع الكتابة */
 .icon-btn {
     background: rgba(255, 255, 255, 0.05);
