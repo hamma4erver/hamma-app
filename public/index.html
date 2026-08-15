@@ -407,7 +407,7 @@
             <div id="voice-recording-bar" style="display: none;"></div>
             <div id="upload-progress-bar" style="display: none;"></div>
 
-            <div class="input-area">
+            <div class="media-actions-row">
                 <input type="file" id="media-file-input" accept="image/*,video/*" style="display:none;">
                 <button type="button" id="btn-attach" class="icon-btn" title="Send a photo or video">
                     <i class="fas fa-paperclip"></i>
@@ -418,6 +418,9 @@
                 <button type="button" id="btn-voice" class="icon-btn" title="Hold to record a voice message">
                     <i class="fas fa-microphone"></i>
                 </button>
+            </div>
+
+            <div class="input-area">
                 <input type="text" id="message" placeholder="Type a message..." onkeydown="checkEnter(event)">
                 <button onclick="sendMessage()" id="chat-send-btn" class="send-btn">Enter ↵</button>
             </div>
