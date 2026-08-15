@@ -17,6 +17,7 @@ body {
     color: white;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     display: flex;
+    height: calc(var(--real-vh, 1vh) * 100);
     height: 100dvh;
     margin: 0;
     overflow: hidden;
@@ -39,7 +40,9 @@ body {
 /* ================= ستايل الـ LOGIN ================= */
 .login-container {
     position: fixed;
-    top: 0; left: 0; width: 100%; height: 100dvh;
+    top: 0; left: 0; width: 100%;
+    height: calc(var(--real-vh, 1vh) * 100);
+    height: 100dvh;
     background: radial-gradient(circle at center, #0f0c20 0%, #030209 100%);
     display: flex;
     justify-content: center;
@@ -191,7 +194,7 @@ body {
 .social-btn:hover { background: rgba(255, 255, 255, 0.06); }
 
 /* ================= ستايل الشات الرئيسي ================= */
-.main-layout { display: flex; width: 100vw; height: 100dvh; }
+.main-layout { display: flex; width: 100vw; height: calc(var(--real-vh, 1vh) * 100); height: 100dvh; }
 
 /* Sidebar في الديسكتوب */
 .sidebar {
@@ -284,6 +287,7 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.05);
     display: flex;
     flex-direction: column;
+    justify-content: flex-end;
 }
 
 #chat-box::-webkit-scrollbar, .ai-chat-modal *::-webkit-scrollbar { width: 5px; }
@@ -745,6 +749,7 @@ input:focus {
     body {
         height: 100vh;
         height: -webkit-fill-available;
+        height: calc(var(--real-vh, 1vh) * 100);
         height: 100dvh;
         overflow: hidden;
         position: fixed;
