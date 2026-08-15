@@ -1014,7 +1014,6 @@
                 snapshot.forEach((docSnap) => {
                     let u = docSnap.data();
                     let userId = docSnap.id;
-                    if (u.isOnline) onlineCount++;
 
                     let isMod = u.role === "moderator" || u.role === "admin";
                     // The chat ban/mute system is keyed by display name, not by Firestore uid
@@ -1022,6 +1021,11 @@
                     let isBannedNow = window.bannedSet && window.bannedSet.has(displayName);
                     let muteExpiry = window.mutedMap && window.mutedMap.get(displayName);
                     let isMutedNow = muteExpiry && muteExpiry > Date.now();
+                    // Real online status = an actual live socket connection right now,
+                    // not Firestore's isOnline flag (mobile browsers often never clear that
+                    // on close/backgrounding, so it used to show people online for good).
+                    let isOnlineNow = window.onlineSet && window.onlineSet.has(displayName);
+                    if (isOnlineNow) onlineCount++;
 
                     tableBody.innerHTML += `
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
@@ -1031,7 +1035,7 @@
                                 ${isMutedNow ? ' <span style="color:#ffb703; font-size:12px;">(Muted)</span>' : ''}
                                 ${isBannedNow ? ' <span style="color:#ff4444; font-size:12px;">(Banned)</span>' : ''}
                             </td>
-                            <td style="padding: 10px;">${u.isOnline ? '🟢 Online' : '🔴 Offline'}</td>
+                            <td style="padding: 10px;">${isOnlineNow ? '🟢 Online' : '🔴 Offline'}</td>
                             <td style="padding: 10px; display: flex; gap: 5px; flex-wrap: wrap;">
                                 ${window.isUserAdmin ? `
                                 <button onclick="window.toggleBanSocket('${displayName}', ${isBannedNow})" style="background: ${isBannedNow ? '#28a745' : '#ff4444'}; color: #fff; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer;">
@@ -1461,14 +1465,18 @@
                 setTimeout(() => socket.disconnect(), 300);
             });
 
-            // Receive the muted (with expiry)/banned users state and update the buttons live
+            // Receive the muted (with expiry)/banned/online users state and update the buttons live
             window.mutedMap = new Map();
             window.bannedSet = new Set();
+            window.onlineSet = new Set();
             socket.on('status-lists', (data) => {
                 window.mutedMap = new Map((data.muted || []).map(u => [u.username, u.expiresAt]));
                 window.bannedSet = new Set(data.banned || []);
+                window.onlineSet = new Set(data.online || []);
                 updateMsgActionButtons();
                 updateOwnRestrictionStatus();
+                // Keep the admin dashboard's online/offline column live if it's open
+                if (document.getElementById('admin-modal').style.display === 'flex') loadAdminData();
             });
 
             // Register our username with the server right away, so bans apply instantly if needed
