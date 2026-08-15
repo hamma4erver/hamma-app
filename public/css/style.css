@@ -436,9 +436,136 @@ body {
 /* ================= مربع الكتابة ================= */
 .input-area {
     display: flex;
+    align-items: center;
     gap: 10px;
     width: 100%;
     flex-shrink: 0;
+}
+
+/* أزرار الإرفاق/الملصقات/الصوت بجانب مربع الكتابة */
+.icon-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #cbd5e1;
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    border-radius: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
+}
+.icon-btn:hover { background: rgba(0, 242, 254, 0.12); color: #00f2fe; }
+.icon-btn:active { transform: scale(0.94); }
+#btn-voice.recording { background: #e63946; color: #fff; animation: micPulse 1s ease-in-out infinite; }
+@keyframes micPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(230, 57, 70, 0.5); }
+    50% { box-shadow: 0 0 0 8px rgba(230, 57, 70, 0); }
+}
+
+/* لوحة الملصقات (Stickers) */
+#sticker-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 10px;
+    margin-bottom: 8px;
+    max-height: 160px;
+    overflow-y: auto;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+}
+.sticker-option {
+    background: none;
+    border: none;
+    font-size: 26px;
+    line-height: 1;
+    padding: 6px;
+    cursor: pointer;
+    border-radius: 10px;
+    transition: background 0.15s ease, transform 0.15s ease;
+}
+.sticker-option:hover { background: rgba(0, 242, 254, 0.12); transform: scale(1.15); }
+
+/* شريط تسجيل الصوت */
+#voice-recording-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    margin-bottom: 8px;
+    border-radius: 12px;
+    background: rgba(230, 57, 70, 0.08);
+    border: 1px solid rgba(230, 57, 70, 0.3);
+    font-size: 13px;
+    color: #f8d7da;
+}
+.recording-dot { color: #e63946; animation: micPulse 1s ease-in-out infinite; }
+#voice-recording-bar span { flex: 1; }
+#voice-recording-bar button {
+    background: none;
+    border: none;
+    color: #f8d7da;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+/* شريط تقدم رفع الصور/الفيديوهات */
+#upload-progress-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    margin-bottom: 8px;
+    border-radius: 12px;
+    background: rgba(0, 201, 255, 0.08);
+    border: 1px solid rgba(0, 201, 255, 0.3);
+    font-size: 12px;
+    color: #cbd5e1;
+}
+.upload-progress-track {
+    flex: 1;
+    height: 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+}
+.upload-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #00c9ff, #92fe9d);
+    transition: width 0.2s ease;
+}
+
+/* رسائل الوسائط داخل الشات: صور/فيديو/صوت/ملصقات */
+.msg-media { padding: 6px; }
+.chat-media-img, .chat-media-video {
+    display: block;
+    max-width: 220px;
+    max-height: 260px;
+    border-radius: 12px;
+    cursor: pointer;
+}
+.voice-msg { display: flex; align-items: center; gap: 8px; padding: 4px 6px; }
+.voice-msg audio { height: 32px; max-width: 200px; }
+.sticker-emoji {
+    display: block;
+    font-size: 52px;
+    line-height: 1;
+    padding: 4px;
+}
+.msg.msg-media.my-msg .sticker-emoji,
+.msg.msg-media.other-msg .sticker-emoji {
+    background: none;
+}
+/* الملصقات تبان بلا فقاعة ملونة، كيف تيليجرام/واتساب */
+.msg-sticker {
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0;
 }
 
 input {
