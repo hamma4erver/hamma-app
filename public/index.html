@@ -215,6 +215,7 @@
             font-size: 12.5px;
             color: #94a3b8;
             font-style: italic;
+            flex-shrink: 0;
         }
         .typing-dots {
             display: inline-flex;
@@ -1461,10 +1462,22 @@
             msgElement.dataset.id = id;
             msgElement.dataset.sender = user;
             msgElement.dataset.rawtext = msg;
+            msgElement.dataset.deleted = 'false';
+
+            // What Reply/Translate/etc. should use right now: the real text normally,
+            // but once this message is deleted, only staff (admin/mod) still get the
+            // real text back — everyone else gets the same placeholder shown in the chat,
+            // for ANY message type (text, photo, video, voice note, sticker).
+            const getEffectiveText = () => {
+                if (msgElement.dataset.deleted === 'true' && !window.isUserAdminOrMod) {
+                    return '(This message was deleted)';
+                }
+                return msgElement.dataset.rawtext;
+            };
 
             msgElement.onclick = () => {
                 if (msgElement._justDragged) { msgElement._justDragged = false; return; }
-                openMsgModal(msgElement, user, msgElement.dataset.rawtext);
+                openMsgModal(msgElement, user, getEffectiveText());
             };
 
             const formattedUser = window.formatUsername(user);
@@ -1474,15 +1487,15 @@
 
             let bodyHtml;
             if (mediaType === 'sticker' && sticker) {
-                bodyHtml = `<span class="sticker-emoji">${sticker}</span>`;
+                bodyHtml = `<span class="msg-content sticker-emoji">${sticker}</span>`;
             } else if (mediaType === 'image' && mediaUrl) {
-                bodyHtml = `<img src="${mediaUrl}" class="chat-media-img" loading="lazy" alt="photo" onclick="event.stopPropagation(); window.open('${mediaUrl}', '_blank')">`;
+                bodyHtml = `<div class="msg-content"><img src="${mediaUrl}" class="chat-media-img" loading="lazy" alt="photo" onclick="event.stopPropagation(); window.open('${mediaUrl}', '_blank')"></div>`;
             } else if (mediaType === 'video' && mediaUrl) {
-                bodyHtml = `<video src="${mediaUrl}" class="chat-media-video" controls preload="metadata" onclick="event.stopPropagation()"></video>`;
+                bodyHtml = `<div class="msg-content"><video src="${mediaUrl}" class="chat-media-video" controls preload="metadata" onclick="event.stopPropagation()"></video></div>`;
             } else if (mediaType === 'audio' && mediaUrl) {
-                bodyHtml = `<div class="voice-msg"><i class="fas fa-microphone"></i><audio src="${mediaUrl}" controls onclick="event.stopPropagation()"></audio></div>`;
+                bodyHtml = `<div class="msg-content voice-msg"><i class="fas fa-microphone"></i><audio src="${mediaUrl}" controls onclick="event.stopPropagation()"></audio></div>`;
             } else {
-                bodyHtml = `<strong>${formattedUser}:</strong> <span class="text-content">${msg}</span>`;
+                bodyHtml = `<strong>${formattedUser}:</strong> <span class="msg-content text-content">${msg}</span>`;
             }
 
             msgElement.innerHTML = `${replyHtml}${bodyHtml}`;
@@ -1499,7 +1512,7 @@
                 });
             }
 
-            attachSwipeToReply(msgElement, () => user, () => msgElement.dataset.rawtext);
+            attachSwipeToReply(msgElement, () => user, getEffectiveText);
         }
 
         // Scrolls to the original message a reply points to, and gives it a soft, eye-friendly glow
@@ -1632,13 +1645,18 @@
                 const target = document.querySelector(`[data-id="${msgId}"]`);
                 if (target) {
                     target.dataset.deleted = 'true';
-                    const textSpan = target.querySelector('.text-content');
+                    const contentEl = target.querySelector('.msg-content');
+                    if (!contentEl) return;
                     if (window.isUserAdminOrMod) {
-                        textSpan.innerHTML = `<span class="msg-deleted-admin">[🗑️ Deleted]:</span> <span class="msg-deleted-text">${target.dataset.rawtext}</span>`;
+                        // Staff keep the real content (photo/video/voice still viewable & playable,
+                        // text still readable) — just tag it, so moderation isn't blind
+                        if (!contentEl.querySelector('.msg-deleted-admin')) {
+                            contentEl.insertAdjacentHTML('afterbegin', `<span class="msg-deleted-admin">[🗑️ Deleted] </span>`);
+                        }
                     } else if (staffDeleted) {
-                        textSpan.innerHTML = `<i style="color: #94a3b8;">(This message was deleted by an admin)</i>`;
+                        contentEl.innerHTML = `<i style="color: #94a3b8;">(This message was deleted by an admin)</i>`;
                     } else {
-                        textSpan.innerHTML = `<i style="color: #94a3b8;">(This message was deleted)</i>`;
+                        contentEl.innerHTML = `<i style="color: #94a3b8;">(This message was deleted)</i>`;
                     }
                 }
             });
@@ -1908,11 +1926,16 @@
             document.getElementById('msg-options-modal').style.display = 'none';
         }
 
-        // Translate button inside the popup
+        // Translate button inside the popup — text messages only
         document.getElementById('btn-msg-translate').addEventListener('click', async () => {
             if (!selectedMsgElem) return;
             closeMsgModal();
-            const textSpan = selectedMsgElem.querySelector('.text-content');
+            if (selectedMsgElem.classList.contains('msg-media')) {
+                appendSystemMessage('Only text messages can be translated.', 'error');
+                return;
+            }
+            const textSpan = selectedMsgElem.querySelector('.msg-content');
+            if (!textSpan) return;
             try {
                 const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ar&dt=t&q=${encodeURIComponent(selectedMsgText)}`);
                 const result = await res.json();
@@ -1968,240 +1991,3 @@
                 if (socket && socket.connected) {
                     socket.emit('delete-message', { msgId, idToken, messageSender: selectedSenderName });
                 } else {
-                    const textSpan = selectedMsgElem.querySelector('.text-content');
-                    textSpan.innerHTML = `<span class="msg-deleted-admin">[🗑️ Deleted]:</span> <span class="msg-deleted-text">${selectedMsgText}</span>`;
-                }
-            } catch (e) { appendSystemMessage('You must be signed in to delete.', 'error'); }
-            closeMsgModal();
-        });
-
-        // Mute duration buttons (5 / 15 / 30 / 60 minutes)
-        document.querySelectorAll('.mute-duration-btn').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                if (!selectedSenderName) return;
-                const minutes = parseInt(btn.dataset.minutes, 10);
-                try {
-                    const idToken = await window.firebaseAuth.currentUser.getIdToken();
-                    socket.emit('mute-user', { username: selectedSenderName, idToken, minutes });
-                } catch (e) { appendSystemMessage('You must be signed in.', 'error'); }
-                closeMsgModal();
-            });
-        });
-
-        // Unmute button
-        document.getElementById('btn-msg-unmute').addEventListener('click', async () => {
-            if (!selectedSenderName) return;
-            try {
-                const idToken = await window.firebaseAuth.currentUser.getIdToken();
-                socket.emit('unmute-user', { username: selectedSenderName, idToken });
-            } catch (e) { appendSystemMessage('You must be signed in.', 'error'); }
-            closeMsgModal();
-        });
-
-        // Ban/unban button (admins only, auto-toggling)
-        document.getElementById('btn-msg-ban').addEventListener('click', async () => {
-            if (!selectedSenderName) return;
-            try {
-                const idToken = await window.firebaseAuth.currentUser.getIdToken();
-                const isBanned = window.bannedSet && window.bannedSet.has(selectedSenderName);
-                socket.emit(isBanned ? 'unblock-user' : 'block-user', { username: selectedSenderName, idToken });
-            } catch (e) { appendSystemMessage('You must be signed in.', 'error'); }
-            closeMsgModal();
-        });
-
-        // Pin the selected message so it stays visible at the top of the chat
-        document.getElementById('btn-msg-pin').addEventListener('click', async () => {
-            if (!selectedMsgElem) return;
-            const msgId = selectedMsgElem.dataset.id;
-            try {
-                const idToken = await window.firebaseAuth.currentUser.getIdToken();
-                socket.emit('pin-message', { msgId, user: selectedSenderName, text: selectedMsgText, idToken });
-            } catch (e) { appendSystemMessage('You must be signed in.', 'error'); }
-            closeMsgModal();
-        });
-
-        // Clear the entire chat for everyone (admins only)
-        document.getElementById('btn-clear-chat').addEventListener('click', async () => {
-            if (!confirm('Clear the whole chat for everyone?')) return;
-            try {
-                const idToken = await window.firebaseAuth.currentUser.getIdToken();
-                socket.emit('clear-chat', { idToken });
-            } catch (e) { appendSystemMessage('You must be signed in.', 'error'); }
-        });
-
-        // Lock/unlock the chat so only admins/mods can send messages (admins only)
-        document.getElementById('btn-lock-chat').addEventListener('click', async () => {
-            try {
-                const idToken = await window.firebaseAuth.currentUser.getIdToken();
-                socket.emit(window.isChatLocked ? 'unlock-chat' : 'lock-chat', { idToken });
-            } catch (e) { appendSystemMessage('You must be signed in.', 'error'); }
-        });
-
-        function changeBg(bg) {
-            document.body.style.transition = "background 0.5s ease";
-            document.body.style.background = bg;
-        }
-
-        function openAIScreen() {
-            if (isGuest) {
-                document.getElementById('ai-notice-modal').style.display = 'flex';
-                return;
-            }
-            document.getElementById('chat-screen').style.display = 'none';
-            const aiScreen = document.getElementById('ai-screen');
-            aiScreen.style.display = 'flex';
-            document.getElementById('ai-message-input').focus();
-        }
-
-        function closeNoticeModal() {
-            document.getElementById('ai-notice-modal').style.display = 'none';
-        }
-
-        function goToLogin() {
-            closeNoticeModal();
-            document.getElementById('chat-screen').style.display = 'none';
-            document.getElementById('ai-screen').style.display = 'none';
-            const loginScreen = document.getElementById('login-screen');
-            loginScreen.style.display = 'flex';
-            loginScreen.style.opacity = '1';
-            loginScreen.style.transform = 'scale(1)';
-        }
-
-        function backToChat() {
-            document.getElementById('ai-screen').style.display = 'none';
-            document.getElementById('chat-screen').style.display = 'flex';
-        }
-
-        function checkAIEnter(event) {
-            if (event.key === "Enter") sendToAI();
-        }
-
-        async function sendToAI() {
-            const inputField = document.getElementById('ai-message-input');
-            const userText = inputField.value.trim();
-            if (userText === "") return;
-
-            const userMsgDiv = document.createElement('div');
-            userMsgDiv.classList.add('msg', 'my-msg');
-            const formattedUser = window.formatUsername(window.currentUsername || 'You');
-            userMsgDiv.innerHTML = `<strong>${formattedUser}:</strong> <span class="text-content">${userText}</span>`;
-            aiChatBox.appendChild(userMsgDiv);
-            inputField.value = "";
-            aiChatBox.scrollTop = aiChatBox.scrollHeight;
-
-            const typingDiv = document.createElement('div');
-            typingDiv.classList.add('msg', 'other-msg');
-            typingDiv.style.opacity = '0.7';
-            typingDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content"><i>Thinking... ⚡</i></span>`;
-            aiChatBox.appendChild(typingDiv);
-            aiChatBox.scrollTop = aiChatBox.scrollHeight;
-
-            try {
-                const res = await fetch('/api/gemini', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt: userText })
-                });
-                const data = await res.json();
-                typingDiv.remove();
-
-                const aiMsgDiv = document.createElement('div');
-                aiMsgDiv.classList.add('msg', 'other-msg');
-                aiMsgDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">${data.reply}</span>`;
-                aiChatBox.appendChild(aiMsgDiv);
-            } catch (error) {
-                typingDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">Error connecting to server.</span>`;
-            }
-            aiChatBox.scrollTop = aiChatBox.scrollHeight;
-        }
-    </script>
-
-    <!-- PWA: service worker registration + install prompt handling (Android + iOS) -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js').then((registration) => {
-                    // Every deploy changes sw.js's bytes, which is how the browser
-                    // notices there's a new version. We nudge that check along instead
-                    // of waiting for the browser's own (slow, once-a-day-ish) schedule —
-                    // once on load, then again whenever the tab regains focus.
-                    registration.update();
-                    document.addEventListener('visibilitychange', () => {
-                        if (document.visibilityState === 'visible') registration.update();
-                    });
-                }).catch(err => {
-                    console.warn('Service worker registration failed:', err);
-                });
-
-                // Once the new service worker takes over (sw.js already calls
-                // skipWaiting + clients.claim), reload so people land on the new
-                // version automatically instead of needing to refresh by hand.
-                let alreadyRefreshed = false;
-                navigator.serviceWorker.addEventListener('controllerchange', () => {
-                    if (alreadyRefreshed) return;
-                    alreadyRefreshed = true;
-                    location.reload();
-                });
-            });
-        }
-
-        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-        const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
-
-        // Android/Chrome fire this when the app becomes installable; we capture it
-        // and show our own "Install App" button instead of the default mini-bar.
-        let deferredInstallPrompt = null;
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredInstallPrompt = e;
-            const btn = document.getElementById('btn-install-app');
-            if (btn) btn.style.display = 'flex';
-        });
-
-        // Safari on iOS never fires beforeinstallprompt (Apple doesn't support it),
-        // so we show the button ourselves and explain the manual steps instead.
-        if (isIOS && !isStandalone) {
-            const btn = document.getElementById('btn-install-app');
-            if (btn) btn.style.display = 'flex';
-        }
-
-        function showIosInstallModal() {
-            const overlay = document.createElement('div');
-            overlay.className = 'modal-overlay';
-            overlay.innerHTML = `
-                <div class="modal-card">
-                    <h3>📲 Install Hamma</h3>
-                    <p>
-                        1. Tap the <strong>Share</strong> button <i class="fas fa-arrow-up-from-bracket"></i> in Safari's toolbar<br>
-                        2. Scroll down and tap <strong>Add to Home Screen</strong><br>
-                        3. Tap <strong>Add</strong> — that's it!
-                    </p>
-                    <div class="modal-buttons">
-                        <button class="modal-btn confirm" id="btn-ios-install-ok">Got it</button>
-                    </div>
-                </div>`;
-            document.body.appendChild(overlay);
-            document.getElementById('btn-ios-install-ok').addEventListener('click', () => overlay.remove());
-            overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
-        }
-
-        document.getElementById('btn-install-app').addEventListener('click', async () => {
-            if (deferredInstallPrompt) {
-                deferredInstallPrompt.prompt();
-                await deferredInstallPrompt.userChoice;
-                deferredInstallPrompt = null;
-                document.getElementById('btn-install-app').style.display = 'none';
-                return;
-            }
-            if (isIOS) {
-                showIosInstallModal();
-            }
-        });
-
-        window.addEventListener('appinstalled', () => {
-            const btn = document.getElementById('btn-install-app');
-            if (btn) btn.style.display = 'none';
-        });
-    </script>
-</body>
-</html>
