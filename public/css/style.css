@@ -296,7 +296,6 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.05);
     display: flex;
     flex-direction: column;
-    justify-content: flex-end;
 }
 
 #chat-box::-webkit-scrollbar, .ai-chat-modal *::-webkit-scrollbar { width: 5px; }
