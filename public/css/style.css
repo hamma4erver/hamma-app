@@ -273,15 +273,24 @@ body {
 
 #user-display-tag { position: absolute; right: 15px; }
 
+#chat-box-wrapper {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 15px;
+}
+
 #chat-box {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    overflow-anchor: none;
     scroll-behavior: smooth;
     background: rgba(0, 0, 0, 0.4);
     padding: 15px;
     border-radius: 20px;
-    margin-bottom: 15px;
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border: 1px solid rgba(255, 255, 255, 0.05);
@@ -295,6 +304,33 @@ body {
     background: rgba(255, 255, 255, 0.12);
     border-radius: 10px;
 }
+
+/* الزر العائم "رسائل جديدة" — يظهر فقط إذا كان المستخدم طالع يقرا فوق
+   ويوصلوه رسائل جديدة، باش يقدر يدوس ويرجع تحت من غير ما الشات يسحبو
+   بالقوة وهو قاعد يقرا القديم */
+.new-msg-pill {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #00c9ff, #4facfe);
+    color: #041018;
+    font-weight: 700;
+    font-size: 12.5px;
+    border-radius: 999px;
+    cursor: pointer;
+    box-shadow: 0 4px 18px rgba(0, 201, 255, 0.5);
+    z-index: 5;
+    animation: msgFadeIn 0.25s ease;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.new-msg-pill:active { transform: translateX(-50%) scale(0.95); }
 
 /* ================= الرسائل — حجم صغير، أنيق، مريح للعين ================= */
 .msg {
