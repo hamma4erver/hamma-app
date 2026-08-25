@@ -395,7 +395,12 @@
                 <span id="user-display-tag" class="user-badge" style="cursor: pointer;" title="Profile Settings"></span>
             </div>
             <div id="pinned-message-bar" style="display: none;"></div>
-            <div id="chat-box"></div>
+            <div id="chat-box-wrapper">
+                <div id="chat-box"></div>
+                <div id="new-msg-pill" class="new-msg-pill">
+                    <i class="fas fa-arrow-down"></i> <span id="new-msg-pill-text">New messages</span>
+                </div>
+            </div>
 
             <div id="restriction-banner" style="display: none;"></div>
 
@@ -1120,6 +1125,29 @@
 
         const chatBox = document.getElementById('chat-box');
         const aiChatBox = document.getElementById('ai-chat-box');
+        const newMsgPill = document.getElementById('new-msg-pill');
+        const newMsgPillText = document.getElementById('new-msg-pill-text');
+
+        // Smart auto-scroll: only follow new messages to the bottom if the user
+        // is already near the bottom. If they scrolled up to read old messages,
+        // we never yank them back down — instead we show a small "new messages"
+        // pill they can tap when they're ready.
+        let unreadMsgCount = 0;
+        function isChatNearBottom(threshold = 90) {
+            return chatBox.scrollHeight - chatBox.scrollTop - chatBox.clientHeight < threshold;
+        }
+        function scrollChatToBottom(smooth = true) {
+            chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+            unreadMsgCount = 0;
+            if (newMsgPill) newMsgPill.style.display = 'none';
+        }
+        function notifyNewMessage() {
+            if (!newMsgPill) return;
+            unreadMsgCount++;
+            newMsgPillText.textContent = unreadMsgCount === 1 ? 'New message' : `${unreadMsgCount} new messages`;
+            newMsgPill.style.display = 'flex';
+        }
+        if (newMsgPill) newMsgPill.addEventListener('click', () => scrollChatToBottom(true));
         window.currentUsername = "";
         let isGuest = false;
         let selectedMsgElem = null;
@@ -1515,8 +1543,13 @@
             }
 
             msgElement.innerHTML = `${replyHtml}${bodyHtml}`;
+            const wasNearBottom = isChatNearBottom();
             chatBox.appendChild(msgElement);
-            chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
+            if (isSelf || wasNearBottom) {
+                scrollChatToBottom(true);
+            } else {
+                notifyNewMessage();
+            }
 
             // Tapping the quoted snippet jumps to & softly highlights the original message,
             // instead of opening the options menu for this message
@@ -1611,8 +1644,13 @@
             const card = document.createElement('div');
             card.className = `system-msg-card kind-${kind || 'info'}`;
             card.innerText = text;
+            const wasNearBottom = isChatNearBottom();
             chatBox.appendChild(card);
-            chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
+            if (wasNearBottom) {
+                scrollChatToBottom(true);
+            } else {
+                notifyNewMessage();
+            }
         }
 
         // Full-screen overlay shown to a banned user
@@ -1763,6 +1801,8 @@
             // Chat cleared by an admin
             socket.on('chat-cleared', (data) => {
                 chatBox.innerHTML = '';
+                unreadMsgCount = 0;
+                if (newMsgPill) newMsgPill.style.display = 'none';
                 appendSystemMessage(`🧹 Chat cleared by ${(data && data.by) || 'an admin'}.`, 'info');
             });
 
