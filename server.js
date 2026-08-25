@@ -371,6 +371,11 @@ io.on('connection', (socket) => {
         const { ok, role, name } = await verifyRole(idToken);
         if (!ok) return socket.emit('system-msg', { text: 'You are not allowed to mute users.', kind: 'error' });
 
+        // Staff can't mute themselves — no self-mute loophole
+        if (name && username && name.toLowerCase() === username.toLowerCase()) {
+            return socket.emit('system-msg', { text: "🙃 You can't mute yourself.", kind: 'error' });
+        }
+
         const allowedDurations = [5, 15, 30, 60];
         const duration = allowedDurations.includes(Number(minutes)) ? Number(minutes) : 5;
         const ms = duration * 60 * 1000;
