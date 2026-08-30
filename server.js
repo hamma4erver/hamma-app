@@ -652,6 +652,26 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Returns everyone you're mutually friends with (accepted, either direction)
+    socket.on('get-friends', async ({ idToken }) => {
+        const me = await verifyUser(idToken);
+        if (!me.ok || !db) return socket.emit('friends-list', []);
+        try {
+            const [sentSnap, receivedSnap] = await Promise.all([
+                db.collection('friendRequests').where('from', '==', me.name).where('status', '==', 'accepted').get(),
+                db.collection('friendRequests').where('to', '==', me.name).where('status', '==', 'accepted').get()
+            ]);
+            const friends = [
+                ...sentSnap.docs.map(d => d.data().to),
+                ...receivedSnap.docs.map(d => d.data().from)
+            ];
+            socket.emit('friends-list', friends.map(username => ({ username, online: isUserOnline(username) })));
+        } catch (e) {
+            console.error("Fetching friends failed:", e.message);
+            socket.emit('friends-list', []);
+        }
+    });
+
     socket.on('respond-friend-request', async ({ fromUsername, action, idToken }) => {
         const me = await verifyUser(idToken);
         if (!me.ok || !db || !fromUsername) return;
