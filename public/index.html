@@ -372,6 +372,15 @@
                 <i class="fas fa-comment-dots" style="color: #92fe9d;"></i>
             </div>
 
+            <div class="ai-btn" onclick="openAddFriendModal()" title="Add Friend" style="background: rgba(146, 254, 157, 0.15); border: 1px solid #92fe9d;">
+                <i class="fas fa-user-plus" style="color: #92fe9d;"></i>
+            </div>
+
+            <div class="ai-btn" id="btn-friend-requests" onclick="openFriendRequestsModal()" title="Friend Requests" style="background: rgba(0, 201, 255, 0.15); border: 1px solid #00c9ff; position: relative;">
+                <i class="fas fa-bell" style="color: #00c9ff;"></i>
+                <span id="friend-requests-badge" style="display: none; position: absolute; top: -4px; right: -4px; background: #e63946; color: #fff; font-size: 10px; font-weight: bold; border-radius: 50%; width: 16px; height: 16px; align-items: center; justify-content: center;"></span>
+            </div>
+
             <div class="ai-btn" id="btn-admin" style="background: rgba(255, 215, 0, 0.2); border: 1px solid #ffd700; margin-top: 10px; display: none;" title="Admin Dashboard">
                 <i class="fas fa-user-shield" style="color: #ffd700;"></i>
             </div>
@@ -582,6 +591,31 @@
     </div>
 
     <!-- NOTICE MODALS -->
+    <!-- ADD FRIEND (search by username) -->
+    <div id="add-friend-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-card" style="max-width: 360px; width: 90%; text-align: left; background: rgba(15, 23, 42, 0.98); border: 1px solid #92fe9d;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h3 style="margin: 0; color: #92fe9d;"><i class="fas fa-user-plus"></i> Add Friend</h3>
+                <button onclick="closeAddFriendModal()" style="background: none; border: none; color: #fff; font-size: 20px; cursor: pointer;">✕</button>
+            </div>
+            <input type="text" id="friend-search-input" placeholder="Enter exact username..." oninput="handleFriendSearchInput()" style="width: 100%; padding: 12px; background: rgba(0,0,0,0.5); border: 1px solid rgba(146,254,157,0.3); border-radius: 8px; color: white; outline: none; box-sizing: border-box;">
+            <div id="friend-search-result" style="margin-top: 14px; min-height: 40px;"></div>
+        </div>
+    </div>
+
+    <!-- FRIEND REQUESTS (notifications) -->
+    <div id="friend-requests-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-card" style="max-width: 380px; width: 90%; text-align: left; background: rgba(15, 23, 42, 0.98); border: 1px solid #00c9ff;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h3 style="margin: 0; color: #00c9ff;"><i class="fas fa-bell"></i> Friend Requests</h3>
+                <button onclick="closeFriendRequestsModal()" style="background: none; border: none; color: #fff; font-size: 20px; cursor: pointer;">✕</button>
+            </div>
+            <div id="friend-requests-list" style="max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;">
+                <p style="color: #94a3b8; font-size: 14px;">No pending requests.</p>
+            </div>
+        </div>
+    </div>
+
     <div id="ai-notice-modal" class="modal-overlay" style="display: none;">
         <div class="modal-card">
             <h3><i class="fas fa-lock"></i> AI Feature Locked</h3>
@@ -1227,6 +1261,7 @@
                 chatScreen.style.display = 'flex';
                 chatScreen.style.opacity = '1';
                 document.getElementById('pc-notice-modal').style.display = 'flex';
+                refreshFriendRequests();
             }, 300);
         }
 
@@ -2286,6 +2321,129 @@
             socket.on('dm-stop-typing', ({ from }) => {
                 if (from !== window.currentDMPartner) return;
                 document.getElementById('dm-typing-indicator').style.display = 'none';
+            });
+        }
+
+        // ===== Friend requests =====
+        window.pendingFriendRequests = [];
+        let friendSearchDebounce = null;
+
+        function openAddFriendModal() {
+            document.getElementById('friend-search-input').value = '';
+            document.getElementById('friend-search-result').innerHTML = '';
+            document.getElementById('add-friend-modal').style.display = 'flex';
+            document.getElementById('friend-search-input').focus();
+        }
+        function closeAddFriendModal() {
+            document.getElementById('add-friend-modal').style.display = 'none';
+        }
+
+        function handleFriendSearchInput() {
+            clearTimeout(friendSearchDebounce);
+            const query = document.getElementById('friend-search-input').value.trim();
+            const resultBox = document.getElementById('friend-search-result');
+            if (!query) { resultBox.innerHTML = ''; return; }
+            friendSearchDebounce = setTimeout(async () => {
+                const idToken = await getIdTokenSafe();
+                if (!idToken) {
+                    resultBox.innerHTML = `<p style="color:#ff4d4d; font-size:14px;">You need to be logged in to add friends.</p>`;
+                    return;
+                }
+                socket.emit('search-user', { query, idToken });
+            }, 400);
+        }
+
+        function renderFriendSearchResult(data) {
+            const resultBox = document.getElementById('friend-search-result');
+            if (data.error) {
+                resultBox.innerHTML = data.error ? `<p style="color:#ff4d4d; font-size:14px;">${escapeHtml(data.error)}</p>` : '';
+                return;
+            }
+            resultBox.innerHTML = `
+                <div style="display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,0.05); padding:10px 12px; border-radius:10px;">
+                    <span style="color:#fff; font-weight:600;">${escapeHtml(data.username)} ${data.online ? '🟢' : '⚪'}</span>
+                    <button onclick="sendFriendRequest('${data.username.replace(/'/g, "\\'")}')" style="background: linear-gradient(45deg, #92fe9d, #00c9ff); border:none; color:#000; font-weight:bold; padding:6px 14px; border-radius:8px; cursor:pointer;">Add</button>
+                </div>`;
+        }
+
+        async function sendFriendRequest(username) {
+            const idToken = await getIdTokenSafe();
+            if (!idToken || !socket) return;
+            socket.emit('send-friend-request', { toUsername: username, idToken });
+            document.getElementById('friend-search-result').innerHTML = `<p style="color:#92fe9d; font-size:14px;">Request sent to ${escapeHtml(username)} ✔️</p>`;
+        }
+
+        function openFriendRequestsModal() {
+            renderFriendRequestsList();
+            document.getElementById('friend-requests-modal').style.display = 'flex';
+        }
+        function closeFriendRequestsModal() {
+            document.getElementById('friend-requests-modal').style.display = 'none';
+        }
+
+        function updateFriendRequestsBadge() {
+            const badge = document.getElementById('friend-requests-badge');
+            const count = window.pendingFriendRequests.length;
+            if (count > 0) {
+                badge.textContent = count > 9 ? '9+' : count;
+                badge.style.display = 'flex';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
+        function renderFriendRequestsList() {
+            const list = document.getElementById('friend-requests-list');
+            if (window.pendingFriendRequests.length === 0) {
+                list.innerHTML = `<p style="color: #94a3b8; font-size: 14px;">No pending requests.</p>`;
+                return;
+            }
+            list.innerHTML = window.pendingFriendRequests.map(req => `
+                <div style="background:rgba(255,255,255,0.05); padding:10px 12px; border-radius:10px;">
+                    <p style="color:#fff; margin:0 0 8px 0;"><strong>${escapeHtml(req.from)}</strong> wants to be your friend</p>
+                    <div style="display:flex; gap:8px;">
+                        <button onclick="respondFriendRequest('${req.from.replace(/'/g, "\\'")}', 'accept')" style="flex:1; background: linear-gradient(45deg, #92fe9d, #00c9ff); border:none; color:#000; font-weight:bold; padding:8px; border-radius:8px; cursor:pointer;">Accept</button>
+                        <button onclick="respondFriendRequest('${req.from.replace(/'/g, "\\'")}', 'decline')" style="flex:1; background: rgba(230,57,70,0.2); border:1px solid #e63946; color:#e63946; font-weight:bold; padding:8px; border-radius:8px; cursor:pointer;">Delete</button>
+                    </div>
+                </div>`).join('');
+        }
+
+        async function respondFriendRequest(fromUsername, action) {
+            const idToken = await getIdTokenSafe();
+            if (!idToken || !socket) return;
+            socket.emit('respond-friend-request', { fromUsername, action, idToken });
+            window.pendingFriendRequests = window.pendingFriendRequests.filter(r => r.from !== fromUsername);
+            updateFriendRequestsBadge();
+            renderFriendRequestsList();
+        }
+
+        async function refreshFriendRequests() {
+            const idToken = await getIdTokenSafe();
+            if (!idToken || !socket) return;
+            socket.emit('get-friend-requests', { idToken });
+        }
+
+        if (socket) {
+            socket.on('search-user-result', renderFriendSearchResult);
+
+            socket.on('friend-requests-list', (list) => {
+                window.pendingFriendRequests = list || [];
+                updateFriendRequestsBadge();
+                renderFriendRequestsList();
+            });
+
+            socket.on('friend-request-received', ({ from }) => {
+                if (!window.pendingFriendRequests.some(r => r.from === from)) {
+                    window.pendingFriendRequests.push({ from });
+                }
+                updateFriendRequestsBadge();
+                renderFriendRequestsList();
+            });
+
+            socket.on('friend-request-response', ({ by, action }) => {
+                if (action === 'accept') {
+                    appendSystemMessage(`🎉 ${by} accepted your friend request!`, 'info');
+                }
             });
         }
 
