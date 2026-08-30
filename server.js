@@ -198,7 +198,23 @@ const mutedUsers = new Map();     // username -> expiresAt (timestamp ms)
 const muteTimers = new Map();     // username -> setTimeout handle
 const blockedUsers = new Set();   // username -> permanently banned
 const socketUsers = new Map();    // socket.id -> username
+const usernameSockets = new Map(); // username -> Set of socket.id (supports multiple tabs/devices)
 let onlineUsersCount = 0;
+
+// -- DM helpers --------------------------------------------------
+function addUsernameSocket(username, socketId) {
+    if (!usernameSockets.has(username)) usernameSockets.set(username, new Set());
+    usernameSockets.get(username).add(socketId);
+}
+function removeUsernameSocket(username, socketId) {
+    const set = usernameSockets.get(username);
+    if (!set) return;
+    set.delete(socketId);
+    if (set.size === 0) usernameSockets.delete(username);
+}
+function isUserOnline(username) {
+    return usernameSockets.has(username) && usernameSockets.get(username).size > 0;
+}
 let chatLocked = false;           // when true, only admins/mods can send messages
 let pinnedMessage = null;         // { id, user, text } or null
 const modClearCooldowns = new Map(); // uid -> next-allowed-timestamp (ms) for moderators clearing chat
@@ -275,6 +291,7 @@ io.on('connection', (socket) => {
             return;
         }
         socketUsers.set(socket.id, username);
+        addUsernameSocket(username, socket.id);
         broadcastStatusLists();
     });
 
@@ -304,7 +321,9 @@ io.on('connection', (socket) => {
             if (remainingMs > 0) scheduleAutoUnmute(newUsername, remainingMs);
         }
 
+        removeUsernameSocket(oldUsername, socket.id);
         socketUsers.set(socket.id, newUsername);
+        addUsernameSocket(newUsername, socket.id);
         broadcastStatusLists();
 
         if (blockedUsers.has(newUsername)) {
@@ -527,7 +546,61 @@ io.on('connection', (socket) => {
         io.emit('pinned-message-update', null);
     });
 
+    // ==================================================
+    // Direct messages (DM) — private 1-to-1 chat between two users.
+    // Not persisted (same as the global chat): delivered live only to
+    // whichever sockets the two users currently have open.
+    // ==================================================
+    socket.on('dm-message', ({ to, text }) => {
+        const from = socketUsers.get(socket.id);
+        if (!from || !to || !text || !text.trim()) return;
+        if (blockedUsers.has(from)) {
+            return socket.emit('dm-system-msg', { text: 'You are banned from sending messages.', kind: 'error' });
+        }
+        const expiresAt = mutedUsers.get(from);
+        if (expiresAt && expiresAt > Date.now()) {
+            const remaining = Math.ceil((expiresAt - Date.now()) / 60000);
+            return socket.emit('dm-system-msg', { text: `You are muted, try again in ${remaining} minute(s).`, kind: 'error' });
+        }
+
+        const payload = {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            from,
+            to,
+            text: text.trim(),
+            timestamp: Date.now()
+        };
+
+        // Deliver to every open tab/device the recipient has
+        const targetSockets = usernameSockets.get(to);
+        if (targetSockets && targetSockets.size > 0) {
+            targetSockets.forEach(id => io.to(id).emit('dm-message', payload));
+        } else {
+            socket.emit('dm-system-msg', { text: `${to} is offline right now — they won't see this message (DMs aren't saved yet).`, kind: 'error' });
+        }
+
+        // Echo back to the sender's own open tabs so their UI updates too
+        const senderSockets = usernameSockets.get(from);
+        if (senderSockets) senderSockets.forEach(id => io.to(id).emit('dm-message', payload));
+    });
+
+    socket.on('dm-typing', ({ to }) => {
+        const from = socketUsers.get(socket.id);
+        if (!from || !to) return;
+        const targetSockets = usernameSockets.get(to);
+        if (targetSockets) targetSockets.forEach(id => io.to(id).emit('dm-typing', { from }));
+    });
+
+    socket.on('dm-stop-typing', ({ to }) => {
+        const from = socketUsers.get(socket.id);
+        if (!from || !to) return;
+        const targetSockets = usernameSockets.get(to);
+        if (targetSockets) targetSockets.forEach(id => io.to(id).emit('dm-stop-typing', { from }));
+    });
+
     socket.on('disconnect', () => {
+        const username = socketUsers.get(socket.id);
+        if (username) removeUsernameSocket(username, socket.id);
         socketUsers.delete(socket.id);
         onlineUsersCount = Math.max(0, onlineUsersCount - 1);
         io.emit('update-online', onlineUsersCount);
