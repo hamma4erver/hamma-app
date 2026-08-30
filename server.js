@@ -141,6 +141,36 @@ async function verifyAdmin(idToken) {
     return { ok, role, uid, name };
 }
 
+// Verifies a Firebase ID token for ANY logged-in user (no role required) —
+// used by the friend-request system, which guests can't take part in
+// since it needs a persistent account.
+async function verifyUser(idToken) {
+    if (!idToken || !db) return { ok: false };
+    try {
+        const decoded = await admin.auth().verifyIdToken(idToken);
+        if (!decoded.name) return { ok: false };
+        return { ok: true, uid: decoded.uid, name: decoded.name };
+    } catch (e) {
+        return { ok: false };
+    }
+}
+
+// Exact-match lookup (by username or displayName) — used for both role
+// checks and the friend-search feature.
+async function findUserByUsername(username) {
+    if (!username || !db) return null;
+    try {
+        let snap = await db.collection('users').where('username', '==', username).limit(1).get();
+        if (snap.empty) snap = await db.collection('users').where('displayName', '==', username).limit(1).get();
+        if (snap.empty) return null;
+        const data = snap.docs[0].data();
+        return { uid: snap.docs[0].id, username: data.username || data.displayName };
+    } catch (e) {
+        console.error("User lookup failed:", e.message);
+        return null;
+    }
+}
+
 // Looks up the role of a chat username (by Firestore `username`/`displayName` field),
 // so staff-protection rules (e.g. "admins can't ban other admins") can be enforced
 // even though the chat itself only knows people by their display name.
@@ -545,6 +575,105 @@ io.on('connection', (socket) => {
         pinnedMessage = null;
         io.emit('pinned-message-update', null);
     });
+
+    // ==================================================
+    // Friend requests — search by exact username, send a request, and
+    // accept/decline it. Persisted in Firestore (unlike the ephemeral
+    // chat) so a pending request is still there next time you log in.
+    // Guests can't use this — it needs a real account.
+    // ==================================================
+    socket.on('search-user', async ({ query, idToken }) => {
+        const me = await verifyUser(idToken);
+        if (!me.ok) return socket.emit('search-user-result', { error: 'You need to be logged in to add friends.' });
+        if (!query || !query.trim()) return socket.emit('search-user-result', { error: '' });
+        const found = await findUserByUsername(query.trim());
+        if (!found || found.username === me.name) {
+            return socket.emit('search-user-result', { error: 'No user found with that username.' });
+        }
+        socket.emit('search-user-result', { username: found.username, online: isUserOnline(found.username) });
+    });
+
+    socket.on('send-friend-request', async ({ toUsername, idToken }) => {
+        const me = await verifyUser(idToken);
+        if (!me.ok) return socket.emit('dm-system-msg', { text: 'You need to be logged in to add friends.', kind: 'error' });
+        if (!toUsername || toUsername === me.name || !db) return;
+
+        const target = await findUserByUsername(toUsername);
+        if (!target) return socket.emit('dm-system-msg', { text: 'No user found with that username.', kind: 'error' });
+
+        const forwardId = `${me.name}__${target.username}`;
+        const reverseId = `${target.username}__${me.name}`;
+
+        try {
+            const [forwardSnap, reverseSnap] = await Promise.all([
+                db.collection('friendRequests').doc(forwardId).get(),
+                db.collection('friendRequests').doc(reverseId).get()
+            ]);
+
+            if (forwardSnap.exists && forwardSnap.data().status === 'accepted') {
+                return socket.emit('dm-system-msg', { text: `You're already friends with ${target.username}.`, kind: 'info' });
+            }
+            if (forwardSnap.exists && forwardSnap.data().status === 'pending') {
+                return socket.emit('dm-system-msg', { text: `You already sent a request to ${target.username}.`, kind: 'info' });
+            }
+
+            // They already sent YOU a request — accept it instead of creating a duplicate
+            if (reverseSnap.exists && reverseSnap.data().status === 'pending') {
+                await db.collection('friendRequests').doc(reverseId).update({ status: 'accepted' });
+                notifyFriendResponse(target.username, me.name, 'accept');
+                socket.emit('friend-request-response', { by: target.username, action: 'accept' });
+                return;
+            }
+
+            await db.collection('friendRequests').doc(forwardId).set({
+                from: me.name, to: target.username, status: 'pending', createdAt: Date.now()
+            });
+
+            const targetSockets = usernameSockets.get(target.username);
+            if (targetSockets) {
+                targetSockets.forEach(id => io.to(id).emit('friend-request-received', { from: me.name }));
+            }
+            socket.emit('dm-system-msg', { text: `Friend request sent to ${target.username}.`, kind: 'info' });
+        } catch (e) {
+            console.error("Friend request failed:", e.message);
+        }
+    });
+
+    socket.on('get-friend-requests', async ({ idToken }) => {
+        const me = await verifyUser(idToken);
+        if (!me.ok || !db) return socket.emit('friend-requests-list', []);
+        try {
+            const snap = await db.collection('friendRequests')
+                .where('to', '==', me.name).where('status', '==', 'pending').get();
+            socket.emit('friend-requests-list', snap.docs.map(d => ({ from: d.data().from })));
+        } catch (e) {
+            console.error("Fetching friend requests failed:", e.message);
+            socket.emit('friend-requests-list', []);
+        }
+    });
+
+    socket.on('respond-friend-request', async ({ fromUsername, action, idToken }) => {
+        const me = await verifyUser(idToken);
+        if (!me.ok || !db || !fromUsername) return;
+        const reqId = `${fromUsername}__${me.name}`;
+        try {
+            if (action === 'accept') {
+                await db.collection('friendRequests').doc(reqId).update({ status: 'accepted' });
+            } else {
+                await db.collection('friendRequests').doc(reqId).delete();
+            }
+            notifyFriendResponse(fromUsername, me.name, action === 'accept' ? 'accept' : 'decline');
+        } catch (e) {
+            console.error("Responding to friend request failed:", e.message);
+        }
+    });
+
+    function notifyFriendResponse(toUsername, byUsername, action) {
+        const targetSockets = usernameSockets.get(toUsername);
+        if (targetSockets) {
+            targetSockets.forEach(id => io.to(id).emit('friend-request-response', { by: byUsername, action }));
+        }
+    }
 
     // ==================================================
     // Direct messages (DM) — private 1-to-1 chat between two users.
