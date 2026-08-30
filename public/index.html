@@ -368,14 +368,6 @@
                 <i class="fas fa-robot"></i> AI
             </div>
 
-            <div class="ai-btn" onclick="promptOpenDM()" title="Direct Message" style="background: rgba(146, 254, 157, 0.15); border: 1px solid #92fe9d;">
-                <i class="fas fa-comment-dots" style="color: #92fe9d;"></i>
-            </div>
-
-            <div class="ai-btn" onclick="openAddFriendModal()" title="Add Friend" style="background: rgba(146, 254, 157, 0.15); border: 1px solid #92fe9d;">
-                <i class="fas fa-user-plus" style="color: #92fe9d;"></i>
-            </div>
-
             <div class="ai-btn" onclick="openFriendsListModal()" title="Friends" style="background: rgba(146, 254, 157, 0.15); border: 1px solid #92fe9d;">
                 <i class="fas fa-users" style="color: #92fe9d;"></i>
             </div>
@@ -612,7 +604,10 @@
         <div class="modal-card" style="max-width: 380px; width: 90%; text-align: left; background: rgba(15, 23, 42, 0.98); border: 1px solid #92fe9d;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <h3 style="margin: 0; color: #92fe9d;"><i class="fas fa-users"></i> Friends</h3>
-                <button onclick="closeFriendsListModal()" style="background: none; border: none; color: #fff; font-size: 20px; cursor: pointer;">✕</button>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <button onclick="closeFriendsListModal(); openAddFriendModal();" title="Add Friend" style="background: rgba(146,254,157,0.15); border: 1px solid #92fe9d; color: #92fe9d; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 16px;"><i class="fas fa-user-plus"></i></button>
+                    <button onclick="closeFriendsListModal()" style="background: none; border: none; color: #fff; font-size: 20px; cursor: pointer;">✕</button>
+                </div>
             </div>
             <div id="friends-list-content" style="max-height: 360px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;">
                 <p style="color: #94a3b8; font-size: 14px;">Loading…</p>
@@ -2245,16 +2240,6 @@
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;');
-        }
-
-        function promptOpenDM() {
-            const username = prompt("Enter the username you want to message:");
-            if (!username || !username.trim()) return;
-            if (username.trim() === window.currentUsername) {
-                alert("You can't DM yourself 🙂");
-                return;
-            }
-            openDMScreen(username.trim());
         }
 
         function openDMScreen(username) {
