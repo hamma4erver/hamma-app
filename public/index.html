@@ -368,6 +368,10 @@
                 <i class="fas fa-robot"></i> AI
             </div>
 
+            <div class="ai-btn" onclick="promptOpenDM()" title="Direct Message" style="background: rgba(146, 254, 157, 0.15); border: 1px solid #92fe9d;">
+                <i class="fas fa-comment-dots" style="color: #92fe9d;"></i>
+            </div>
+
             <div class="ai-btn" id="btn-admin" style="background: rgba(255, 215, 0, 0.2); border: 1px solid #ffd700; margin-top: 10px; display: none;" title="Admin Dashboard">
                 <i class="fas fa-user-shield" style="color: #ffd700;"></i>
             </div>
@@ -474,6 +478,33 @@
             <div class="input-area">
                 <input type="text" id="ai-message-input" placeholder="Message..." onkeydown="checkAIEnter(event)">
                 <button onclick="sendToAI()" class="send-btn" style="background: linear-gradient(45deg, #00c9ff, #92fe9d);">Ask ↵</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4b. DIRECT MESSAGE (DM) SCREEN -->
+    <div id="dm-screen" class="main-layout" style="display: none;">
+        <div class="sidebar">
+            <div class="bg-btn" style="background: #222; display: flex; justify-content: center; align-items: center; color: white;" onclick="closeDMScreen()" title="Back to Chat">
+                <i class="fas fa-arrow-left"></i>
+            </div>
+        </div>
+
+        <div class="chat-container">
+            <div class="chat-header">
+                <h1 class="chat-title" id="dm-title" style="color: #92fe9d; text-shadow: 0 0 10px rgba(146, 254, 157, 0.5);">DM</h1>
+                <span class="user-badge" style="background: rgba(146, 254, 157, 0.1); border-color: #92fe9d; color: #92fe9d;">🔒 Private</span>
+            </div>
+
+            <div id="dm-box-wrapper" style="flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; margin-bottom: 15px;">
+                <div id="dm-box" style="flex: 1; min-height: 0; overflow-y: auto; background: rgba(0, 0, 0, 0.4); padding: 15px; border-radius: 20px; backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.05); display: flex; flex-direction: column; gap: 12px;"></div>
+            </div>
+
+            <div id="dm-typing-indicator" style="display: none; color: #94a3b8; font-size: 13px; margin-bottom: 6px;"></div>
+
+            <div class="input-area">
+                <input type="text" id="dm-message-input" placeholder="Message..." onkeydown="checkDMEnter(event)" oninput="dmHandleTyping()">
+                <button onclick="sendDMMessage()" class="send-btn" style="background: linear-gradient(45deg, #92fe9d, #00c9ff);">Send ↵</button>
             </div>
         </div>
     </div>
@@ -2150,6 +2181,112 @@
         function backToChat() {
             document.getElementById('ai-screen').style.display = 'none';
             document.getElementById('chat-screen').style.display = 'flex';
+        }
+
+        // ===== Direct Messages (DM) — v1: open a private chat by typing a username =====
+        window.currentDMPartner = null;
+        let dmTypingTimeout = null;
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function promptOpenDM() {
+            const username = prompt("Enter the username you want to message:");
+            if (!username || !username.trim()) return;
+            if (username.trim() === window.currentUsername) {
+                alert("You can't DM yourself 🙂");
+                return;
+            }
+            openDMScreen(username.trim());
+        }
+
+        function openDMScreen(username) {
+            window.currentDMPartner = username;
+            document.getElementById('dm-title').textContent = `💬 ${username}`;
+            document.getElementById('dm-box').innerHTML = '';
+            document.getElementById('dm-typing-indicator').style.display = 'none';
+            document.getElementById('chat-screen').style.display = 'none';
+            document.getElementById('ai-screen').style.display = 'none';
+            document.getElementById('dm-screen').style.display = 'flex';
+            document.getElementById('dm-message-input').focus();
+        }
+
+        function closeDMScreen() {
+            window.currentDMPartner = null;
+            document.getElementById('dm-screen').style.display = 'none';
+            document.getElementById('chat-screen').style.display = 'flex';
+        }
+
+        function appendDMMessage(data) {
+            const isSelf = data.from === window.currentUsername;
+            const el = document.createElement('div');
+            el.className = `msg ${isSelf ? 'my-msg' : 'other-msg'}`;
+            el.innerHTML = `<strong>${escapeHtml(data.from)}:</strong> <span class="text-content">${escapeHtml(data.text)}</span>`;
+            const box = document.getElementById('dm-box');
+            box.appendChild(el);
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function appendDMSystemMessage(text, kind) {
+            const card = document.createElement('div');
+            card.className = `system-msg-card kind-${kind || 'info'}`;
+            card.innerText = text;
+            const box = document.getElementById('dm-box');
+            box.appendChild(card);
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function checkDMEnter(event) {
+            if (event.key === "Enter") sendDMMessage();
+        }
+
+        function sendDMMessage() {
+            const input = document.getElementById('dm-message-input');
+            const text = input.value;
+            if (!text.trim() || !window.currentDMPartner || !socket) return;
+            socket.emit('dm-message', { to: window.currentDMPartner, text });
+            input.value = '';
+            socket.emit('dm-stop-typing', { to: window.currentDMPartner });
+        }
+
+        function dmHandleTyping() {
+            if (!window.currentDMPartner || !socket) return;
+            socket.emit('dm-typing', { to: window.currentDMPartner });
+            clearTimeout(dmTypingTimeout);
+            dmTypingTimeout = setTimeout(() => {
+                socket.emit('dm-stop-typing', { to: window.currentDMPartner });
+            }, 2000);
+        }
+
+        if (socket) {
+            socket.on('dm-message', (data) => {
+                // Only render if this message belongs to the DM currently open
+                const partner = data.from === window.currentUsername ? data.to : data.from;
+                if (partner !== window.currentDMPartner) return;
+                appendDMMessage(data);
+                document.getElementById('dm-typing-indicator').style.display = 'none';
+            });
+
+            socket.on('dm-system-msg', (payload) => {
+                appendDMSystemMessage(payload.text, payload.kind);
+            });
+
+            socket.on('dm-typing', ({ from }) => {
+                if (from !== window.currentDMPartner) return;
+                const indicator = document.getElementById('dm-typing-indicator');
+                indicator.textContent = `${from} is typing…`;
+                indicator.style.display = 'block';
+            });
+
+            socket.on('dm-stop-typing', ({ from }) => {
+                if (from !== window.currentDMPartner) return;
+                document.getElementById('dm-typing-indicator').style.display = 'none';
+            });
         }
 
         function checkAIEnter(event) {
