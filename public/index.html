@@ -1238,6 +1238,7 @@
         }
 
         window.formatUsername = function(username) {
+            const safeUsername = escapeHtml(username || '');
             const lower = (username || '').toLowerCase();
             const ownerNames = ["hamma", "hamma admin", "othmani hiba"];
             const isOwner = ownerNames.includes(lower);
@@ -1245,12 +1246,12 @@
             const isModerator = !isAdmin && window.modUsernames && window.modUsernames.has(username);
 
             if (isAdmin) {
-                return `<span class="rainbow-admin-name">${username}</span><span class="role-badge role-badge-admin">ADMIN</span>`;
+                return `<span class="rainbow-admin-name">${safeUsername}</span><span class="role-badge role-badge-admin">ADMIN</span>`;
             }
             if (isModerator) {
-                return `${username}<span class="role-badge role-badge-mod">MOD</span>`;
+                return `${safeUsername}<span class="role-badge role-badge-mod">MOD</span>`;
             }
-            return username;
+            return safeUsername;
         }
 
         window.proceedToChat = function(username) {
@@ -1604,7 +1605,7 @@
 
             const formattedUser = window.formatUsername(user);
             const replyHtml = replyTo
-                ? `<div class="reply-quote" data-jump-id="${replyTo.id}"><i class="fas fa-reply"></i> <strong>${replyTo.user}:</strong> ${(replyTo.text || '').slice(0, 80)}</div>`
+                ? `<div class="reply-quote" data-jump-id="${replyTo.id}"><i class="fas fa-reply"></i> <strong>${escapeHtml(replyTo.user)}:</strong> ${escapeHtml((replyTo.text || '').slice(0, 80))}</div>`
                 : '';
 
             let bodyHtml;
@@ -1617,7 +1618,7 @@
             } else if (mediaType === 'audio' && mediaUrl) {
                 bodyHtml = `<div class="msg-content voice-msg"><i class="fas fa-microphone"></i><audio src="${mediaUrl}" controls onclick="event.stopPropagation()"></audio></div>`;
             } else {
-                bodyHtml = `<strong>${formattedUser}:</strong> <span class="msg-content text-content">${msg}</span>`;
+                bodyHtml = `<strong>${formattedUser}:</strong> <span class="msg-content text-content">${escapeHtml(msg)}</span>`;
             }
 
             msgElement.innerHTML = `${replyHtml}${bodyHtml}`;
@@ -2244,13 +2245,29 @@
 
         function openDMScreen(username) {
             window.currentDMPartner = username;
+            window.dmOldestLoadedTimestamp = null;
             document.getElementById('dm-title').textContent = `💬 ${username}`;
-            document.getElementById('dm-box').innerHTML = '';
+            document.getElementById('dm-box').innerHTML = '<p style="color:#94a3b8; text-align:center; font-size:13px;">Loading conversation…</p>';
             document.getElementById('dm-typing-indicator').style.display = 'none';
             document.getElementById('chat-screen').style.display = 'none';
             document.getElementById('ai-screen').style.display = 'none';
             document.getElementById('dm-screen').style.display = 'flex';
             document.getElementById('dm-message-input').focus();
+            loadDMHistory(username);
+        }
+
+        async function loadDMHistory(username, before) {
+            const idToken = await getIdTokenSafe();
+            if (!idToken || !socket) {
+                document.getElementById('dm-box').innerHTML = '<p style="color:#ff4d4d; text-align:center; font-size:13px;">You need to be logged in to see this conversation.</p>';
+                return;
+            }
+            socket.emit('get-dm-history', { withUsername: username, idToken, before });
+        }
+
+        function loadOlderDMMessages() {
+            if (!window.currentDMPartner || !window.dmOldestLoadedTimestamp) return;
+            loadDMHistory(window.currentDMPartner, window.dmOldestLoadedTimestamp);
         }
 
         function closeDMScreen() {
@@ -2259,14 +2276,19 @@
             document.getElementById('chat-screen').style.display = 'flex';
         }
 
-        function appendDMMessage(data) {
+        function appendDMMessage(data, prepend) {
             const isSelf = data.from === window.currentUsername;
             const el = document.createElement('div');
             el.className = `msg ${isSelf ? 'my-msg' : 'other-msg'}`;
             el.innerHTML = `<strong>${escapeHtml(data.from)}:</strong> <span class="text-content">${escapeHtml(data.text)}</span>`;
             const box = document.getElementById('dm-box');
-            box.appendChild(el);
-            box.scrollTop = box.scrollHeight;
+            if (prepend) {
+                box.insertBefore(el, box.firstChild);
+            } else {
+                box.appendChild(el);
+                box.scrollTop = box.scrollHeight;
+            }
+            return el;
         }
 
         function appendDMSystemMessage(text, kind) {
@@ -2282,11 +2304,12 @@
             if (event.key === "Enter") sendDMMessage();
         }
 
-        function sendDMMessage() {
+        async function sendDMMessage() {
             const input = document.getElementById('dm-message-input');
             const text = input.value;
             if (!text.trim() || !window.currentDMPartner || !socket) return;
-            socket.emit('dm-message', { to: window.currentDMPartner, text });
+            const idToken = await getIdTokenSafe();
+            socket.emit('dm-message', { to: window.currentDMPartner, text, idToken });
             input.value = '';
             socket.emit('dm-stop-typing', { to: window.currentDMPartner });
         }
@@ -2307,6 +2330,41 @@
                 if (partner !== window.currentDMPartner) return;
                 appendDMMessage(data);
                 document.getElementById('dm-typing-indicator').style.display = 'none';
+            });
+
+            socket.on('dm-history', ({ withUsername, messages, hasMore }) => {
+                if (withUsername !== window.currentDMPartner) return;
+                const box = document.getElementById('dm-box');
+                const isFirstPage = !window.dmOldestLoadedTimestamp;
+                if (isFirstPage) box.innerHTML = '';
+
+                if (messages.length === 0 && isFirstPage) {
+                    box.innerHTML = '<p style="color:#94a3b8; text-align:center; font-size:13px;">No messages yet — say hi! 👋</p>';
+                    return;
+                }
+
+                // Remove any existing "load older" button before re-adding
+                const oldBtn = document.getElementById('dm-load-older');
+                if (oldBtn) oldBtn.remove();
+
+                if (isFirstPage) {
+                    messages.forEach(m => appendDMMessage(m, false));
+                } else {
+                    // Prepending a batch: insert in reverse so final order stays oldest→newest
+                    [...messages].reverse().forEach(m => appendDMMessage(m, true));
+                }
+                if (messages.length > 0) window.dmOldestLoadedTimestamp = messages[0].timestamp;
+
+                if (hasMore) {
+                    const btn = document.createElement('button');
+                    btn.id = 'dm-load-older';
+                    btn.textContent = 'Load older messages';
+                    btn.onclick = loadOlderDMMessages;
+                    btn.style.cssText = 'align-self:center; background:rgba(146,254,157,0.15); border:1px solid #92fe9d; color:#92fe9d; padding:6px 14px; border-radius:20px; cursor:pointer; margin-bottom:8px; font-size:12px;';
+                    box.insertBefore(btn, box.firstChild);
+                }
+
+                if (isFirstPage) box.scrollTop = box.scrollHeight;
             });
 
             socket.on('dm-system-msg', (payload) => {
@@ -2501,7 +2559,7 @@
             const userMsgDiv = document.createElement('div');
             userMsgDiv.classList.add('msg', 'my-msg');
             const formattedUser = window.formatUsername(window.currentUsername || 'You');
-            userMsgDiv.innerHTML = `<strong>${formattedUser}:</strong> <span class="text-content">${userText}</span>`;
+            userMsgDiv.innerHTML = `<strong>${formattedUser}:</strong> <span class="text-content">${escapeHtml(userText)}</span>`;
             aiChatBox.appendChild(userMsgDiv);
             inputField.value = "";
             aiChatBox.scrollTop = aiChatBox.scrollHeight;
@@ -2524,7 +2582,7 @@
 
                 const aiMsgDiv = document.createElement('div');
                 aiMsgDiv.classList.add('msg', 'other-msg');
-                aiMsgDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">${data.reply}</span>`;
+                aiMsgDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">${escapeHtml(data.reply)}</span>`;
                 aiChatBox.appendChild(aiMsgDiv);
             } catch (error) {
                 typingDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">Error connecting to server.</span>`;
