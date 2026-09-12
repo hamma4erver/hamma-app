@@ -245,6 +245,19 @@ function removeUsernameSocket(username, socketId) {
 function isUserOnline(username) {
     return usernameSockets.has(username) && usernameSockets.get(username).size > 0;
 }
+
+// -- Basic rate limiting (anti-spam) ------------------------------
+// Sliding window per socket: max MESSAGES within WINDOW_MS.
+const RATE_LIMIT_MAX = 8;
+const RATE_LIMIT_WINDOW_MS = 10000;
+const rateLimitLog = new Map(); // socket.id -> array of timestamps
+function isRateLimited(socketId) {
+    const now = Date.now();
+    const arr = (rateLimitLog.get(socketId) || []).filter(t => now - t < RATE_LIMIT_WINDOW_MS);
+    arr.push(now);
+    rateLimitLog.set(socketId, arr);
+    return arr.length > RATE_LIMIT_MAX;
+}
 let chatLocked = false;           // when true, only admins/mods can send messages
 let pinnedMessage = null;         // { id, user, text } or null
 const modClearCooldowns = new Map(); // uid -> next-allowed-timestamp (ms) for moderators clearing chat
@@ -362,6 +375,9 @@ io.on('connection', (socket) => {
     });
 
     socket.on('chat-message', async (data) => {
+        if (isRateLimited(socket.id)) {
+            return socket.emit('system-msg', { text: "You're sending messages too fast — slow down a bit.", kind: 'error' });
+        }
         if (blockedUsers.has(data.user)) {
             return socket.emit('system-msg', { text: 'You are banned from sending messages.', kind: 'error' });
         }
@@ -697,12 +713,15 @@ io.on('connection', (socket) => {
 
     // ==================================================
     // Direct messages (DM) — private 1-to-1 chat between two users.
-    // Not persisted (same as the global chat): delivered live only to
-    // whichever sockets the two users currently have open.
+    // Persisted in Firestore (unlike the global chat, which stays live-only
+    // by request) so history survives reconnects and page reloads.
     // ==================================================
-    socket.on('dm-message', ({ to, text }) => {
+    socket.on('dm-message', async ({ to, text, idToken }) => {
         const from = socketUsers.get(socket.id);
         if (!from || !to || !text || !text.trim()) return;
+        if (isRateLimited(socket.id)) {
+            return socket.emit('dm-system-msg', { text: "You're sending messages too fast — slow down a bit.", kind: 'error' });
+        }
         if (blockedUsers.has(from)) {
             return socket.emit('dm-system-msg', { text: 'You are banned from sending messages.', kind: 'error' });
         }
@@ -724,13 +743,45 @@ io.on('connection', (socket) => {
         const targetSockets = usernameSockets.get(to);
         if (targetSockets && targetSockets.size > 0) {
             targetSockets.forEach(id => io.to(id).emit('dm-message', payload));
-        } else {
-            socket.emit('dm-system-msg', { text: `${to} is offline right now — they won't see this message (DMs aren't saved yet).`, kind: 'error' });
+        } else if (!db) {
+            socket.emit('dm-system-msg', { text: `${to} is offline right now — they won't see this message.`, kind: 'error' });
         }
 
         // Echo back to the sender's own open tabs so their UI updates too
         const senderSockets = usernameSockets.get(from);
         if (senderSockets) senderSockets.forEach(id => io.to(id).emit('dm-message', payload));
+
+        // Persist — only once we can confirm the sender's real identity via
+        // their ID token (keeps guest chatter out of permanent storage)
+        if (db && idToken) {
+            const me = await verifyUser(idToken);
+            if (me.ok && me.name === from) {
+                const convId = [from, to].sort().join('__');
+                db.collection('directMessages').doc(convId).collection('messages').add({
+                    from, to, text: payload.text, timestamp: payload.timestamp
+                }).catch(e => console.error('DM persist failed:', e.message));
+            }
+        }
+    });
+
+    // Loads the last page of a DM conversation (or an older page, via `before`)
+    socket.on('get-dm-history', async ({ withUsername, idToken, before }) => {
+        const me = await verifyUser(idToken);
+        if (!me.ok || !withUsername || !db) {
+            return socket.emit('dm-history', { withUsername, messages: [], hasMore: false });
+        }
+        const convId = [me.name, withUsername].sort().join('__');
+        try {
+            let q = db.collection('directMessages').doc(convId).collection('messages')
+                .orderBy('timestamp', 'desc').limit(30);
+            if (before) q = q.where('timestamp', '<', before);
+            const snap = await q.get();
+            const messages = snap.docs.map(d => d.data()).reverse();
+            socket.emit('dm-history', { withUsername, messages, hasMore: snap.size === 30 });
+        } catch (e) {
+            console.error('DM history fetch failed:', e.message);
+            socket.emit('dm-history', { withUsername, messages: [], hasMore: false });
+        }
     });
 
     socket.on('dm-typing', ({ to }) => {
@@ -751,6 +802,7 @@ io.on('connection', (socket) => {
         const username = socketUsers.get(socket.id);
         if (username) removeUsernameSocket(username, socket.id);
         socketUsers.delete(socket.id);
+        rateLimitLog.delete(socket.id);
         onlineUsersCount = Math.max(0, onlineUsersCount - 1);
         io.emit('update-online', onlineUsersCount);
         broadcastStatusLists();
@@ -760,4 +812,4 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-});
+});s
