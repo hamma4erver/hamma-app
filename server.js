@@ -4,6 +4,7 @@ const { Server } = require('socket.io');
 const path = require('path');
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
+const webpush = require('web-push');
 
 const app = express();
 const server = http.createServer(app);
@@ -13,6 +14,17 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 const apiKey = process.env.GROQ_API_KEY;
+
+// ==================================================
+// Web Push (VAPID) — set VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY env vars on Render.
+// ==================================================
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+    webpush.setVapidDetails('mailto:hamma@example.com', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+} else {
+    console.warn("⚠️ VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY are missing! Push notifications will not work.");
+}
 
 // ==================================================
 // Firebase Admin SDK initialization
@@ -164,12 +176,54 @@ async function findUserByUsername(username) {
         if (snap.empty) snap = await db.collection('users').where('displayName', '==', username).limit(1).get();
         if (snap.empty) return null;
         const data = snap.docs[0].data();
-        return { uid: snap.docs[0].id, username: data.username || data.displayName };
+        return { uid: snap.docs[0].id, username: data.username || data.displayName, lastSeen: data.lastSeen || null };
     } catch (e) {
         console.error("User lookup failed:", e.message);
         return null;
     }
 }
+
+// Sends a web push notification to a username's saved subscription (if any).
+// Silently does nothing if push isn't configured or the user never subscribed.
+async function sendPushToUser(username, payload) {
+    if (!db || !VAPID_PUBLIC_KEY) return;
+    try {
+        let snap = await db.collection('users').where('username', '==', username).limit(1).get();
+        if (snap.empty) snap = await db.collection('users').where('displayName', '==', username).limit(1).get();
+        if (snap.empty) return;
+        const sub = snap.docs[0].data().pushSubscription;
+        if (!sub) return;
+        await webpush.sendNotification(sub, JSON.stringify(payload)).catch(err => {
+            if (err.statusCode === 410 || err.statusCode === 404) {
+                // Subscription expired or was revoked by the browser — clean it up
+                snap.docs[0].ref.update({ pushSubscription: admin.firestore.FieldValue.delete() }).catch(() => {});
+            } else {
+                console.error('Push send failed:', err.message);
+            }
+        });
+    } catch (e) {
+        console.error('sendPushToUser failed:', e.message);
+    }
+}
+
+// Save a push subscription for the logged-in user (called from the browser
+// after they grant notification permission).
+app.post('/api/save-push-subscription', async (req, res) => {
+    const { idToken, subscription } = req.body;
+    const me = await verifyUser(idToken);
+    if (!me.ok || !subscription || !db) return res.status(401).json({ ok: false });
+    try {
+        await db.collection('users').doc(me.uid).set({ pushSubscription: subscription }, { merge: true });
+        res.json({ ok: true });
+    } catch (e) {
+        console.error("Saving push subscription failed:", e.message);
+        res.status(500).json({ ok: false });
+    }
+});
+
+app.get('/vapid-public-key', (req, res) => {
+    res.json({ publicKey: VAPID_PUBLIC_KEY || '' });
+});
 
 // Looks up the role of a chat username (by Firestore `username`/`displayName` field),
 // so staff-protection rules (e.g. "admins can't ban other admins") can be enforced
@@ -646,8 +700,15 @@ io.on('connection', (socket) => {
             });
 
             const targetSockets = usernameSockets.get(target.username);
-            if (targetSockets) {
+            if (targetSockets && targetSockets.size > 0) {
                 targetSockets.forEach(id => io.to(id).emit('friend-request-received', { from: me.name }));
+            } else {
+                sendPushToUser(target.username, {
+                    title: 'New friend request',
+                    body: `${me.name} wants to be your friend on Hamma`,
+                    tag: `friend-request-${me.name}`,
+                    url: '/'
+                });
             }
             socket.emit('dm-system-msg', { text: `Friend request sent to ${target.username}.`, kind: 'info' });
         } catch (e) {
@@ -681,7 +742,18 @@ io.on('connection', (socket) => {
                 ...sentSnap.docs.map(d => d.data().to),
                 ...receivedSnap.docs.map(d => d.data().from)
             ];
-            socket.emit('friends-list', friends.map(username => ({ username, online: isUserOnline(username) })));
+            const results = await Promise.all(friends.map(async (username) => {
+                const online = isUserOnline(username);
+                let lastSeenMs = null;
+                if (!online) {
+                    const info = await findUserByUsername(username);
+                    if (info && info.lastSeen && typeof info.lastSeen.toMillis === 'function') {
+                        lastSeenMs = info.lastSeen.toMillis();
+                    }
+                }
+                return { username, online, lastSeenMs };
+            }));
+            socket.emit('friends-list', results);
         } catch (e) {
             console.error("Fetching friends failed:", e.message);
             socket.emit('friends-list', []);
@@ -736,15 +808,24 @@ io.on('connection', (socket) => {
             from,
             to,
             text: text.trim(),
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            read: false
         };
 
         // Deliver to every open tab/device the recipient has
         const targetSockets = usernameSockets.get(to);
         if (targetSockets && targetSockets.size > 0) {
             targetSockets.forEach(id => io.to(id).emit('dm-message', payload));
-        } else if (!db) {
-            socket.emit('dm-system-msg', { text: `${to} is offline right now — they won't see this message.`, kind: 'error' });
+        } else {
+            if (!db) {
+                socket.emit('dm-system-msg', { text: `${to} is offline right now — they won't see this message.`, kind: 'error' });
+            }
+            sendPushToUser(to, {
+                title: from,
+                body: payload.text.length > 120 ? payload.text.slice(0, 117) + '…' : payload.text,
+                tag: `dm-${from}`,
+                url: '/'
+            });
         }
 
         // Echo back to the sender's own open tabs so their UI updates too
@@ -758,9 +839,30 @@ io.on('connection', (socket) => {
             if (me.ok && me.name === from) {
                 const convId = [from, to].sort().join('__');
                 db.collection('directMessages').doc(convId).collection('messages').add({
-                    from, to, text: payload.text, timestamp: payload.timestamp
+                    from, to, text: payload.text, timestamp: payload.timestamp, read: false
                 }).catch(e => console.error('DM persist failed:', e.message));
             }
+        }
+    });
+
+    // Marks every unread message FROM `withUsername` TO me as read, and lets
+    // the sender know (so their UI can flip ✓ to ✓✓).
+    socket.on('dm-mark-read', async ({ withUsername, idToken }) => {
+        const me = await verifyUser(idToken);
+        if (!me.ok || !withUsername || !db) return;
+        const convId = [me.name, withUsername].sort().join('__');
+        try {
+            const snap = await db.collection('directMessages').doc(convId).collection('messages')
+                .where('to', '==', me.name).where('read', '==', false).get();
+            if (snap.empty) return;
+            const batch = db.batch();
+            snap.docs.forEach(d => batch.update(d.ref, { read: true }));
+            await batch.commit();
+
+            const targetSockets = usernameSockets.get(withUsername);
+            if (targetSockets) targetSockets.forEach(id => io.to(id).emit('dm-read-receipt', { by: me.name }));
+        } catch (e) {
+            console.error('Marking DM as read failed:', e.message);
         }
     });
 
