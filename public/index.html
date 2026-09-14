@@ -25,11 +25,18 @@
          the ACTUAL visible height in JS and exposes it as --real-vh for CSS to fall back on. -->
     <script>
         function hammaSetRealVh() {
-            document.documentElement.style.setProperty('--real-vh', (window.innerHeight * 0.01) + 'px');
+            // visualViewport reflects the keyboard-adjusted height accurately on
+            // modern mobile browsers; window.innerHeight is the fallback for the rest.
+            const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+            document.documentElement.style.setProperty('--real-vh', (h * 0.01) + 'px');
         }
         hammaSetRealVh();
         window.addEventListener('resize', hammaSetRealVh);
         window.addEventListener('orientationchange', () => setTimeout(hammaSetRealVh, 100));
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', hammaSetRealVh);
+            window.visualViewport.addEventListener('scroll', hammaSetRealVh);
+        }
     </script>
     <style>
         .role-badge {
