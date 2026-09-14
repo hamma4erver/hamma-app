@@ -1359,6 +1359,10 @@
             return null;
         }
 
+        function isGuestUser() {
+            return !(window.firebaseAuth && window.firebaseAuth.currentUser);
+        }
+
         // Shared send path for text, photos/videos, voice notes, and stickers —
         // "extra" carries whichever of {msg, mediaType, mediaUrl, sticker} applies.
         async function sendChatPayload(extra) {
@@ -1402,6 +1406,11 @@
 
         async function uploadAndSendMedia(file, mediaType) {
             if (!file || !window.currentUsername) return;
+            if (isGuestUser()) {
+                const label = mediaType === 'audio' ? 'voice messages' : 'photos and videos';
+                appendSystemMessage(`🔒 Guests can't send ${label} — log in or create an account to unlock this.`, 'error');
+                return;
+            }
             if (file.size > MAX_MEDIA_BYTES) {
                 appendSystemMessage(`⚠️ "${file.name}" is too big — 50MB max.`, 'error');
                 return;
@@ -1447,6 +1456,10 @@
         }
 
         document.getElementById('btn-attach').addEventListener('click', () => {
+            if (isGuestUser()) {
+                appendSystemMessage("🔒 Guests can't send photos or videos — log in or create an account to unlock this.", 'error');
+                return;
+            }
             document.getElementById('media-file-input').click();
         });
         document.getElementById('media-file-input').addEventListener('change', (e) => {
@@ -1483,6 +1496,10 @@
 
         async function startVoiceRecording() {
             if (mediaRecorder && mediaRecorder.state === 'recording') return;
+            if (isGuestUser()) {
+                appendSystemMessage("🔒 Guests can't send voice messages — log in or create an account to unlock this.", 'error');
+                return;
+            }
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 recordedChunks = [];
