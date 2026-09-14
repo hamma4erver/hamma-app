@@ -793,8 +793,8 @@ input:focus {
     body {
         height: 100vh;
         height: -webkit-fill-available;
-        height: calc(var(--real-vh, 1vh) * 100);
         height: 100dvh;
+        height: calc(var(--real-vh, 1vh) * 100);
         overflow: hidden;
         position: fixed;
         width: 100%;
@@ -850,7 +850,7 @@ input:focus {
     .user-badge { font-size: 11px; padding: 4px 10px; }
     #user-display-tag { position: static; right: auto; flex-shrink: 0; }
 
-    #chat-box, #ai-chat-box {
+    #chat-box, #ai-chat-box, #dm-box {
         flex: 1;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch; /* سلاسة التمرير في آيفون */
