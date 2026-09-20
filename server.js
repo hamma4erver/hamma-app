@@ -305,6 +305,22 @@ function isUserOnline(username) {
 const RATE_LIMIT_MAX = 8;
 const RATE_LIMIT_WINDOW_MS = 10000;
 const rateLimitLog = new Map(); // socket.id -> array of timestamps
+
+// -- DM presence (for "should we send a push?" decisions) ---------
+// socket.id -> { partner: username|null, focused: boolean }
+// A push is skipped only when the recipient has that EXACT conversation
+// open AND their tab/app is in the foreground — same rule WhatsApp/Messenger
+// use, so being merely "online" elsewhere no longer silences notifications.
+const activeDMView = new Map();
+function isUserActivelyViewingDM(username, partnerUsername) {
+    const sockets = usernameSockets.get(username);
+    if (!sockets) return false;
+    for (const id of sockets) {
+        const view = activeDMView.get(id);
+        if (view && view.partner === partnerUsername && view.focused) return true;
+    }
+    return false;
+}
 function isRateLimited(socketId) {
     const now = Date.now();
     const arr = (rateLimitLog.get(socketId) || []).filter(t => now - t < RATE_LIMIT_WINDOW_MS);
@@ -837,10 +853,15 @@ io.on('connection', (socket) => {
         const targetSockets = usernameSockets.get(to);
         if (targetSockets && targetSockets.size > 0) {
             targetSockets.forEach(id => io.to(id).emit('dm-message', payload));
-        } else {
-            if (!db) {
-                socket.emit('dm-system-msg', { text: `${to} is offline right now — they won't see this message.`, kind: 'error' });
-            }
+        } else if (!db) {
+            socket.emit('dm-system-msg', { text: `${to} is offline right now — they won't see this message.`, kind: 'error' });
+        }
+
+        // Push notification: sent whenever they're NOT actively looking at
+        // this exact conversation in the foreground — same rule big chat
+        // apps use, so it fires even if they're "online" but on another
+        // screen, another tab, or the app is backgrounded.
+        if (!isUserActivelyViewingDM(to, from)) {
             sendPushToUser(to, {
                 title: from,
                 body: hasMedia ? `Sent ${mediaType === 'audio' ? 'a voice message' : mediaType === 'video' ? 'a video' : 'a photo'}` :
@@ -959,6 +980,21 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Tells the server which DM conversation (if any) this tab currently
+    // has open, and whether it's in the foreground — used only to decide
+    // whether a push notification should fire (see isUserActivelyViewingDM).
+    socket.on('dm-view-open', ({ withUsername }) => {
+        if (!withUsername) return;
+        activeDMView.set(socket.id, { partner: withUsername, focused: true });
+    });
+    socket.on('dm-view-close', () => {
+        activeDMView.set(socket.id, { partner: null, focused: true });
+    });
+    socket.on('dm-visibility', ({ focused }) => {
+        const cur = activeDMView.get(socket.id) || { partner: null };
+        activeDMView.set(socket.id, { partner: cur.partner, focused: !!focused });
+    });
+
     socket.on('dm-typing', ({ to }) => {
         const from = socketUsers.get(socket.id);
         if (!from || !to) return;
@@ -978,6 +1014,7 @@ io.on('connection', (socket) => {
         if (username) removeUsernameSocket(username, socket.id);
         socketUsers.delete(socket.id);
         rateLimitLog.delete(socket.id);
+        activeDMView.delete(socket.id);
         onlineUsersCount = Math.max(0, onlineUsersCount - 1);
         io.emit('update-online', onlineUsersCount);
         broadcastStatusLists();
