@@ -513,6 +513,18 @@
             </div>
 
             <div id="dm-typing-indicator" style="display: none; color: #94a3b8; font-size: 13px; margin-bottom: 6px;"></div>
+            <div id="dm-voice-recording-bar" style="display: none;"></div>
+            <div id="dm-upload-progress-bar" style="display: none;"></div>
+
+            <div class="media-actions-row">
+                <input type="file" id="dm-media-file-input" accept="image/*,video/*" style="display:none;">
+                <button type="button" id="btn-dm-attach" class="icon-btn" title="Send a photo or video">
+                    <i class="fas fa-paperclip"></i>
+                </button>
+                <button type="button" id="btn-dm-voice" class="icon-btn" title="Hold to record a voice message">
+                    <i class="fas fa-microphone"></i>
+                </button>
+            </div>
 
             <div class="input-area">
                 <input type="text" id="dm-message-input" placeholder="Message..." onkeydown="checkDMEnter(event)" oninput="dmHandleTyping()">
@@ -560,6 +572,10 @@
                 <i class="fas fa-reply"></i> Reply
             </button>
 
+            <button class="btn-primary" id="btn-msg-edit" style="margin-bottom: 10px; background: #334155; display: none;">
+                <i class="fas fa-pen"></i> Edit Message
+            </button>
+
             <div id="admin-msg-actions" style="display: none; flex-direction: column; gap: 10px;">
                 <button class="btn-primary" id="btn-msg-delete" style="background: #e63946;">
                     <i class="fas fa-trash-alt"></i> Delete Message
@@ -590,6 +606,29 @@
             </div>
 
             <button class="modal-btn cancel" onclick="closeMsgModal()" style="margin-top: 15px; width: 100%;">Cancel</button>
+        </div>
+    </div>
+
+    <!-- 6b. EDIT MESSAGE MODAL -->
+    <div id="edit-message-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-card" style="max-width: 340px; width: 90%; background: rgba(15, 23, 42, 0.98); border: 1px solid #00c9ff;">
+            <h4 style="color: #00c9ff; margin-bottom: 15px; text-align: center;">Edit Message</h4>
+            <textarea id="edit-message-input" rows="3" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.5); border: 1px solid rgba(0,201,255,0.3); border-radius: 8px; color: white; outline: none; resize: vertical; box-sizing: border-box; font-family: inherit;"></textarea>
+            <div style="display: flex; gap: 10px; margin-top: 12px;">
+                <button class="btn-primary" onclick="closeEditMessageModal()" style="flex: 1; background: #334155;">Cancel</button>
+                <button class="btn-primary" onclick="saveEditedMessage()" style="flex: 1; background: linear-gradient(45deg, #00c9ff, #92fe9d); color:#000;">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DM message actions (edit/delete own message) -->
+    <div id="dm-message-actions-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-card" style="max-width: 300px; width: 90%; background: rgba(15, 23, 42, 0.98); border: 1px solid #92fe9d;">
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <button class="btn-primary" onclick="openDMEditFromActions()" style="background: linear-gradient(45deg, #00c9ff, #92fe9d); color:#000; font-weight:bold;"><i class="fas fa-pen"></i> Edit</button>
+                <button class="btn-primary" onclick="deleteDMFromActions()" style="background: rgba(230,57,70,0.2); border: 1px solid #e63946; color:#e63946; font-weight:bold;"><i class="fas fa-trash"></i> Delete</button>
+                <button class="btn-primary" onclick="closeDMMessageActions()" style="background: #334155;">Cancel</button>
+            </div>
         </div>
     </div>
 
@@ -1394,12 +1433,12 @@
         const CLOUDINARY_UPLOAD_PRESET = 'preset';
 
         function showUploadProgress(pct) {
-            const bar = document.getElementById('upload-progress-bar');
+            const bar = document.getElementById(window.currentDMPartner ? 'dm-upload-progress-bar' : 'upload-progress-bar');
             bar.style.display = 'flex';
             bar.innerHTML = `<div class="upload-progress-track"><div class="upload-progress-fill" style="width:${pct}%"></div></div><span>Uploading… ${pct}%</span>`;
         }
         function hideUploadProgress() {
-            const bar = document.getElementById('upload-progress-bar');
+            const bar = document.getElementById(window.currentDMPartner ? 'dm-upload-progress-bar' : 'upload-progress-bar');
             bar.style.display = 'none';
             bar.innerHTML = '';
         }
@@ -1448,7 +1487,12 @@
                 });
 
                 hideUploadProgress();
-                await sendChatPayload({ mediaType, mediaUrl: url });
+                if (window.currentDMPartner) {
+                    const idToken = await getIdTokenSafe();
+                    socket.emit('dm-message', { to: window.currentDMPartner, text: '', idToken, mediaType, mediaUrl: url });
+                } else {
+                    await sendChatPayload({ mediaType, mediaUrl: url });
+                }
             } catch (error) {
                 hideUploadProgress();
                 appendSystemMessage('⚠️ Upload failed: ' + error.message, 'error');
@@ -1470,6 +1514,21 @@
             e.target.value = '';
         });
 
+        document.getElementById('btn-dm-attach').addEventListener('click', () => {
+            if (isGuestUser()) {
+                appendSystemMessage("🔒 Guests can't send photos or videos — log in or create an account to unlock this.", 'error');
+                return;
+            }
+            document.getElementById('dm-media-file-input').click();
+        });
+        document.getElementById('dm-media-file-input').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const mediaType = file.type.startsWith('video/') ? 'video' : 'image';
+            uploadAndSendMedia(file, mediaType);
+            e.target.value = '';
+        });
+
         // ===== Voice messages (hold the mic button to record) =====
         let mediaRecorder = null;
         let recordedChunks = [];
@@ -1478,20 +1537,24 @@
         let cancelNextRecording = false;
 
         function updateRecordingTimer() {
-            const bar = document.getElementById('voice-recording-bar');
+            const bar = document.getElementById(window.currentDMPartner ? 'dm-voice-recording-bar' : 'voice-recording-bar');
             const secs = Math.floor((Date.now() - recordingStartedAt) / 1000);
             const mm = String(Math.floor(secs / 60)).padStart(2, '0');
             const ss = String(secs % 60).padStart(2, '0');
             bar.innerHTML = `<i class="fas fa-microphone recording-dot"></i><span>Recording ${mm}:${ss}</span><button type="button" onclick="window.cancelVoiceRecording()"><i class="fas fa-trash"></i></button>`;
         }
         function showRecordingBar() {
-            document.getElementById('voice-recording-bar').style.display = 'flex';
+            document.getElementById(window.currentDMPartner ? 'dm-voice-recording-bar' : 'voice-recording-bar').style.display = 'flex';
             updateRecordingTimer();
             recordingTimerInterval = setInterval(updateRecordingTimer, 500);
         }
         function hideRecordingBar() {
             clearInterval(recordingTimerInterval);
-            document.getElementById('voice-recording-bar').style.display = 'none';
+            document.getElementById(window.currentDMPartner ? 'dm-voice-recording-bar' : 'voice-recording-bar').style.display = 'none';
+        }
+
+        function getActiveVoiceBtn() {
+            return document.getElementById(window.currentDMPartner ? 'btn-dm-voice' : 'btn-voice');
         }
 
         async function startVoiceRecording() {
@@ -1518,14 +1581,14 @@
                 mediaRecorder.start();
                 recordingStartedAt = Date.now();
                 showRecordingBar();
-                voiceBtn.classList.add('recording');
+                getActiveVoiceBtn().classList.add('recording');
             } catch (e) {
                 appendSystemMessage('⚠️ Microphone access is needed to send a voice message.', 'error');
             }
         }
         function stopVoiceRecording() {
             if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
-            voiceBtn.classList.remove('recording');
+            getActiveVoiceBtn().classList.remove('recording');
         }
         window.cancelVoiceRecording = function() {
             cancelNextRecording = true;
@@ -1538,6 +1601,13 @@
         voiceBtn.addEventListener('mouseleave', () => { if (mediaRecorder && mediaRecorder.state === 'recording') stopVoiceRecording(); });
         voiceBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startVoiceRecording(); }, { passive: false });
         voiceBtn.addEventListener('touchend', (e) => { e.preventDefault(); stopVoiceRecording(); });
+
+        const dmVoiceBtn = document.getElementById('btn-dm-voice');
+        dmVoiceBtn.addEventListener('mousedown', startVoiceRecording);
+        dmVoiceBtn.addEventListener('mouseup', stopVoiceRecording);
+        dmVoiceBtn.addEventListener('mouseleave', () => { if (mediaRecorder && mediaRecorder.state === 'recording') stopVoiceRecording(); });
+        dmVoiceBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startVoiceRecording(); }, { passive: false });
+        dmVoiceBtn.addEventListener('touchend', (e) => { e.preventDefault(); stopVoiceRecording(); });
 
         // ===== Stickers (quick-tap emoji set) =====
         const STICKER_SET = ['😂','❤️','🔥','👍','😍','😢','🎉','👏','😮','🙏','💯','😎','🤣','😭','🥳','😡','🤔','👀','💀','🙌','✨','🥰','😴','🤝','🎂','🍕','⚽','🐐'];
@@ -1819,6 +1889,17 @@
                 }
             });
 
+            socket.on('edit-message', ({ msgId, newText }) => {
+                const target = document.querySelector(`[data-id="${msgId}"]`);
+                if (!target || target.dataset.deleted === 'true') return;
+                const contentEl = target.querySelector('.text-content');
+                if (!contentEl) return;
+                contentEl.textContent = newText;
+                if (!target.querySelector('.msg-edited-tag')) {
+                    contentEl.insertAdjacentHTML('afterend', ` <span class="msg-edited-tag" style="color:#94a3b8; font-size:11px;">(edited)</span>`);
+                }
+            });
+
             socket.on('system-msg', (payload) => {
                 // Compatibility: the server now sends { text, kind }, but handle plain strings just in case
                 if (typeof payload === 'string') {
@@ -2079,6 +2160,10 @@
             replyBtn.style.opacity = isDeleted ? '0.4' : '1';
             replyBtn.style.cursor = isDeleted ? 'not-allowed' : 'pointer';
 
+            const editBtn = document.getElementById('btn-msg-edit');
+            const isMediaMsg = element.querySelector('.chat-media-img, .chat-media-video, audio, .sticker-emoji');
+            editBtn.style.display = (isOwnMessage && !isDeleted && !isMediaMsg) ? 'flex' : 'none';
+
             document.getElementById('msg-options-modal').style.display = 'flex';
         }
 
@@ -2140,6 +2225,52 @@
             const bar = document.getElementById('reply-preview-bar');
             bar.style.display = 'none';
             bar.innerHTML = '';
+        }
+
+        // Edit message button — own text messages only
+        document.getElementById('btn-msg-edit').addEventListener('click', () => {
+            if (!selectedMsgElem) return;
+            document.getElementById('edit-message-input').value = selectedMsgText;
+            document.getElementById('edit-message-modal').style.display = 'flex';
+            closeMsgModal();
+            setTimeout(() => document.getElementById('edit-message-input').focus(), 50);
+        });
+
+        function closeEditMessageModal() {
+            document.getElementById('edit-message-modal').style.display = 'none';
+            window.editingDMMessage = false;
+        }
+
+        async function saveEditedMessage() {
+            const newText = document.getElementById('edit-message-input').value.trim();
+            if (!newText) return;
+
+            if (window.editingDMMessage) {
+                if (!selectedDMMsgElem || !window.currentDMPartner || !socket) { closeEditMessageModal(); return; }
+                const idToken = await getIdTokenSafe();
+                if (idToken) {
+                    socket.emit('dm-edit-message', {
+                        withUsername: window.currentDMPartner,
+                        msgId: selectedDMMsgElem.dataset.id,
+                        idToken,
+                        newText
+                    });
+                }
+                closeEditMessageModal();
+                return;
+            }
+
+            if (!selectedMsgElem) return;
+            const msgId = selectedMsgElem.dataset.id;
+            try {
+                const idToken = await window.firebaseAuth.currentUser.getIdToken();
+                if (socket && socket.connected) {
+                    socket.emit('edit-message', { msgId, idToken, messageSender: selectedSenderName, newText });
+                }
+            } catch (e) {
+                appendSystemMessage('You must be signed in to edit.', 'error');
+            }
+            closeEditMessageModal();
         }
 
         // Delete message button — everyone can delete their own message; admins can delete anyone's
@@ -2346,14 +2477,47 @@
             document.getElementById('chat-screen').style.display = 'flex';
         }
 
+        let selectedDMMsgElem = null;
+        window.editingDMMessage = false;
+
         function appendDMMessage(data, prepend) {
             const isSelf = data.from === window.currentUsername;
             const el = document.createElement('div');
             el.className = `msg ${isSelf ? 'my-msg' : 'other-msg'}`;
+            el.dataset.id = data.id || '';
+            el.dataset.text = data.text || '';
+
             const readStatus = isSelf
                 ? `<span class="dm-read-status" style="font-size:11px; margin-left:4px; color:${data.read ? '#00c9ff' : '#94a3b8'};">${data.read ? '✓✓' : '✓'}</span>`
                 : '';
-            el.innerHTML = `<strong>${escapeHtml(data.from)}:</strong> <span class="text-content">${escapeHtml(data.text)}</span>${readStatus}`;
+            const editedTag = data.edited ? `<span style="font-size:10px; color:#94a3b8; margin-left:4px;">(edited)</span>` : '';
+
+            let bodyHtml;
+            if (data.mediaType === 'image' && data.mediaUrl) {
+                bodyHtml = `<div class="msg-content"><img src="${data.mediaUrl}" class="chat-media-img" loading="lazy" alt="photo" onclick="event.stopPropagation(); window.open('${data.mediaUrl}', '_blank')"></div>`;
+            } else if (data.mediaType === 'video' && data.mediaUrl) {
+                bodyHtml = `<div class="msg-content"><video src="${data.mediaUrl}" class="chat-media-video" controls preload="metadata" onclick="event.stopPropagation()"></video></div>`;
+            } else if (data.mediaType === 'audio' && data.mediaUrl) {
+                bodyHtml = `<div class="msg-content voice-msg"><i class="fas fa-microphone"></i><audio src="${data.mediaUrl}" controls onclick="event.stopPropagation()"></audio></div>`;
+            } else {
+                bodyHtml = `<span class="text-content">${escapeHtml(data.text)}</span>`;
+            }
+
+            el.innerHTML = `<strong>${escapeHtml(data.from)}:</strong> ${bodyHtml}${editedTag}${readStatus}`;
+
+            if (isSelf && !data.mediaType) {
+                el.style.cursor = 'pointer';
+                el.addEventListener('click', () => openDMMessageActions(el));
+            } else if (isSelf) {
+                // Media messages: still deletable, just tap-and-hold the delete icon area isn't
+                // needed — a small long-press works the same via the same handler.
+                el.style.cursor = 'pointer';
+                el.addEventListener('click', (e) => {
+                    if (e.target.closest('img,video,audio')) return; // let media controls work normally
+                    openDMMessageActions(el);
+                });
+            }
+
             const box = document.getElementById('dm-box');
             if (prepend) {
                 box.insertBefore(el, box.firstChild);
@@ -2362,6 +2526,31 @@
                 box.scrollTop = box.scrollHeight;
             }
             return el;
+        }
+
+        function openDMMessageActions(el) {
+            selectedDMMsgElem = el;
+            document.getElementById('dm-message-actions-modal').style.display = 'flex';
+        }
+        function closeDMMessageActions() {
+            document.getElementById('dm-message-actions-modal').style.display = 'none';
+        }
+
+        function openDMEditFromActions() {
+            if (!selectedDMMsgElem) return;
+            document.getElementById('edit-message-input').value = selectedDMMsgElem.dataset.text || '';
+            window.editingDMMessage = true;
+            document.getElementById('edit-message-modal').style.display = 'flex';
+            closeDMMessageActions();
+            setTimeout(() => document.getElementById('edit-message-input').focus(), 50);
+        }
+
+        async function deleteDMFromActions() {
+            if (!selectedDMMsgElem || !window.currentDMPartner || !socket) return;
+            const idToken = await getIdTokenSafe();
+            if (!idToken) return;
+            socket.emit('dm-delete-message', { withUsername: window.currentDMPartner, msgId: selectedDMMsgElem.dataset.id, idToken });
+            closeDMMessageActions();
         }
 
         async function markDMRead(withUsername) {
@@ -2419,6 +2608,26 @@
                     el.textContent = '✓✓';
                     el.style.color = '#00c9ff';
                 });
+            });
+
+            socket.on('dm-message-deleted', ({ msgId }) => {
+                const target = document.querySelector(`#dm-box [data-id="${msgId}"]`);
+                if (!target) return;
+                target.innerHTML = `<i style="color: #94a3b8;">(This message was deleted)</i>`;
+                target.style.cursor = 'default';
+                target.replaceWith(target.cloneNode(true)); // drop click listeners on the deleted bubble
+            });
+
+            socket.on('dm-message-edited', ({ msgId, newText }) => {
+                const target = document.querySelector(`#dm-box [data-id="${msgId}"]`);
+                if (!target) return;
+                target.dataset.text = newText;
+                const textEl = target.querySelector('.text-content');
+                if (textEl) textEl.textContent = newText;
+                if (!target.querySelector('.dm-edited-tag')) {
+                    const strongEl = target.querySelector('strong');
+                    if (strongEl) strongEl.insertAdjacentHTML('afterend', ` <span class="dm-edited-tag" style="font-size:10px; color:#94a3b8;">(edited)</span>`);
+                }
             });
 
             socket.on('dm-history', ({ withUsername, messages, hasMore }) => {
