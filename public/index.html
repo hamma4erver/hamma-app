@@ -2455,6 +2455,7 @@
             document.getElementById('dm-screen').style.display = 'flex';
             document.getElementById('dm-message-input').focus();
             loadDMHistory(username);
+            if (socket) socket.emit('dm-view-open', { withUsername: username });
         }
 
         async function loadDMHistory(username, before) {
@@ -2475,7 +2476,21 @@
             window.currentDMPartner = null;
             document.getElementById('dm-screen').style.display = 'none';
             document.getElementById('chat-screen').style.display = 'flex';
+            if (socket) socket.emit('dm-view-close');
         }
+
+        // Tell the server whenever this tab goes to the background or comes
+        // back — needed so a push notification still fires if the DM screen
+        // is open but the tab/app isn't actually in front of the person.
+        document.addEventListener('visibilitychange', () => {
+            if (socket) socket.emit('dm-visibility', { focused: !document.hidden });
+        });
+        window.addEventListener('blur', () => {
+            if (socket) socket.emit('dm-visibility', { focused: false });
+        });
+        window.addEventListener('focus', () => {
+            if (socket) socket.emit('dm-visibility', { focused: !document.hidden });
+        });
 
         let selectedDMMsgElem = null;
         window.editingDMMessage = false;
