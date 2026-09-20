@@ -257,7 +257,7 @@ app.post('/api/gemini', async (req, res) => {
                 'Authorization': `Bearer ${apiKey}`
             },
             body: JSON.stringify({
-                model: "llama-3.1-8b-instant",
+                model: "openai/gpt-oss-20b",
                 messages: [{ role: "user", content: prompt }]
             })
         });
@@ -483,6 +483,21 @@ io.on('connection', (socket) => {
         }
 
         io.emit('delete-message', { msgId, staffDeleted: isStaff && !isSelf });
+    });
+
+    // Edit a message — self only (no staff override; editing someone else's
+    // words isn't something even admins get to do). Same ephemeral trust
+    // model as delete-message: the client tells us which message and who
+    // sent it, we just confirm the requester's identity matches.
+    socket.on('edit-message', async ({ msgId, idToken, messageSender, newText }) => {
+        const { name } = await verifyRole(idToken);
+        const isSelf = !!messageSender && !!name && messageSender.toLowerCase() === name.toLowerCase();
+        if (!isSelf || !newText || !newText.trim()) return;
+        if (isRateLimited(socket.id)) {
+            return socket.emit('system-msg', { text: "You're doing that too fast — slow down a bit.", kind: 'error' });
+        }
+
+        io.emit('edit-message', { msgId, newText: newText.trim() });
     });
 
     // Timed mute (minutes: 5 / 15 / 30 / 60) — admins AND moderators are allowed
@@ -788,9 +803,11 @@ io.on('connection', (socket) => {
     // Persisted in Firestore (unlike the global chat, which stays live-only
     // by request) so history survives reconnects and page reloads.
     // ==================================================
-    socket.on('dm-message', async ({ to, text, idToken }) => {
+    socket.on('dm-message', async ({ to, text, idToken, mediaType, mediaUrl }) => {
         const from = socketUsers.get(socket.id);
-        if (!from || !to || !text || !text.trim()) return;
+        const hasText = !!text && !!text.trim();
+        const hasMedia = !!mediaType && !!mediaUrl;
+        if (!from || !to || (!hasText && !hasMedia)) return;
         if (isRateLimited(socket.id)) {
             return socket.emit('dm-system-msg', { text: "You're sending messages too fast — slow down a bit.", kind: 'error' });
         }
@@ -807,10 +824,14 @@ io.on('connection', (socket) => {
             id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             from,
             to,
-            text: text.trim(),
+            text: hasText ? text.trim() : '',
             timestamp: Date.now(),
             read: false
         };
+        if (hasMedia) {
+            payload.mediaType = mediaType;
+            payload.mediaUrl = mediaUrl;
+        }
 
         // Deliver to every open tab/device the recipient has
         const targetSockets = usernameSockets.get(to);
@@ -822,7 +843,8 @@ io.on('connection', (socket) => {
             }
             sendPushToUser(to, {
                 title: from,
-                body: payload.text.length > 120 ? payload.text.slice(0, 117) + '…' : payload.text,
+                body: hasMedia ? `Sent ${mediaType === 'audio' ? 'a voice message' : mediaType === 'video' ? 'a video' : 'a photo'}` :
+                    (payload.text.length > 120 ? payload.text.slice(0, 117) + '…' : payload.text),
                 tag: `dm-${from}`,
                 url: '/'
             });
@@ -838,11 +860,62 @@ io.on('connection', (socket) => {
             const me = await verifyUser(idToken);
             if (me.ok && me.name === from) {
                 const convId = [from, to].sort().join('__');
-                db.collection('directMessages').doc(convId).collection('messages').add({
-                    from, to, text: payload.text, timestamp: payload.timestamp, read: false
-                }).catch(e => console.error('DM persist failed:', e.message));
+                const doc = { id: payload.id, from, to, text: payload.text, timestamp: payload.timestamp, read: false };
+                if (hasMedia) { doc.mediaType = mediaType; doc.mediaUrl = mediaUrl; }
+                db.collection('directMessages').doc(convId).collection('messages').add(doc)
+                    .catch(e => console.error('DM persist failed:', e.message));
             }
         }
+    });
+
+    // Delete a DM message — sender only, removes it for both sides.
+    socket.on('dm-delete-message', async ({ withUsername, msgId, idToken }) => {
+        const me = await verifyUser(idToken);
+        if (!me.ok || !withUsername || !msgId || !db) return;
+        const convId = [me.name, withUsername].sort().join('__');
+        try {
+            const snap = await db.collection('directMessages').doc(convId).collection('messages')
+                .where('id', '==', msgId).limit(1).get();
+            if (!snap.empty && snap.docs[0].data().from === me.name) {
+                await snap.docs[0].ref.delete();
+            } else {
+                return; // not found, or not the owner — don't notify either side
+            }
+        } catch (e) {
+            console.error('DM message delete failed:', e.message);
+            return;
+        }
+
+        const targetSockets = usernameSockets.get(withUsername);
+        if (targetSockets) targetSockets.forEach(id => io.to(id).emit('dm-message-deleted', { msgId, by: me.name }));
+        const senderSockets = usernameSockets.get(me.name);
+        if (senderSockets) senderSockets.forEach(id => io.to(id).emit('dm-message-deleted', { msgId, by: me.name }));
+    });
+
+    // Edit a DM message — self only, updates Firestore and tells both sides live.
+    socket.on('dm-edit-message', async ({ withUsername, msgId, idToken, newText }) => {
+        const me = await verifyUser(idToken);
+        if (!me.ok || !withUsername || !msgId || !newText || !newText.trim() || !db) return;
+        if (isRateLimited(socket.id)) {
+            return socket.emit('dm-system-msg', { text: "You're doing that too fast — slow down a bit.", kind: 'error' });
+        }
+        const convId = [me.name, withUsername].sort().join('__');
+        const trimmed = newText.trim();
+        try {
+            const snap = await db.collection('directMessages').doc(convId).collection('messages')
+                .where('id', '==', msgId).limit(1).get();
+            if (snap.empty || snap.docs[0].data().from !== me.name) return;
+            await snap.docs[0].ref.update({ text: trimmed, edited: true });
+        } catch (e) {
+            console.error('DM message edit failed:', e.message);
+            return;
+        }
+
+        const payload = { msgId, newText: trimmed, by: me.name };
+        const targetSockets = usernameSockets.get(withUsername);
+        if (targetSockets) targetSockets.forEach(id => io.to(id).emit('dm-message-edited', payload));
+        const senderSockets = usernameSockets.get(me.name);
+        if (senderSockets) senderSockets.forEach(id => io.to(id).emit('dm-message-edited', payload));
     });
 
     // Marks every unread message FROM `withUsername` TO me as read, and lets
