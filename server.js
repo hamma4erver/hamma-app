@@ -1,1027 +1,915 @@
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const path = require('path');
-const admin = require('firebase-admin');
-const nodemailer = require('nodemailer');
-const webpush = require('web-push');
+/* =====================================================================
+   ملف الستايل — تم تنظيفه ودمج القواعد المكررة (نفس المظهر، كود أنظف)
+   ===================================================================== */
 
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
+/* ================= أساسيات عامة ================= */
+* { box-sizing: border-box; }
 
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
-
-const apiKey = process.env.GROQ_API_KEY;
-
-// ==================================================
-// Web Push (VAPID) — set VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY env vars on Render.
-// ==================================================
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
-if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
-    webpush.setVapidDetails('mailto:hamma@example.com', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-} else {
-    console.warn("⚠️ VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY are missing! Push notifications will not work.");
+html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent; /* بلا فلاش أبيض مزعج كي تلمس فالهاتف */
 }
 
-// ==================================================
-// Firebase Admin SDK initialization
-// FIREBASE_SERVICE_ACCOUNT must be the full service account JSON (as one string) in env vars
-// ==================================================
-if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
-    console.warn("⚠️ FIREBASE_SERVICE_ACCOUNT is missing! Admin actions will fail.");
-} else {
-    admin.initializeApp({
-        credential: admin.credential.cert(
-            JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
-        )
-    });
+body {
+    background: linear-gradient(135deg, #10101f, #131328, #0d1420, #151025);
+    background-size: 300% 300%;
+    animation: bgDrift 20s ease infinite;
+    color: white;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    height: calc(var(--real-vh, 1vh) * 100);
+    height: 100dvh;
+    margin: 0;
+    overflow: hidden;
+    direction: ltr;
+    -webkit-font-smoothing: antialiased;
 }
 
-const db = admin.apps.length ? admin.firestore() : null;
-
-// ==================================================
-// Email verification (6-digit codes)
-// Requires SMTP env vars: EMAIL_HOST, EMAIL_PORT, EMAIL_USER, EMAIL_PASS
-// (e.g. a Gmail App Password, or a service like Resend/Brevo/Mailgun SMTP)
-// ==================================================
-let mailer = null;
-if (process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-    mailer = nodemailer.createTransport({
-        host: process.env.EMAIL_HOST,
-        port: Number(process.env.EMAIL_PORT) || 587,
-        secure: Number(process.env.EMAIL_PORT) === 465,
-        auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS
-        }
-    });
-} else {
-    console.warn("⚠️ Email SMTP env vars are missing! Verification emails will not be sent.");
+@keyframes bgDrift {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
 }
 
-const verificationCodes = new Map(); // email -> { code, expiresAt }
-
-function generateCode() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+/* شريط تمرير رفيع وهادئ لأي عنصر قابل للتمرير فالتطبيق (Firefox) */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
 }
 
-app.post('/api/send-verification-code', async (req, res) => {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ success: false, message: 'Email is required.' });
-    if (!mailer) return res.status(500).json({ success: false, message: 'Email service is not configured on the server.' });
+/* ================= ستايل الـ LOGIN ================= */
+.login-container {
+    position: fixed;
+    top: 0; left: 0; width: 100%;
+    height: calc(var(--real-vh, 1vh) * 100);
+    height: 100dvh;
+    background: radial-gradient(circle at center, #0f0c20 0%, #030209 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+    overflow: hidden;
+}
 
-    const code = generateCode();
-    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
-    verificationCodes.set(email, { code, expiresAt });
+/* Ambient mouse-reactive background — a few soft, slow-drifting glowing
+   blobs behind the login card. Purely decorative, never blocks clicks. */
+.parallax-bg {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 0;
+}
+.parallax-blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.32;
+    will-change: transform;
+}
+.parallax-blob.blob-1 { width: 380px; height: 380px; background: #00c9ff; top: 8%;  left: 12%; }
+.parallax-blob.blob-2 { width: 320px; height: 320px; background: #92fe9d; bottom: 8%; right: 12%; }
+.parallax-blob.blob-3 { width: 260px; height: 260px; background: #7c3aed; top: 52%; left: 55%; }
 
-    try {
-        await mailer.sendMail({
-            from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
-            to: email,
-            subject: 'Your Hamma Chat verification code',
-            text: `Your verification code is: ${code}\nIt expires in 10 minutes.`,
-            html: `<p>Your verification code is:</p><h2 style="letter-spacing:6px;">${code}</h2><p>It expires in 10 minutes.</p>`
-        });
-        res.json({ success: true });
-    } catch (e) {
-        console.error("Failed to send verification email:", e.message);
-        res.status(500).json({ success: false, message: 'Failed to send verification email.' });
+.login-card {
+    position: relative;
+    z-index: 1;
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 30px;
+    border-radius: 24px;
+    width: 90%;
+    max-width: 360px;
+    text-align: center;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 25px rgba(0, 201, 255, 0.15);
+    animation: floatingCard 4s ease-in-out infinite alternate;
+}
+
+@keyframes floatingCard {
+    from { transform: translateY(0px); }
+    to { transform: translateY(-10px); }
+}
+
+.logo-area { position: relative; margin-bottom: 30px; }
+
+.glow-orb {
+    position: absolute;
+    top: -20px; left: 50%;
+    transform: translateX(-50%);
+    width: 80px; height: 80px;
+    background: #00f2fe;
+    filter: blur(40px);
+    border-radius: 50%;
+    opacity: 0.6;
+}
+
+.login-card h1 {
+    font-size: 28px;
+    color: #fff;
+    margin: 0;
+    letter-spacing: 2px;
+    background: linear-gradient(45deg, #00f2fe, #4facfe);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 20px rgba(0, 242, 254, 0.3);
+}
+
+.subtitle {
+    font-size: 11px;
+    color: #666;
+    letter-spacing: 3px;
+    margin-top: 5px;
+    text-transform: uppercase;
+}
+
+.input-group { position: relative; margin-bottom: 20px; }
+
+.input-icon {
+    position: absolute;
+    left: 15px; top: 50%;
+    transform: translateY(-50%);
+    color: #555;
+}
+
+.input-group input {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    padding: 14px 14px 14px 45px;
+    border-radius: 12px;
+    font-size: 15px;
+    transition: border-color 0.25s ease, background 0.25s ease, box-shadow 0.25s ease;
+}
+
+.input-group input:focus {
+    outline: none;
+    border-color: #00f2fe;
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: 0 0 15px rgba(0, 242, 254, 0.2);
+}
+
+/* ================= أزرار مشتركة ================= */
+.btn-primary, .btn-secondary {
+    width: 100%;
+    padding: 14px;
+    border-radius: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease, background 0.2s ease;
+    border: none;
+    margin-bottom: 12px;
+    font-size: 15px;
+}
+
+.btn-primary {
+    background: linear-gradient(45deg, #00f2fe, #4facfe);
+    color: white;
+    box-shadow: 0 4px 15px rgba(0, 242, 254, 0.3);
+}
+
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 242, 254, 0.5); }
+.btn-primary:active { transform: translateY(0); }
+
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.05);
+    color: #ccc;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.btn-secondary:hover { background: rgba(255, 255, 255, 0.08); }
+
+.divider {
+    display: flex;
+    align-items: center;
+    margin: 20px 0;
+    color: #444;
+    font-size: 10px;
+    letter-spacing: 1px;
+}
+
+.divider::before, .divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.05);
+    margin: 0 10px;
+}
+
+.social-login { display: flex; gap: 12px; }
+
+.social-btn {
+    flex: 1;
+    padding: 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    color: #fff;
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: background 0.2s ease;
+}
+.social-btn:hover { background: rgba(255, 255, 255, 0.06); }
+
+/* ================= ستايل الشات الرئيسي ================= */
+.main-layout { display: flex; width: 100vw; height: calc(var(--real-vh, 1vh) * 100); height: 100dvh; }
+
+/* Sidebar في الديسكتوب */
+.sidebar {
+    width: 70px;
+    background: #090913;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 20px;
+    gap: 15px;
+    z-index: 10;
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.bg-btn {
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid #222;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.bg-btn:hover { transform: scale(1.15); }
+
+/* حاوية الشات */
+.chat-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    height: 100%;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+    box-shadow: 0 0 25px rgba(0, 201, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.chat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    width: 100%;
+    margin-bottom: 15px;
+    padding: 5px 10px;
+    gap: 10px;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
+}
+
+.chat-title {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+    font-size: clamp(14px, 3.5vw, 22px);
+    color: #00f2fe;
+    text-shadow: 0 0 10px rgba(0, 242, 254, 0.5);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.user-badge {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    background: rgba(0, 242, 254, 0.1);
+    border: 1px solid rgba(0, 242, 254, 0.2);
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: clamp(12px, 3vw, 15px);
+    color: #00f2fe;
+}
+
+#user-display-tag { position: absolute; right: 15px; }
+
+#chat-box-wrapper {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 15px;
+}
+
+#chat-box {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-anchor: none;
+    scroll-behavior: smooth;
+    background: rgba(0, 0, 0, 0.4);
+    padding: 15px;
+    border-radius: 20px;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    flex-direction: column;
+}
+
+#chat-box::-webkit-scrollbar, .ai-chat-modal *::-webkit-scrollbar { width: 5px; }
+#chat-box::-webkit-scrollbar-thumb, .ai-chat-modal *::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+}
+
+/* الزر العائم "رسائل جديدة" — يظهر فقط إذا كان المستخدم طالع يقرا فوق
+   ويوصلوه رسائل جديدة، باش يقدر يدوس ويرجع تحت من غير ما الشات يسحبو
+   بالقوة وهو قاعد يقرا القديم */
+.new-msg-pill {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #00c9ff, #4facfe);
+    color: #041018;
+    font-weight: 700;
+    font-size: 12.5px;
+    border-radius: 999px;
+    cursor: pointer;
+    box-shadow: 0 4px 18px rgba(0, 201, 255, 0.5);
+    z-index: 5;
+    animation: msgFadeIn 0.25s ease;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.new-msg-pill:active { transform: translateX(-50%) scale(0.95); }
+
+/* ================= الرسائل — حجم صغير، أنيق، مريح للعين ================= */
+.msg {
+    position: relative;
+    margin-bottom: 8px;
+    padding: 8px 13px;
+    border-radius: 14px;
+    word-break: break-word;
+    max-width: 68%;
+    cursor: pointer;
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 1.45;
+    letter-spacing: 0.1px;
+    touch-action: pan-y;
+    transition: background 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 0.25s ease;
+    animation: msgFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes msgFadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.msg.swiping { transition: none !important; }
+
+.msg strong { font-weight: 600; }
+
+/* ميساجاتي أنا (تدرج بنفسجي غامق ومريح للعين) */
+.my-msg {
+    align-self: flex-end;
+    background: linear-gradient(135deg, #4e148c, #854dff);
+    color: white;
+    border-bottom-right-radius: 6px;
+    box-shadow: 0 2px 6px rgba(133, 77, 255, 0.2);
+}
+.my-msg:hover {
+    background: linear-gradient(135deg, #3c0d6e, #713be6);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(133, 77, 255, 0.28);
+}
+
+/* ميساجات صحابي (تدرج أزرق/سيان هادئ ورائع للعين) */
+.other-msg {
+    align-self: flex-start;
+    background: linear-gradient(135deg, #0082c8, #00c9ff);
+    color: white;
+    border-bottom-left-radius: 6px;
+    box-shadow: 0 2px 6px rgba(0, 201, 255, 0.2);
+}
+.other-msg:hover {
+    background: linear-gradient(135deg, #006fa1, #00b4e6);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(0, 201, 255, 0.28);
+}
+
+/* سحب الرسالة (Swipe) للرد عليها كيما في إنستغرام */
+.swipe-reply-icon {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0;
+    color: #00c9ff;
+    font-size: 15px;
+    pointer-events: none;
+    transition: opacity 0.1s ease;
+}
+
+/* اقتباس الرد فوق الرسالة — قابل للنقر للقفز للرسالة الأصلية */
+.reply-quote {
+    font-size: 12px;
+    opacity: 0.85;
+    border-left: 2px solid rgba(255, 255, 255, 0.5);
+    padding: 3px 8px;
+    margin-bottom: 4px;
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    cursor: pointer;
+    transition: background 0.2s ease, opacity 0.2s ease;
+}
+.reply-quote:hover { opacity: 1; background: rgba(0, 0, 0, 0.25); }
+
+/* توهج ناعم ومريح للعين كي تكبس على الاقتباس باش يوريك الرسالة الأصلية */
+@keyframes highlightPulse {
+    0%   { box-shadow: 0 0 0 0 rgba(0, 201, 255, 0.45); }
+    70%  { box-shadow: 0 0 0 9px rgba(0, 201, 255, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(0, 201, 255, 0); }
+}
+.msg.highlight-pulse { animation: highlightPulse 1.2s ease-out; }
+
+/* شريط معاينة الرد فوق مربع الكتابة */
+#reply-preview-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    border-radius: 12px;
+    background: rgba(0, 201, 255, 0.08);
+    border: 1px solid rgba(0, 201, 255, 0.3);
+    font-size: 13px;
+}
+.reply-preview-icon { color: #00c9ff; flex-shrink: 0; }
+.reply-preview-content { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+.reply-preview-content strong { color: #00c9ff; font-size: 12px; }
+.reply-preview-content span {
+    color: #cbd5e1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.reply-preview-cancel {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    font-size: 14px;
+    flex-shrink: 0;
+    transition: color 0.2s ease;
+}
+.reply-preview-cancel:hover { color: #e2e8f0; }
+
+/* زر مسح الشات وهو في فترة الانتظار (cooldown) بالنسبة للموديراتور */
+#btn-clear-chat.on-cooldown { filter: grayscale(0.6); }
+
+.hint { font-size: 10px; color: rgba(255, 255, 255, 0.7); display: block; margin-top: 4px; }
+
+.translated-text {
+    color: #fff;
+    font-weight: bold;
+    display: block;
+    margin-top: 6px;
+    direction: rtl;
+    text-align: left;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 6px;
+    border-radius: 8px;
+}
+
+/* ================= مربع الكتابة ================= */
+.input-area {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    flex-shrink: 0;
+}
+
+/* صف أزرار الإرفاق/الملصقات/الصوت — فوق بار الكتابة، على اليسار */
+.media-actions-row {
+    display: flex;
+    justify-content: flex-start;
+    gap: 8px;
+    margin-bottom: 8px;
+    flex-shrink: 0;
+}
+
+/* أزرار الإرفاق/الملصقات/الصوت بجانب مربع الكتابة */
+.icon-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #cbd5e1;
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    border-radius: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
+}
+.icon-btn:hover { background: rgba(0, 242, 254, 0.12); color: #00f2fe; }
+.icon-btn:active { transform: scale(0.94); }
+#btn-voice.recording { background: #e63946; color: #fff; animation: micPulse 1s ease-in-out infinite; }
+@keyframes micPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(230, 57, 70, 0.5); }
+    50% { box-shadow: 0 0 0 8px rgba(230, 57, 70, 0); }
+}
+
+/* لوحة الملصقات (Stickers) */
+#sticker-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 10px;
+    margin-bottom: 8px;
+    max-height: 160px;
+    overflow-y: auto;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+}
+.sticker-option {
+    background: none;
+    border: none;
+    font-size: 26px;
+    line-height: 1;
+    padding: 6px;
+    cursor: pointer;
+    border-radius: 10px;
+    transition: background 0.15s ease, transform 0.15s ease;
+}
+.sticker-option:hover { background: rgba(0, 242, 254, 0.12); transform: scale(1.15); }
+
+/* شريط تسجيل الصوت */
+#voice-recording-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    margin-bottom: 8px;
+    border-radius: 12px;
+    flex-shrink: 0;
+    background: rgba(230, 57, 70, 0.08);
+    border: 1px solid rgba(230, 57, 70, 0.3);
+    font-size: 13px;
+    color: #f8d7da;
+}
+.recording-dot { color: #e63946; animation: micPulse 1s ease-in-out infinite; }
+#voice-recording-bar span { flex: 1; }
+#voice-recording-bar button {
+    background: none;
+    border: none;
+    color: #f8d7da;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+/* شريط تقدم رفع الصور/الفيديوهات */
+#upload-progress-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    margin-bottom: 8px;
+    border-radius: 12px;
+    flex-shrink: 0;
+    background: rgba(0, 201, 255, 0.08);
+    border: 1px solid rgba(0, 201, 255, 0.3);
+    font-size: 12px;
+    color: #cbd5e1;
+}
+.upload-progress-track {
+    flex: 1;
+    height: 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+}
+.upload-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #00c9ff, #92fe9d);
+    transition: width 0.2s ease;
+}
+
+/* رسائل الوسائط داخل الشات: صور/فيديو/صوت/ملصقات */
+.msg-media { padding: 6px; }
+.chat-media-img, .chat-media-video {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: min(220px, 60vw);
+    max-height: min(260px, 40vh);
+    object-fit: cover;
+    border-radius: 12px;
+    cursor: pointer;
+}
+.voice-msg { display: flex; align-items: center; gap: 8px; padding: 4px 6px; }
+.voice-msg audio { height: 32px; max-width: 200px; }
+.sticker-emoji {
+    display: block;
+    font-size: 52px;
+    line-height: 1;
+    padding: 4px;
+}
+.msg.msg-media.my-msg .sticker-emoji,
+.msg.msg-media.other-msg .sticker-emoji {
+    background: none;
+}
+/* الملصقات تبان بلا فقاعة ملونة، كيف تيليجرام/واتساب */
+.msg-sticker {
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0;
+}
+
+input {
+    background: #090915;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: white;
+    padding: 14px;
+    border-radius: 12px;
+    font-size: 16px;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+input:focus {
+    outline: none;
+    border-color: #00f2fe;
+    box-shadow: 0 0 12px rgba(0, 242, 254, 0.18);
+}
+
+#message { flex: 1; }
+
+.send-btn {
+    background: linear-gradient(45deg, #00f2fe, #4facfe);
+    border: none;
+    color: white;
+    padding: 0 24px;
+    border-radius: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0, 242, 254, 0.3);
+    transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+.send-btn:hover { box-shadow: 0 6px 18px rgba(0, 242, 254, 0.45); }
+.send-btn:active { transform: scale(0.96); }
+
+/* ================= زر فقاعة الـ AI ونافذتها ================= */
+.ai-btn {
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    cursor: pointer;
+    background: linear-gradient(135deg, #667eea, #764ba2); /* بنفسجي هادئ ومريح للعين */
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-size: 10px;
+    font-weight: bold;
+    box-shadow: 0 4px 15px rgba(118, 75, 162, 0.4);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: aiPulse 2.8s ease-in-out infinite alternate; /* تأثير نبض هادئ */
+}
+.ai-btn:hover { transform: scale(1.15); }
+
+@keyframes aiPulse {
+    0%   { box-shadow: 0 0 6px rgba(118, 75, 162, 0.4); }
+    100% { box-shadow: 0 0 14px rgba(118, 75, 162, 0.7); }
+}
+
+.ai-chat-modal {
+    position: fixed;
+    bottom: 85px;
+    left: 85px; /* تفتح بجانب السايدبار مباشرة */
+    width: 320px;
+    height: 450px;
+    background: rgba(10, 10, 25, 0.95);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    display: none; /* تظهر فقط عند النقر */
+    flex-direction: column;
+    padding: 15px;
+    z-index: 99;
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6), 0 0 25px rgba(0, 201, 255, 0.15);
+    animation: aiSlideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes aiSlideUp {
+    from { opacity: 0; transform: translateY(15px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ================= شارة الأدمن واسم قوس قزح ================= */
+.admin-badge-img {
+    height: 1.3em;
+    width: auto;
+    max-width: 32px;
+    padding: 1px 4px;
+    background: #000;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    object-fit: contain;
+    vertical-align: middle;
+    margin-left: 5px;
+    box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
+    display: inline-block;
+}
+
+.rainbow-admin-name {
+    background: linear-gradient(270deg, #00c9ff, #92fe9d, #ffd700, #ff758c);
+    background-size: 800% 800%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: smoothRainbow 8s ease infinite;
+    font-weight: bold;
+}
+
+@keyframes smoothRainbow {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* ================= نوافذ منبثقة (Modals) ================= */
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(10px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    opacity: 0;
+    transition: opacity 0.28s ease;
+}
+.modal-overlay.modal-visible { opacity: 1; }
+
+.modal-card {
+    background: rgba(18, 22, 36, 0.95);
+    border: 1px solid rgba(0, 201, 255, 0.3);
+    box-shadow: 0 0 35px rgba(0, 201, 255, 0.25);
+    border-radius: 20px;
+    padding: 25px;
+    max-width: 360px;
+    width: 85%;
+    text-align: center;
+    color: #ffffff;
+    transform: translateY(28px) scale(0.94);
+    opacity: 0;
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
+}
+.modal-overlay.modal-visible .modal-card {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+}
+.modal-card h3 { color: #00c9ff; margin-bottom: 10px; font-size: 20px; }
+.modal-card p { font-size: 14px; color: #cbd5e1; line-height: 1.5; margin-bottom: 20px; }
+
+.modal-buttons { display: flex; gap: 12px; justify-content: center; }
+.modal-btn {
+    flex: 1;
+    padding: 10px 18px;
+    border-radius: 12px;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+}
+.modal-btn:hover { transform: translateY(-1px); }
+.modal-btn.confirm { background: linear-gradient(135deg, #00c9ff, #92fe9d); color: #000; }
+.modal-btn.cancel { background: rgba(255, 255, 255, 0.1); color: #fff; border: 1px solid rgba(255, 255, 255, 0.2); }
+
+/* ================= تأثير التحميل للأزرار ================= */
+.btn-loading { opacity: 0.7; pointer-events: none; position: relative; }
+.fa-spin { animation: fa-spin 1s infinite linear; }
+@keyframes fa-spin {
+    0%   { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* =====================================================================
+   التجاوب مع الهواتف — بلوك واحد نظيف بدل 3 بلوكات مكررة
+   ===================================================================== */
+@media (max-width: 768px) {
+    html { height: 100%; }
+
+    body {
+        height: 100vh;
+        height: -webkit-fill-available;
+        height: 100dvh;
+        height: calc(var(--real-vh, 1vh) * 100);
+        overflow: hidden;
+        position: fixed;
+        width: 100%;
     }
-});
 
-app.post('/api/verify-code', async (req, res) => {
-    const { email, code } = req.body;
-    if (!email || !code) return res.status(400).json({ success: false, message: 'Email and code are required.' });
-
-    const entry = verificationCodes.get(email);
-    if (!entry) return res.status(400).json({ success: false, message: 'No code was sent to this email, or it already expired.' });
-    if (Date.now() > entry.expiresAt) {
-        verificationCodes.delete(email);
-        return res.status(400).json({ success: false, message: 'This code has expired. Please request a new one.' });
-    }
-    if (entry.code !== String(code).trim()) {
-        return res.status(400).json({ success: false, message: 'Incorrect code.' });
+    .main-layout {
+        flex-direction: column;
+        height: 100%;
+        padding: 8px;
+        padding-bottom: max(10px, env(safe-area-inset-bottom));
     }
 
-    verificationCodes.delete(email);
+    .sidebar {
+        flex-direction: row;
+        width: 100%;
+        height: auto;
+        padding: 6px;
+        justify-content: center;
+        gap: 12px;
+        flex-shrink: 0;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .sidebar::-webkit-scrollbar { display: none; }
 
-    // Mark the Firebase account as verified, if it exists
-    try {
-        if (db) {
-            const userRecord = await admin.auth().getUserByEmail(email);
-            await admin.auth().updateUser(userRecord.uid, { emailVerified: true });
-        }
-    } catch (e) {
-        console.warn("Could not mark Firebase user as verified:", e.message);
+    .bg-btn, .ai-btn { width: 28px; height: 28px; flex-shrink: 0; }
+    .ai-btn { font-size: 8px; }
+
+    .chat-container {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        margin: 0;
+        padding: 10px;
+        border-radius: 16px;
     }
 
-    res.json({ success: true });
-});
-
-// ==================================================
-// Verifies a Firebase ID token and returns the caller's effective role.
-// role is one of: "admin", "moderator", or null (regular user / invalid token)
-// The owner accounts are always treated as "admin".
-// ==================================================
-const OWNER_NAMES = ["hamma", "hamma admin", "othmani hiba"];
-
-async function verifyRole(idToken) {
-    if (!idToken || !db) return { ok: false, role: null };
-    try {
-        const decoded = await admin.auth().verifyIdToken(idToken);
-        const userDoc = await db.collection('users').doc(decoded.uid).get();
-        const dbRole = userDoc.exists ? userDoc.data().role : null;
-        const isOwner = decoded.name && OWNER_NAMES.includes(decoded.name.toLowerCase());
-
-        let role = null;
-        if (isOwner || dbRole === "admin") role = "admin";
-        else if (dbRole === "moderator") role = "moderator";
-
-        return { ok: role !== null, role, uid: decoded.uid, name: decoded.name, isOwner };
-    } catch (e) {
-        console.error("Token verification failed:", e.message);
-        return { ok: false, role: null };
+    .chat-header { margin-bottom: 10px; }
+    .chat-title {
+        position: static;      /* was absolutely centered — collided with the username on narrow screens */
+        left: auto;
+        transform: none;
+        text-align: left;
+        flex: 1;
+        min-width: 0;          /* lets text-overflow ellipsis actually kick in inside a flex item */
+        font-size: 18px;
     }
-}
-
-// Backwards-compatible helper: true if the caller is admin OR moderator
-async function verifyAdmin(idToken) {
-    const { ok, role, uid, name } = await verifyRole(idToken);
-    return { ok, role, uid, name };
-}
-
-// Verifies a Firebase ID token for ANY logged-in user (no role required) —
-// used by the friend-request system, which guests can't take part in
-// since it needs a persistent account.
-async function verifyUser(idToken) {
-    if (!idToken || !db) return { ok: false };
-    try {
-        const decoded = await admin.auth().verifyIdToken(idToken);
-        if (!decoded.name) return { ok: false };
-        return { ok: true, uid: decoded.uid, name: decoded.name };
-    } catch (e) {
-        return { ok: false };
-    }
-}
-
-// Exact-match lookup (by username or displayName) — used for both role
-// checks and the friend-search feature.
-async function findUserByUsername(username) {
-    if (!username || !db) return null;
-    try {
-        let snap = await db.collection('users').where('username', '==', username).limit(1).get();
-        if (snap.empty) snap = await db.collection('users').where('displayName', '==', username).limit(1).get();
-        if (snap.empty) return null;
-        const data = snap.docs[0].data();
-        return { uid: snap.docs[0].id, username: data.username || data.displayName, lastSeen: data.lastSeen || null };
-    } catch (e) {
-        console.error("User lookup failed:", e.message);
-        return null;
-    }
-}
-
-// Sends a web push notification to a username's saved subscription (if any).
-// Silently does nothing if push isn't configured or the user never subscribed.
-async function sendPushToUser(username, payload) {
-    if (!db || !VAPID_PUBLIC_KEY) return;
-    try {
-        let snap = await db.collection('users').where('username', '==', username).limit(1).get();
-        if (snap.empty) snap = await db.collection('users').where('displayName', '==', username).limit(1).get();
-        if (snap.empty) return;
-        const sub = snap.docs[0].data().pushSubscription;
-        if (!sub) return;
-        await webpush.sendNotification(sub, JSON.stringify(payload)).catch(err => {
-            if (err.statusCode === 410 || err.statusCode === 404) {
-                // Subscription expired or was revoked by the browser — clean it up
-                snap.docs[0].ref.update({ pushSubscription: admin.firestore.FieldValue.delete() }).catch(() => {});
-            } else {
-                console.error('Push send failed:', err.message);
-            }
-        });
-    } catch (e) {
-        console.error('sendPushToUser failed:', e.message);
-    }
-}
-
-// Save a push subscription for the logged-in user (called from the browser
-// after they grant notification permission).
-app.post('/api/save-push-subscription', async (req, res) => {
-    const { idToken, subscription } = req.body;
-    const me = await verifyUser(idToken);
-    if (!me.ok || !subscription || !db) return res.status(401).json({ ok: false });
-    try {
-        await db.collection('users').doc(me.uid).set({ pushSubscription: subscription }, { merge: true });
-        res.json({ ok: true });
-    } catch (e) {
-        console.error("Saving push subscription failed:", e.message);
-        res.status(500).json({ ok: false });
-    }
-});
-
-app.get('/vapid-public-key', (req, res) => {
-    res.json({ publicKey: VAPID_PUBLIC_KEY || '' });
-});
-
-// Looks up the role of a chat username (by Firestore `username`/`displayName` field),
-// so staff-protection rules (e.g. "admins can't ban other admins") can be enforced
-// even though the chat itself only knows people by their display name.
-async function getRoleByUsername(username) {
-    if (!username) return null;
-    if (OWNER_NAMES.includes(username.toLowerCase())) return "admin";
-    if (!db) return null;
-    try {
-        let snap = await db.collection('users').where('username', '==', username).limit(1).get();
-        if (snap.empty) snap = await db.collection('users').where('displayName', '==', username).limit(1).get();
-        if (snap.empty) return null;
-        const role = snap.docs[0].data().role;
-        return role === "admin" ? "admin" : (role === "moderator" ? "moderator" : "user");
-    } catch (e) {
-        console.error("Role lookup failed:", e.message);
-        return null;
-    }
-}
-
-// AI chat endpoint
-app.post('/api/gemini', async (req, res) => {
-    const { prompt } = req.body;
-    if (!apiKey) return res.json({ reply: "GROQ_API_KEY is missing on Render." });
-
-    try {
-        const apiResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-                model: "openai/gpt-oss-20b",
-                messages: [{ role: "user", content: prompt }]
-            })
-        });
-
-        const data = await apiResponse.json();
-        if (data.choices && data.choices[0] && data.choices[0].message) {
-            res.json({ reply: data.choices[0].message.content });
-        } else if (data.error) {
-            res.json({ reply: `Groq Error: ${data.error.message}` });
-        } else {
-            res.json({ reply: "Received an invalid response structure." });
-        }
-    } catch (error) {
-        res.json({ reply: `Fetch Error: ${error.message}` });
-    }
-});
-
-// ==================================================
-// Moderation state: timed mutes, permanent bans, chat lock, pinned message
-// ==================================================
-const mutedUsers = new Map();     // username -> expiresAt (timestamp ms)
-const muteTimers = new Map();     // username -> setTimeout handle
-const blockedUsers = new Set();   // username -> permanently banned
-const socketUsers = new Map();    // socket.id -> username
-const usernameSockets = new Map(); // username -> Set of socket.id (supports multiple tabs/devices)
-let onlineUsersCount = 0;
-
-// -- DM helpers --------------------------------------------------
-function addUsernameSocket(username, socketId) {
-    if (!usernameSockets.has(username)) usernameSockets.set(username, new Set());
-    usernameSockets.get(username).add(socketId);
-}
-function removeUsernameSocket(username, socketId) {
-    const set = usernameSockets.get(username);
-    if (!set) return;
-    set.delete(socketId);
-    if (set.size === 0) usernameSockets.delete(username);
-}
-function isUserOnline(username) {
-    return usernameSockets.has(username) && usernameSockets.get(username).size > 0;
-}
-
-// -- Basic rate limiting (anti-spam) ------------------------------
-// Sliding window per socket: max MESSAGES within WINDOW_MS.
-const RATE_LIMIT_MAX = 8;
-const RATE_LIMIT_WINDOW_MS = 10000;
-const rateLimitLog = new Map(); // socket.id -> array of timestamps
-
-// -- DM presence (for "should we send a push?" decisions) ---------
-// socket.id -> { partner: username|null, focused: boolean }
-// A push is skipped only when the recipient has that EXACT conversation
-// open AND their tab/app is in the foreground — same rule WhatsApp/Messenger
-// use, so being merely "online" elsewhere no longer silences notifications.
-const activeDMView = new Map();
-function isUserActivelyViewingDM(username, partnerUsername) {
-    const sockets = usernameSockets.get(username);
-    if (!sockets) return false;
-    for (const id of sockets) {
-        const view = activeDMView.get(id);
-        if (view && view.partner === partnerUsername && view.focused) return true;
-    }
-    return false;
-}
-function isRateLimited(socketId) {
-    const now = Date.now();
-    const arr = (rateLimitLog.get(socketId) || []).filter(t => now - t < RATE_LIMIT_WINDOW_MS);
-    arr.push(now);
-    rateLimitLog.set(socketId, arr);
-    return arr.length > RATE_LIMIT_MAX;
-}
-let chatLocked = false;           // when true, only admins/mods can send messages
-let pinnedMessage = null;         // { id, user, text } or null
-const modClearCooldowns = new Map(); // uid -> next-allowed-timestamp (ms) for moderators clearing chat
-const CLEAR_COOLDOWN_MS = 5 * 60 * 1000;
-const modUnmuteCooldowns = new Map(); // uid -> next-allowed-timestamp (ms) for moderators unmuting someone
-const UNMUTE_COOLDOWN_MS = 5 * 60 * 1000;
-
-function getStatusLists() {
-    // Clean up any expired mutes before broadcasting
-    const now = Date.now();
-    for (const [user, expiresAt] of mutedUsers.entries()) {
-        if (expiresAt <= now) mutedUsers.delete(user);
-    }
-    return {
-        muted: [...mutedUsers.entries()].map(([username, expiresAt]) => ({ username, expiresAt })),
-        banned: [...blockedUsers],
-        // The real source of truth for "online" — an actual live socket connection,
-        // not a Firestore flag that mobile browsers often fail to clear on close/backgrounding.
-        online: [...new Set(socketUsers.values())]
-    };
-}
-
-function broadcastStatusLists() {
-    io.emit('status-lists', getStatusLists());
-}
-
-function scheduleAutoUnmute(username, ms) {
-    if (muteTimers.has(username)) clearTimeout(muteTimers.get(username));
-    const timer = setTimeout(() => {
-        mutedUsers.delete(username);
-        muteTimers.delete(username);
-        io.emit('system-msg', { text: `Mute expired for: ${username}`, kind: 'info' });
-        broadcastStatusLists();
-    }, ms);
-    muteTimers.set(username, timer);
-}
-
-function performChatClear(by) {
-    pinnedMessage = null;
-    io.emit('chat-cleared', { by: by || 'Admin' });
-    io.emit('pinned-message-update', null);
-}
-
-// Kicks every socket registered under this username (used on ban)
-function kickUserSockets(username, reason) {
-    for (const [socketId, uname] of socketUsers.entries()) {
-        if (uname === username) {
-            const s = io.sockets.sockets.get(socketId);
-            if (s) {
-                s.emit('you-are-banned', { reason });
-                s.disconnect(true);
-            }
-            socketUsers.delete(socketId);
-        }
-    }
-}
-
-io.on('connection', (socket) => {
-    onlineUsersCount++;
-    io.emit('update-online', onlineUsersCount);
-
-    // Send current state to the newly connected client
-    socket.emit('status-lists', getStatusLists());
-    socket.emit('chat-lock-status', { locked: chatLocked });
-    socket.emit('pinned-message-update', pinnedMessage);
-
-    // Client registers its username right after entering the chat,
-    // so bans can be enforced immediately even for already-connected users
-    socket.on('register-user', ({ username }) => {
-        if (!username) return;
-        if (blockedUsers.has(username)) {
-            socket.emit('you-are-banned', { reason: 'You are banned from this chat.' });
-            socket.disconnect(true);
-            return;
-        }
-        socketUsers.set(socket.id, username);
-        addUsernameSocket(username, socket.id);
-        broadcastStatusLists();
-    });
-
-    // Fired when a logged-in user changes their username from the profile panel.
-    // Without this, renaming was an easy way to escape an active mute/ban
-    // (the moderation state is keyed by username), so we carry the
-    // mute/ban status over from the old name to the new one.
-    socket.on('rename-user', async ({ oldUsername, newUsername, idToken }) => {
-        if (!oldUsername || !newUsername || oldUsername === newUsername) return;
-        try {
-            if (!idToken || !db) return; // require a logged-in user
-            await admin.auth().verifyIdToken(idToken);
-        } catch (e) {
-            return; // invalid token, ignore silently
-        }
-
-        if (blockedUsers.has(oldUsername)) {
-            blockedUsers.delete(oldUsername);
-            blockedUsers.add(newUsername);
-        }
-
-        if (mutedUsers.has(oldUsername)) {
-            const expiresAt = mutedUsers.get(oldUsername);
-            mutedUsers.delete(oldUsername);
-            mutedUsers.set(newUsername, expiresAt);
-            const remainingMs = expiresAt - Date.now();
-            if (remainingMs > 0) scheduleAutoUnmute(newUsername, remainingMs);
-        }
-
-        removeUsernameSocket(oldUsername, socket.id);
-        socketUsers.set(socket.id, newUsername);
-        addUsernameSocket(newUsername, socket.id);
-        broadcastStatusLists();
-
-        if (blockedUsers.has(newUsername)) {
-            kickUserSockets(newUsername, 'You have been banned by an admin.');
-        }
-    });
-
-    socket.on('chat-message', async (data) => {
-        if (isRateLimited(socket.id)) {
-            return socket.emit('system-msg', { text: "You're sending messages too fast — slow down a bit.", kind: 'error' });
-        }
-        if (blockedUsers.has(data.user)) {
-            return socket.emit('system-msg', { text: 'You are banned from sending messages.', kind: 'error' });
-        }
-        const expiresAt = mutedUsers.get(data.user);
-        if (expiresAt && expiresAt > Date.now()) {
-            const remaining = Math.ceil((expiresAt - Date.now()) / 60000);
-            return socket.emit('system-msg', { text: `You are muted, try again in ${remaining} minute(s).`, kind: 'error' });
-        }
-        if (chatLocked) {
-            const { ok } = await verifyAdmin(data.idToken);
-            if (!ok) {
-                return socket.emit('system-msg', { text: 'Chat is currently locked by an admin.', kind: 'error' });
-            }
-        }
-        io.emit('chat-message', data);
-    });
-
-    // Relay typing status to everyone else (Instagram-style "X is typing…" indicator)
-    socket.on('typing', ({ username }) => {
-        if (!username) return;
-        socket.broadcast.emit('user-typing', { username });
-    });
-
-    socket.on('stop-typing', ({ username }) => {
-        if (!username) return;
-        socket.broadcast.emit('user-stop-typing', { username });
-    });
-
-    // Delete a message — the message's own sender can delete it, and so can
-    // an admin or moderator (same staff tier that can already mute/pin).
-    // Regular viewers are only told a message was "deleted by an admin" when staff did it
-    // (never which admin/moderator), so the client can tell that apart from a self-delete.
-    // Exception: only Hamma admin / Othmani Hiba (the owners) can delete another admin's message —
-    // a regular admin/moderator can't touch what an admin wrote.
-    socket.on('delete-message', async ({ msgId, idToken, messageSender }) => {
-        const { role, name, isOwner } = await verifyRole(idToken);
-        const isStaff = role === 'admin' || role === 'moderator';
-        const isSelf = !!messageSender && !!name && messageSender.toLowerCase() === name.toLowerCase();
-
-        if (!isSelf && !isStaff) {
-            return socket.emit('system-msg', { text: 'You are not allowed to delete this message.', kind: 'error' });
-        }
-
-        if (!isSelf && isStaff && !isOwner) {
-            const senderRole = await getRoleByUsername(messageSender);
-            if (senderRole === 'admin') {
-                return socket.emit('system-msg', { text: `🚫 Can't delete an admin's message.`, kind: 'error' });
-            }
-        }
-
-        io.emit('delete-message', { msgId, staffDeleted: isStaff && !isSelf });
-    });
-
-    // Edit a message — self only (no staff override; editing someone else's
-    // words isn't something even admins get to do). Same ephemeral trust
-    // model as delete-message: the client tells us which message and who
-    // sent it, we just confirm the requester's identity matches.
-    socket.on('edit-message', async ({ msgId, idToken, messageSender, newText }) => {
-        const { name } = await verifyRole(idToken);
-        const isSelf = !!messageSender && !!name && messageSender.toLowerCase() === name.toLowerCase();
-        if (!isSelf || !newText || !newText.trim()) return;
-        if (isRateLimited(socket.id)) {
-            return socket.emit('system-msg', { text: "You're doing that too fast — slow down a bit.", kind: 'error' });
-        }
-
-        io.emit('edit-message', { msgId, newText: newText.trim() });
-    });
-
-    // Timed mute (minutes: 5 / 15 / 30 / 60) — admins AND moderators are allowed
-    socket.on('mute-user', async ({ username, idToken, minutes }) => {
-        const { ok, role, name } = await verifyRole(idToken);
-        if (!ok) return socket.emit('system-msg', { text: 'You are not allowed to mute users.', kind: 'error' });
-
-        // Staff can't mute themselves — no self-mute loophole
-        if (name && username && name.toLowerCase() === username.toLowerCase()) {
-            return socket.emit('system-msg', { text: "🙃 You can't mute yourself.", kind: 'error' });
-        }
-
-        const allowedDurations = [5, 15, 30, 60];
-        const duration = allowedDurations.includes(Number(minutes)) ? Number(minutes) : 5;
-        const ms = duration * 60 * 1000;
-        const expiresAt = Date.now() + ms;
-
-        // 😂 A moderator trying to mute an admin gets muted themselves instead
-        let target = username;
-        let backfired = false;
-        if (role === 'moderator') {
-            const targetRole = await getRoleByUsername(username);
-            if (targetRole === 'admin') {
-                target = name;
-                backfired = true;
-            }
-        }
-
-        mutedUsers.set(target, expiresAt);
-        scheduleAutoUnmute(target, ms);
-
-        if (backfired) {
-            io.emit('system-msg', { text: `😂 ${name} tried to mute an admin... and got muted instead for ${duration} minute(s)!`, kind: 'mute' });
-        } else {
-            io.emit('system-msg', { text: `🔇 ${target} has been muted for ${duration} minute(s).`, kind: 'mute' });
-        }
-        broadcastStatusLists();
-    });
-
-    // Unmuting a moderator is reserved for the owners (Hamma Admin / Othmani Hiba) —
-    // a regular admin can't lift a moderator's mute.
-    socket.on('unmute-user', async ({ username, idToken }) => {
-        const { ok, role, uid } = await verifyRole(idToken);
-        if (!ok) return socket.emit('system-msg', { text: 'You are not allowed to unmute users.', kind: 'error' });
-
-        if (role === 'moderator') {
-            const now = Date.now();
-            const nextAllowed = modUnmuteCooldowns.get(uid) || 0;
-            if (now < nextAllowed) {
-                const remainingMin = Math.ceil((nextAllowed - now) / 60000);
-                return socket.emit('system-msg', { text: `⏳ You can unmute again in ~${remainingMin} minute(s).`, kind: 'error' });
-            }
-            modUnmuteCooldowns.set(uid, now + UNMUTE_COOLDOWN_MS);
-        }
-
-        mutedUsers.delete(username);
-        if (muteTimers.has(username)) {
-            clearTimeout(muteTimers.get(username));
-            muteTimers.delete(username);
-        }
-        io.emit('system-msg', { text: `🔊 ${username} has been unmuted.`, kind: 'info' });
-        broadcastStatusLists();
-    });
-
-    // Permanent ban (admins only — moderators can only mute/pin)
-    socket.on('block-user', async ({ username, idToken }) => {
-        const { ok, role } = await verifyRole(idToken);
-        if (!ok || role !== 'admin') return socket.emit('system-msg', { text: 'You are not allowed to ban users.', kind: 'error' });
-
-        // Admins can't ban other admins — only mute them
-        const targetRole = await getRoleByUsername(username);
-        if (targetRole === 'admin') {
-            return socket.emit('system-msg', { text: `🚫 Admins can't ban other admins. You can only mute ${username}.`, kind: 'error' });
-        }
-
-        blockedUsers.add(username);
-        io.emit('system-msg', { text: `🚫 ${username} has been banned from the chat.`, kind: 'ban' });
-        kickUserSockets(username, 'You have been banned by an admin.');
-        broadcastStatusLists();
-    });
-
-    socket.on('unblock-user', async ({ username, idToken }) => {
-        const { ok, role } = await verifyRole(idToken);
-        if (!ok || role !== 'admin') return socket.emit('system-msg', { text: 'You are not allowed to unban users.', kind: 'error' });
-
-        blockedUsers.delete(username);
-        io.emit('system-msg', { text: `✅ ${username} has been unbanned.`, kind: 'info' });
-        broadcastStatusLists();
-    });
-
-    // Clear the entire chat for everyone.
-    // Admins can do this anytime. Moderators can too, but only once every 5 minutes.
-    socket.on('clear-chat', async ({ idToken }) => {
-        const { ok, role, name, uid } = await verifyRole(idToken);
-        if (!ok) return socket.emit('system-msg', { text: 'You are not allowed to clear the chat.', kind: 'error' });
-
-        if (role === 'admin') {
-            performChatClear(name || 'Admin');
-            socket.emit('clear-chat-result', { ok: true, nextAllowedAt: null });
-            return;
-        }
-
-        // role === 'moderator'
-        const now = Date.now();
-        const nextAllowed = modClearCooldowns.get(uid) || 0;
-        if (now < nextAllowed) {
-            socket.emit('clear-chat-result', { ok: false, nextAllowedAt: nextAllowed });
-            const remainingMin = Math.ceil((nextAllowed - now) / 60000);
-            socket.emit('system-msg', { text: `⏳ You can clear the chat again in ~${remainingMin} minute(s).`, kind: 'error' });
-            return;
-        }
-
-        modClearCooldowns.set(uid, now + CLEAR_COOLDOWN_MS);
-        performChatClear(name || 'Moderator');
-        socket.emit('clear-chat-result', { ok: true, nextAllowedAt: now + CLEAR_COOLDOWN_MS });
-    });
-
-    // Lets a moderator (or admin) find out their current clear-chat cooldown,
-    // e.g. right after connecting/refreshing, so the button can show a live countdown.
-    socket.on('get-clear-cooldown', async ({ idToken }) => {
-        const { ok, role, uid } = await verifyRole(idToken);
-        if (!ok) return;
-        if (role === 'admin') return socket.emit('clear-cooldown-status', { nextAllowedAt: null });
-        if (role === 'moderator') {
-            const nextAllowed = modClearCooldowns.get(uid) || 0;
-            return socket.emit('clear-cooldown-status', { nextAllowedAt: nextAllowed > Date.now() ? nextAllowed : null });
-        }
-    });
-
-    // Lock / unlock the chat (admins only; while locked, only admins/mods can send)
-    socket.on('lock-chat', async ({ idToken }) => {
-        const { ok, role } = await verifyRole(idToken);
-        if (!ok || role !== 'admin') return socket.emit('system-msg', { text: 'You are not allowed to lock the chat.', kind: 'error' });
-        chatLocked = true;
-        io.emit('chat-lock-status', { locked: true });
-        io.emit('system-msg', { text: '🔒 The chat has been locked by an admin.', kind: 'ban' });
-    });
-
-    socket.on('unlock-chat', async ({ idToken }) => {
-        const { ok, role } = await verifyRole(idToken);
-        if (!ok || role !== 'admin') return socket.emit('system-msg', { text: 'You are not allowed to unlock the chat.', kind: 'error' });
-        chatLocked = false;
-        io.emit('chat-lock-status', { locked: false });
-        io.emit('system-msg', { text: '🔓 The chat has been unlocked.', kind: 'info' });
-    });
-
-    // Pin / unpin a message — admins AND moderators are allowed
-    socket.on('pin-message', async ({ msgId, user, text, idToken }) => {
-        const { ok } = await verifyRole(idToken);
-        if (!ok) return socket.emit('system-msg', { text: 'You are not allowed to pin messages.', kind: 'error' });
-
-        pinnedMessage = { id: msgId, user, text };
-        io.emit('pinned-message-update', pinnedMessage);
-    });
-
-    socket.on('unpin-message', async ({ idToken }) => {
-        const { ok } = await verifyRole(idToken);
-        if (!ok) return socket.emit('system-msg', { text: 'You are not allowed to unpin messages.', kind: 'error' });
-
-        pinnedMessage = null;
-        io.emit('pinned-message-update', null);
-    });
-
-    // ==================================================
-    // Friend requests — search by exact username, send a request, and
-    // accept/decline it. Persisted in Firestore (unlike the ephemeral
-    // chat) so a pending request is still there next time you log in.
-    // Guests can't use this — it needs a real account.
-    // ==================================================
-    socket.on('search-user', async ({ query, idToken }) => {
-        const me = await verifyUser(idToken);
-        if (!me.ok) return socket.emit('search-user-result', { error: 'You need to be logged in to add friends.' });
-        if (!query || !query.trim()) return socket.emit('search-user-result', { error: '' });
-        const found = await findUserByUsername(query.trim());
-        if (!found || found.username === me.name) {
-            return socket.emit('search-user-result', { error: 'No user found with that username.' });
-        }
-        socket.emit('search-user-result', { username: found.username, online: isUserOnline(found.username) });
-    });
-
-    socket.on('send-friend-request', async ({ toUsername, idToken }) => {
-        const me = await verifyUser(idToken);
-        if (!me.ok) return socket.emit('dm-system-msg', { text: 'You need to be logged in to add friends.', kind: 'error' });
-        if (!toUsername || toUsername === me.name || !db) return;
-
-        const target = await findUserByUsername(toUsername);
-        if (!target) return socket.emit('dm-system-msg', { text: 'No user found with that username.', kind: 'error' });
-
-        const forwardId = `${me.name}__${target.username}`;
-        const reverseId = `${target.username}__${me.name}`;
-
-        try {
-            const [forwardSnap, reverseSnap] = await Promise.all([
-                db.collection('friendRequests').doc(forwardId).get(),
-                db.collection('friendRequests').doc(reverseId).get()
-            ]);
-
-            if (forwardSnap.exists && forwardSnap.data().status === 'accepted') {
-                return socket.emit('dm-system-msg', { text: `You're already friends with ${target.username}.`, kind: 'info' });
-            }
-            if (forwardSnap.exists && forwardSnap.data().status === 'pending') {
-                return socket.emit('dm-system-msg', { text: `You already sent a request to ${target.username}.`, kind: 'info' });
-            }
-
-            // They already sent YOU a request — accept it instead of creating a duplicate
-            if (reverseSnap.exists && reverseSnap.data().status === 'pending') {
-                await db.collection('friendRequests').doc(reverseId).update({ status: 'accepted' });
-                notifyFriendResponse(target.username, me.name, 'accept');
-                socket.emit('friend-request-response', { by: target.username, action: 'accept' });
-                return;
-            }
-
-            await db.collection('friendRequests').doc(forwardId).set({
-                from: me.name, to: target.username, status: 'pending', createdAt: Date.now()
-            });
-
-            const targetSockets = usernameSockets.get(target.username);
-            if (targetSockets && targetSockets.size > 0) {
-                targetSockets.forEach(id => io.to(id).emit('friend-request-received', { from: me.name }));
-            } else {
-                sendPushToUser(target.username, {
-                    title: 'New friend request',
-                    body: `${me.name} wants to be your friend on Hamma`,
-                    tag: `friend-request-${me.name}`,
-                    url: '/'
-                });
-            }
-            socket.emit('dm-system-msg', { text: `Friend request sent to ${target.username}.`, kind: 'info' });
-        } catch (e) {
-            console.error("Friend request failed:", e.message);
-        }
-    });
-
-    socket.on('get-friend-requests', async ({ idToken }) => {
-        const me = await verifyUser(idToken);
-        if (!me.ok || !db) return socket.emit('friend-requests-list', []);
-        try {
-            const snap = await db.collection('friendRequests')
-                .where('to', '==', me.name).where('status', '==', 'pending').get();
-            socket.emit('friend-requests-list', snap.docs.map(d => ({ from: d.data().from })));
-        } catch (e) {
-            console.error("Fetching friend requests failed:", e.message);
-            socket.emit('friend-requests-list', []);
-        }
-    });
-
-    // Returns everyone you're mutually friends with (accepted, either direction)
-    socket.on('get-friends', async ({ idToken }) => {
-        const me = await verifyUser(idToken);
-        if (!me.ok || !db) return socket.emit('friends-list', []);
-        try {
-            const [sentSnap, receivedSnap] = await Promise.all([
-                db.collection('friendRequests').where('from', '==', me.name).where('status', '==', 'accepted').get(),
-                db.collection('friendRequests').where('to', '==', me.name).where('status', '==', 'accepted').get()
-            ]);
-            const friends = [
-                ...sentSnap.docs.map(d => d.data().to),
-                ...receivedSnap.docs.map(d => d.data().from)
-            ];
-            const results = await Promise.all(friends.map(async (username) => {
-                const online = isUserOnline(username);
-                let lastSeenMs = null;
-                if (!online) {
-                    const info = await findUserByUsername(username);
-                    if (info && info.lastSeen && typeof info.lastSeen.toMillis === 'function') {
-                        lastSeenMs = info.lastSeen.toMillis();
-                    }
-                }
-                return { username, online, lastSeenMs };
-            }));
-            socket.emit('friends-list', results);
-        } catch (e) {
-            console.error("Fetching friends failed:", e.message);
-            socket.emit('friends-list', []);
-        }
-    });
-
-    socket.on('respond-friend-request', async ({ fromUsername, action, idToken }) => {
-        const me = await verifyUser(idToken);
-        if (!me.ok || !db || !fromUsername) return;
-        const reqId = `${fromUsername}__${me.name}`;
-        try {
-            if (action === 'accept') {
-                await db.collection('friendRequests').doc(reqId).update({ status: 'accepted' });
-            } else {
-                await db.collection('friendRequests').doc(reqId).delete();
-            }
-            notifyFriendResponse(fromUsername, me.name, action === 'accept' ? 'accept' : 'decline');
-        } catch (e) {
-            console.error("Responding to friend request failed:", e.message);
-        }
-    });
-
-    function notifyFriendResponse(toUsername, byUsername, action) {
-        const targetSockets = usernameSockets.get(toUsername);
-        if (targetSockets) {
-            targetSockets.forEach(id => io.to(id).emit('friend-request-response', { by: byUsername, action }));
-        }
+    .user-badge { font-size: 11px; padding: 4px 10px; }
+    #user-display-tag { position: static; right: auto; flex-shrink: 0; }
+
+    #chat-box, #ai-chat-box, #dm-box {
+        flex: 1;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch; /* سلاسة التمرير في آيفون */
+        margin-bottom: 10px;
     }
 
-    // ==================================================
-    // Direct messages (DM) — private 1-to-1 chat between two users.
-    // Persisted in Firestore (unlike the global chat, which stays live-only
-    // by request) so history survives reconnects and page reloads.
-    // ==================================================
-    socket.on('dm-message', async ({ to, text, idToken, mediaType, mediaUrl }) => {
-        const from = socketUsers.get(socket.id);
-        const hasText = !!text && !!text.trim();
-        const hasMedia = !!mediaType && !!mediaUrl;
-        if (!from || !to || (!hasText && !hasMedia)) return;
-        if (isRateLimited(socket.id)) {
-            return socket.emit('dm-system-msg', { text: "You're sending messages too fast — slow down a bit.", kind: 'error' });
-        }
-        if (blockedUsers.has(from)) {
-            return socket.emit('dm-system-msg', { text: 'You are banned from sending messages.', kind: 'error' });
-        }
-        const expiresAt = mutedUsers.get(from);
-        if (expiresAt && expiresAt > Date.now()) {
-            const remaining = Math.ceil((expiresAt - Date.now()) / 60000);
-            return socket.emit('dm-system-msg', { text: `You are muted, try again in ${remaining} minute(s).`, kind: 'error' });
-        }
+    .input-area { flex-shrink: 0; display: flex; gap: 8px; }
 
-        const payload = {
-            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            from,
-            to,
-            text: hasText ? text.trim() : '',
-            timestamp: Date.now(),
-            read: false
-        };
-        if (hasMedia) {
-            payload.mediaType = mediaType;
-            payload.mediaUrl = mediaUrl;
-        }
+    /* حماية من التكبير التلقائي المزعج في آيفون عند التركيز على الكتابة */
+    input[type="text"], #ai-message-input {
+        font-size: 16px;
+        padding: 10px 14px;
+    }
 
-        // Deliver to every open tab/device the recipient has
-        const targetSockets = usernameSockets.get(to);
-        if (targetSockets && targetSockets.size > 0) {
-            targetSockets.forEach(id => io.to(id).emit('dm-message', payload));
-        } else if (!db) {
-            socket.emit('dm-system-msg', { text: `${to} is offline right now — they won't see this message.`, kind: 'error' });
-        }
+    .send-btn {
+        padding: 0 16px;
+        font-size: 14px;
+        height: 44px;
+        white-space: nowrap;
+    }
 
-        // Push notification: sent whenever they're NOT actively looking at
-        // this exact conversation in the foreground — same rule big chat
-        // apps use, so it fires even if they're "online" but on another
-        // screen, another tab, or the app is backgrounded.
-        if (!isUserActivelyViewingDM(to, from)) {
-            sendPushToUser(to, {
-                title: from,
-                body: hasMedia ? `Sent ${mediaType === 'audio' ? 'a voice message' : mediaType === 'video' ? 'a video' : 'a photo'}` :
-                    (payload.text.length > 120 ? payload.text.slice(0, 117) + '…' : payload.text),
-                tag: `dm-${from}`,
-                url: '/'
-            });
-        }
-
-        // Echo back to the sender's own open tabs so their UI updates too
-        const senderSockets = usernameSockets.get(from);
-        if (senderSockets) senderSockets.forEach(id => io.to(id).emit('dm-message', payload));
-
-        // Persist — only once we can confirm the sender's real identity via
-        // their ID token (keeps guest chatter out of permanent storage)
-        if (db && idToken) {
-            const me = await verifyUser(idToken);
-            if (me.ok && me.name === from) {
-                const convId = [from, to].sort().join('__');
-                const doc = { id: payload.id, from, to, text: payload.text, timestamp: payload.timestamp, read: false };
-                if (hasMedia) { doc.mediaType = mediaType; doc.mediaUrl = mediaUrl; }
-                db.collection('directMessages').doc(convId).collection('messages').add(doc)
-                    .catch(e => console.error('DM persist failed:', e.message));
-            }
-        }
-    });
-
-    // Delete a DM message — sender only, removes it for both sides.
-    socket.on('dm-delete-message', async ({ withUsername, msgId, idToken }) => {
-        const me = await verifyUser(idToken);
-        if (!me.ok || !withUsername || !msgId || !db) return;
-        const convId = [me.name, withUsername].sort().join('__');
-        try {
-            const snap = await db.collection('directMessages').doc(convId).collection('messages')
-                .where('id', '==', msgId).limit(1).get();
-            if (!snap.empty && snap.docs[0].data().from === me.name) {
-                await snap.docs[0].ref.delete();
-            } else {
-                return; // not found, or not the owner — don't notify either side
-            }
-        } catch (e) {
-            console.error('DM message delete failed:', e.message);
-            return;
-        }
-
-        const targetSockets = usernameSockets.get(withUsername);
-        if (targetSockets) targetSockets.forEach(id => io.to(id).emit('dm-message-deleted', { msgId, by: me.name }));
-        const senderSockets = usernameSockets.get(me.name);
-        if (senderSockets) senderSockets.forEach(id => io.to(id).emit('dm-message-deleted', { msgId, by: me.name }));
-    });
-
-    // Edit a DM message — self only, updates Firestore and tells both sides live.
-    socket.on('dm-edit-message', async ({ withUsername, msgId, idToken, newText }) => {
-        const me = await verifyUser(idToken);
-        if (!me.ok || !withUsername || !msgId || !newText || !newText.trim() || !db) return;
-        if (isRateLimited(socket.id)) {
-            return socket.emit('dm-system-msg', { text: "You're doing that too fast — slow down a bit.", kind: 'error' });
-        }
-        const convId = [me.name, withUsername].sort().join('__');
-        const trimmed = newText.trim();
-        try {
-            const snap = await db.collection('directMessages').doc(convId).collection('messages')
-                .where('id', '==', msgId).limit(1).get();
-            if (snap.empty || snap.docs[0].data().from !== me.name) return;
-            await snap.docs[0].ref.update({ text: trimmed, edited: true });
-        } catch (e) {
-            console.error('DM message edit failed:', e.message);
-            return;
-        }
-
-        const payload = { msgId, newText: trimmed, by: me.name };
-        const targetSockets = usernameSockets.get(withUsername);
-        if (targetSockets) targetSockets.forEach(id => io.to(id).emit('dm-message-edited', payload));
-        const senderSockets = usernameSockets.get(me.name);
-        if (senderSockets) senderSockets.forEach(id => io.to(id).emit('dm-message-edited', payload));
-    });
-
-    // Marks every unread message FROM `withUsername` TO me as read, and lets
-    // the sender know (so their UI can flip ✓ to ✓✓).
-    socket.on('dm-mark-read', async ({ withUsername, idToken }) => {
-        const me = await verifyUser(idToken);
-        if (!me.ok || !withUsername || !db) return;
-        const convId = [me.name, withUsername].sort().join('__');
-        try {
-            const snap = await db.collection('directMessages').doc(convId).collection('messages')
-                .where('to', '==', me.name).where('read', '==', false).get();
-            if (snap.empty) return;
-            const batch = db.batch();
-            snap.docs.forEach(d => batch.update(d.ref, { read: true }));
-            await batch.commit();
-
-            const targetSockets = usernameSockets.get(withUsername);
-            if (targetSockets) targetSockets.forEach(id => io.to(id).emit('dm-read-receipt', { by: me.name }));
-        } catch (e) {
-            console.error('Marking DM as read failed:', e.message);
-        }
-    });
-
-    // Loads the last page of a DM conversation (or an older page, via `before`)
-    socket.on('get-dm-history', async ({ withUsername, idToken, before }) => {
-        const me = await verifyUser(idToken);
-        if (!me.ok || !withUsername || !db) {
-            return socket.emit('dm-history', { withUsername, messages: [], hasMore: false });
-        }
-        const convId = [me.name, withUsername].sort().join('__');
-        try {
-            let q = db.collection('directMessages').doc(convId).collection('messages')
-                .orderBy('timestamp', 'desc').limit(30);
-            if (before) q = q.where('timestamp', '<', before);
-            const snap = await q.get();
-            const messages = snap.docs.map(d => d.data()).reverse();
-            socket.emit('dm-history', { withUsername, messages, hasMore: snap.size === 30 });
-        } catch (e) {
-            console.error('DM history fetch failed:', e.message);
-            socket.emit('dm-history', { withUsername, messages: [], hasMore: false });
-        }
-    });
-
-    // Tells the server which DM conversation (if any) this tab currently
-    // has open, and whether it's in the foreground — used only to decide
-    // whether a push notification should fire (see isUserActivelyViewingDM).
-    socket.on('dm-view-open', ({ withUsername }) => {
-        if (!withUsername) return;
-        activeDMView.set(socket.id, { partner: withUsername, focused: true });
-    });
-    socket.on('dm-view-close', () => {
-        activeDMView.set(socket.id, { partner: null, focused: true });
-    });
-    socket.on('dm-visibility', ({ focused }) => {
-        const cur = activeDMView.get(socket.id) || { partner: null };
-        activeDMView.set(socket.id, { partner: cur.partner, focused: !!focused });
-    });
-
-    socket.on('dm-typing', ({ to }) => {
-        const from = socketUsers.get(socket.id);
-        if (!from || !to) return;
-        const targetSockets = usernameSockets.get(to);
-        if (targetSockets) targetSockets.forEach(id => io.to(id).emit('dm-typing', { from }));
-    });
-
-    socket.on('dm-stop-typing', ({ to }) => {
-        const from = socketUsers.get(socket.id);
-        if (!from || !to) return;
-        const targetSockets = usernameSockets.get(to);
-        if (targetSockets) targetSockets.forEach(id => io.to(id).emit('dm-stop-typing', { from }));
-    });
-
-    socket.on('disconnect', () => {
-        const username = socketUsers.get(socket.id);
-        if (username) removeUsernameSocket(username, socket.id);
-        socketUsers.delete(socket.id);
-        rateLimitLog.delete(socket.id);
-        activeDMView.delete(socket.id);
-        onlineUsersCount = Math.max(0, onlineUsersCount - 1);
-        io.emit('update-online', onlineUsersCount);
-        broadcastStatusLists();
-    });
-});
-
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+    /* تعديل مكان نافذة الـ AI على الهواتف لتظهر بشكل متناسق في المنتصف */
+    .ai-chat-modal {
+        bottom: 70px;
+        left: 5%;
+        width: 90%;
+        height: 70vh;
+    }
+}
