@@ -258,8 +258,20 @@
 </head>
 <body>
 
+    <!-- Ambient background: slow-moving blurred gradient blobs, purely decorative -->
+    <div class="bg-blobs" aria-hidden="true">
+        <div class="blob blob-cyan"></div>
+        <div class="blob blob-purple"></div>
+        <div class="blob blob-green"></div>
+    </div>
+
     <!-- 1. LOGIN SCREEN -->
     <div id="login-screen" class="login-container">
+        <div class="parallax-bg" id="loginParallaxBg">
+            <div class="parallax-blob blob-1"></div>
+            <div class="parallax-blob blob-2"></div>
+            <div class="parallax-blob blob-3"></div>
+        </div>
         <div class="login-card">
             <div class="logo-area">
                 <div class="glow-orb"></div>
@@ -305,6 +317,72 @@
             </div>
         </div>
     </div>
+
+    <script>
+        // ===== Ambient mouse-parallax background (login screen) =====
+        (function() {
+            const blobs = document.querySelectorAll('#loginParallaxBg .parallax-blob');
+            if (!blobs.length) return;
+            const depths = [18, -24, 13]; // px range per blob — gives a subtle sense of depth
+            let targetX = 0, targetY = 0, curX = 0, curY = 0;
+
+            function setTarget(clientX, clientY) {
+                targetX = (clientX / window.innerWidth - 0.5) * 2;   // -1 .. 1
+                targetY = (clientY / window.innerHeight - 0.5) * 2;  // -1 .. 1
+            }
+            window.addEventListener('mousemove', (e) => setTarget(e.clientX, e.clientY));
+            window.addEventListener('touchmove', (e) => {
+                if (e.touches[0]) setTarget(e.touches[0].clientX, e.touches[0].clientY);
+            }, { passive: true });
+
+            function tick() {
+                // Ease toward the target rather than snapping to it — keeps the
+                // motion slow and calm instead of jittery.
+                curX += (targetX - curX) * 0.035;
+                curY += (targetY - curY) * 0.035;
+                blobs.forEach((blob, i) => {
+                    const d = depths[i] || 15;
+                    blob.style.transform = `translate(${curX * d}px, ${curY * d}px)`;
+                });
+                requestAnimationFrame(tick);
+            }
+            tick();
+        })();
+
+        // ===== Smooth open/close animation for every .modal-overlay =====
+        // Rather than touching every open/close function in the app, this
+        // watches for the existing display:none <-> display:flex toggle and
+        // layers a translate+fade transition on top of it automatically —
+        // including intercepting the instant "display:none" on close so the
+        // fade-out actually gets to play before the element disappears.
+        // Runs on DOMContentLoaded since modals further down the page
+        // haven't been parsed yet at this point in the document.
+        window.addEventListener('DOMContentLoaded', () => {
+            const CLOSE_ANIM_MS = 300;
+            document.querySelectorAll('.modal-overlay').forEach((modal) => {
+                let closing = false;
+                let ignoreNext = false;
+                const observer = new MutationObserver(() => {
+                    if (ignoreNext) { ignoreNext = false; return; }
+                    const display = modal.style.display;
+                    if (display === 'none' && !closing) {
+                        closing = true;
+                        ignoreNext = true;
+                        modal.style.display = 'flex'; // cancel the instant hide — animate out first
+                        modal.classList.remove('modal-visible');
+                        setTimeout(() => {
+                            ignoreNext = true;
+                            modal.style.display = 'none';
+                            closing = false;
+                        }, CLOSE_ANIM_MS);
+                    } else if (display === 'flex' && !closing && !modal.classList.contains('modal-visible')) {
+                        requestAnimationFrame(() => modal.classList.add('modal-visible'));
+                    }
+                });
+                observer.observe(modal, { attributes: true, attributeFilter: ['style'] });
+            });
+        });
+    </script>
 
     <!-- 2. PROFILE SETUP SCREEN -->
     <div id="profile-setup-screen" class="login-container" style="display: none;">
