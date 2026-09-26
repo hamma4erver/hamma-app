@@ -48,9 +48,32 @@ body {
     justify-content: center;
     align-items: center;
     z-index: 100;
+    overflow: hidden;
 }
 
+/* Ambient mouse-reactive background — a few soft, slow-drifting glowing
+   blobs behind the login card. Purely decorative, never blocks clicks. */
+.parallax-bg {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 0;
+}
+.parallax-blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.32;
+    will-change: transform;
+}
+.parallax-blob.blob-1 { width: 380px; height: 380px; background: #00c9ff; top: 8%;  left: 12%; }
+.parallax-blob.blob-2 { width: 320px; height: 320px; background: #92fe9d; bottom: 8%; right: 12%; }
+.parallax-blob.blob-3 { width: 260px; height: 260px; background: #7c3aed; top: 52%; left: 55%; }
+
 .login-card {
+    position: relative;
+    z-index: 1;
     background: rgba(255, 255, 255, 0.03);
     backdrop-filter: blur(25px);
     -webkit-backdrop-filter: blur(25px);
@@ -746,7 +769,10 @@ input:focus {
     justify-content: center;
     align-items: center;
     z-index: 9999;
+    opacity: 0;
+    transition: opacity 0.28s ease;
 }
+.modal-overlay.modal-visible { opacity: 1; }
 
 .modal-card {
     background: rgba(18, 22, 36, 0.95);
@@ -758,6 +784,13 @@ input:focus {
     width: 85%;
     text-align: center;
     color: #ffffff;
+    transform: translateY(28px) scale(0.94);
+    opacity: 0;
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
+}
+.modal-overlay.modal-visible .modal-card {
+    transform: translateY(0) scale(1);
+    opacity: 1;
 }
 .modal-card h3 { color: #00c9ff; margin-bottom: 10px; font-size: 20px; }
 .modal-card p { font-size: 14px; color: #cbd5e1; line-height: 1.5; margin-bottom: 20px; }
