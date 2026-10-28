@@ -913,3 +913,181 @@ input:focus {
         height: 70vh;
     }
 }
+
+/* =====================================================================
+   طبقة Apple (Human Interface Guidelines) — Clarity · Deference · Depth
+   ===================================================================== */
+:root {
+    color-scheme: dark;
+    --ios-bg: #000000;
+    --ios-surface: #1c1c1e;
+    --ios-surface-2: #2c2c2e;
+    --ios-separator: rgba(84, 84, 88, 0.45);
+    --ios-blue: #0a84ff;
+    --ios-red: #ff453a;
+    --ios-label-2: rgba(235, 235, 245, 0.6);
+    --ios-spring: cubic-bezier(0.32, 0.72, 0, 1);
+    --ios-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Roboto, "Segoe UI", sans-serif;
+}
+
+/* Clarity: خلفية هادئة، خط النظام، بلا نيون */
+body {
+    background: var(--ios-bg);
+    animation: none;
+    font-family: var(--ios-font);
+    -webkit-text-size-adjust: 100%;
+}
+.login-container { background: var(--ios-bg); }
+.parallax-blob { opacity: 0.18; }
+.login-card {
+    animation: none;
+    background: rgba(44, 44, 46, 0.72);
+    backdrop-filter: saturate(180%) blur(30px);
+    -webkit-backdrop-filter: saturate(180%) blur(30px);
+    border: 0.5px solid var(--ios-separator);
+    border-radius: 22px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.login-card h1, .chat-title { text-shadow: none; letter-spacing: -0.02em; }
+.chat-title { color: #fff; font-weight: 600; }
+
+/* Deference: الحاوية ما تنافسش المحتوى */
+.sidebar {
+    background: rgba(28, 28, 30, 0.72);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-color: var(--ios-separator);
+}
+.chat-container { box-shadow: none; border: 0; background: transparent; }
+.user-badge {
+    background: var(--ios-surface-2);
+    border: 0;
+    color: #fff;
+    font-weight: 500;
+}
+#chat-box {
+    background: var(--ios-surface);
+    border: 0.5px solid var(--ios-separator);
+    border-radius: 20px;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    overscroll-behavior: contain;
+}
+#chat-box::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); }
+
+/* فقاعات على طريقة iMessage */
+.msg {
+    font-size: 16px;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+    padding: 8px 14px;
+    border-radius: 18px;
+    max-width: 78%;
+    animation: iosPop 0.35s var(--ios-spring);
+    transition: transform 0.25s var(--ios-spring), opacity 0.2s ease;
+}
+@keyframes iosPop {
+    from { opacity: 0; transform: scale(0.92) translateY(6px); }
+    to   { opacity: 1; transform: none; }
+}
+.my-msg, .my-msg:hover {
+    background: var(--ios-blue);
+    box-shadow: none;
+    transform: none;
+    border-bottom-right-radius: 5px;
+}
+.other-msg, .other-msg:hover {
+    background: var(--ios-surface-2);
+    box-shadow: none;
+    transform: none;
+    border-bottom-left-radius: 5px;
+}
+
+/* الأزرار: مسطحة، ردّة فعل عند اللمس (press) مش hover */
+.btn-primary, .modal-btn.confirm {
+    background: var(--ios-blue);
+    color: #fff;
+    box-shadow: none;
+    border-radius: 14px;
+    font-weight: 600;
+}
+.btn-primary:hover { transform: none; box-shadow: none; }
+.btn-primary:active, .modal-btn:active, .icon-btn:active, .send-btn:active {
+    transform: scale(0.96);
+    opacity: 0.85;
+}
+.btn-secondary, .modal-btn.cancel {
+    background: var(--ios-surface-2);
+    color: #fff;
+    border: 0;
+    border-radius: 14px;
+    font-weight: 500;
+}
+.modal-btn:hover { transform: none; }
+
+/* الإدخال */
+input, .input-group input {
+    background: var(--ios-surface-2);
+    border: 0.5px solid transparent;
+    border-radius: 12px;
+    color: #fff;
+}
+input::placeholder { color: var(--ios-label-2); }
+input:focus, .input-group input:focus {
+    border-color: var(--ios-blue);
+    box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.3);
+    background: var(--ios-surface-2);
+}
+#message { border-radius: 22px; padding-left: 16px; padding-right: 16px; }
+
+/* أهداف اللمس 44pt كحد أدنى */
+.icon-btn { width: 44px; height: 44px; min-width: 44px; border-radius: 50%; background: var(--ios-surface-2); border: 0; color: var(--ios-blue); }
+.icon-btn:hover { background: var(--ios-surface-2); color: var(--ios-blue); }
+.send-btn {
+    min-width: 44px; height: 44px; border-radius: 22px;
+    background: var(--ios-blue); box-shadow: none; font-weight: 600;
+}
+.send-btn:hover { box-shadow: none; }
+#btn-voice.recording { background: var(--ios-red); color: #fff; }
+.bg-btn { border: 0.5px solid var(--ios-separator); }
+
+/* زر "رسائل جديدة" */
+.new-msg-pill {
+    background: rgba(44, 44, 46, 0.85);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    color: #fff;
+    border: 0.5px solid var(--ios-separator);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+    font-weight: 600;
+    font-size: 13px;
+}
+
+/* Depth: النوافذ كـ sheet بخلفية مادّية */
+.modal-overlay { background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.modal-card {
+    background: rgba(44, 44, 46, 0.92);
+    border: 0.5px solid var(--ios-separator);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+    border-radius: 20px;
+    transition: transform 0.45s var(--ios-spring), opacity 0.3s ease;
+}
+.modal-card h3 { color: #fff; font-weight: 600; letter-spacing: -0.01em; }
+.modal-card p { color: var(--ios-label-2); }
+
+/* Safe areas (Dynamic Island / Home indicator) */
+@supports (padding: max(0px)) {
+    .main-layout {
+        padding-top: max(8px, env(safe-area-inset-top));
+        padding-left: max(8px, env(safe-area-inset-left));
+        padding-right: max(8px, env(safe-area-inset-right));
+        padding-bottom: max(10px, env(safe-area-inset-bottom));
+    }
+    @media (min-width: 769px) { .main-layout { padding: 0; } }
+}
+
+/* Accessibility: Focus ring + Reduce Motion */
+:focus-visible { outline: 2px solid var(--ios-blue); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
