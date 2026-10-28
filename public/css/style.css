@@ -1089,5 +1089,110 @@ input:focus, .input-group input:focus {
 /* Accessibility: Focus ring + Reduce Motion */
 :focus-visible { outline: 2px solid var(--ios-blue); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+    .msg, .modal-card, .hm-panel, .hm-panel * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
+/* =====================================================================
+   LOGIN: النيون رجع + الخلفية تتحرك
+   ===================================================================== */
+.login-container::before {
+    content: "";
+    position: absolute;
+    inset: -30%;
+    background: conic-gradient(from 0deg, rgba(0,201,255,.20), rgba(124,58,237,.20), rgba(146,254,157,.14), rgba(0,201,255,.20));
+    filter: blur(70px);
+    animation: loginSpin 22s linear infinite;
+    pointer-events: none;
+    z-index: 0;
+}
+@keyframes loginSpin { to { transform: rotate(360deg); } }
+.parallax-blob { opacity: 0.38; animation: blobFloat 9s ease-in-out infinite alternate; }
+.parallax-blob.blob-2 { animation-duration: 11s; animation-delay: -3s; }
+.parallax-blob.blob-3 { animation-duration: 13s; animation-delay: -6s; }
+@keyframes blobFloat {
+    0%   { translate: 0 0; scale: 1; }
+    50%  { translate: 45px -55px; scale: 1.18; }
+    100% { translate: -50px 40px; scale: 0.9; }
+}
+.login-card {
+    animation: floatingCard 4s ease-in-out infinite alternate;
+    border: 1px solid rgba(0, 201, 255, 0.28);
+    box-shadow: 0 20px 50px rgba(0,0,0,.5), 0 0 32px rgba(0,201,255,.28), inset 0 0 22px rgba(0,201,255,.06);
+}
+.login-card h1 { text-shadow: 0 0 12px rgba(0,242,254,.75), 0 0 32px rgba(0,242,254,.35); }
+.login-container .btn-primary { background: linear-gradient(45deg, #00f2fe, #4facfe); box-shadow: 0 4px 18px rgba(0,242,254,.5); }
+.login-container .input-group input:focus { border-color: #00f2fe; box-shadow: 0 0 16px rgba(0,242,254,.4); }
+
+/* =====================================================================
+   قائمة الإعدادات + قائمة الأدمن/المودريتور (futuristic)
+   ===================================================================== */
+#chat-screen > .sidebar { display: none; }
+.media-actions-row { position: relative; }
+#btn-menu { color: #00f2fe; position: relative; }
+#btn-staff { color: #ffd700; box-shadow: 0 0 14px rgba(255,215,0,.35); }
+#btn-menu .menu-dot {
+    display: none; position: absolute; top: 4px; right: 4px; width: 10px; height: 10px;
+    border-radius: 50%; background: var(--ios-red); border: 2px solid var(--ios-surface-2);
+}
+.icon-btn.panel-open { transform: rotate(90deg) scale(1.05); box-shadow: 0 0 18px rgba(0,242,254,.5); }
+#btn-staff.panel-open { box-shadow: 0 0 18px rgba(255,215,0,.6); }
+
+.hm-panel {
+    position: absolute; bottom: calc(100% + 12px); left: 0; z-index: 30;
+    width: min(260px, calc(100vw - 40px)); padding: 12px; border-radius: 20px; overflow: hidden;
+    background: rgba(8, 12, 26, 0.80);
+    backdrop-filter: blur(26px) saturate(180%); -webkit-backdrop-filter: blur(26px) saturate(180%);
+    border: 1px solid rgba(0,242,254,.5);
+    box-shadow: 0 0 0 1px rgba(0,242,254,.12), 0 0 30px rgba(0,242,254,.28), 0 24px 50px rgba(0,0,0,.6);
+    transform-origin: bottom left;
+    opacity: 0; visibility: hidden; pointer-events: none;
+    transform: perspective(700px) rotateX(-18deg) translateY(24px) scale(.55);
+    filter: blur(8px);
+    clip-path: inset(100% 0 0 0 round 20px);
+    transition: transform .55s var(--ios-spring), opacity .3s ease, filter .45s ease, clip-path .55s var(--ios-spring), visibility 0s linear .55s;
+}
+#staff-panel { border-color: rgba(255,215,0,.55); box-shadow: 0 0 0 1px rgba(255,215,0,.12), 0 0 30px rgba(255,215,0,.25), 0 24px 50px rgba(0,0,0,.6); }
+#staff-panel { left: 52px; }
+.hm-panel.open {
+    opacity: 1; visibility: visible; pointer-events: auto; transform: none; filter: none;
+    clip-path: inset(0 0 0 0 round 20px); transition-delay: 0s;
+}
+/* خط مسح (scanline) يعدّي مرة كي تتفتح */
+.hm-panel::before {
+    content: ""; position: absolute; left: 0; right: 0; top: 0; height: 36px; pointer-events: none;
+    background: linear-gradient(180deg, transparent, rgba(0,242,254,.28), transparent); opacity: 0;
+}
+#staff-panel::before { background: linear-gradient(180deg, transparent, rgba(255,215,0,.28), transparent); }
+.hm-panel.open::before { animation: hmScan .9s ease-out .1s 1; }
+@keyframes hmScan { 0% { top: -36px; opacity: 1; } 100% { top: 100%; opacity: 0; } }
+
+.hm-label { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: rgba(0,242,254,.85); margin: 0 2px 8px; font-weight: 700; }
+#staff-panel .hm-label { color: rgba(255,215,0,.9); }
+.hm-swatches { display: flex; gap: 12px; justify-content: space-between; padding: 2px 2px 12px; margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,.1); }
+.hm-swatches .bg-btn { width: 38px; height: 38px; flex-shrink: 0; }
+
+.hm-panel .ai-btn {
+    width: 100%; height: 46px; border-radius: 14px; justify-content: flex-start; gap: 12px;
+    padding: 0 14px; font-size: 14px; margin: 0 0 8px !important; box-shadow: none; animation: none;
+    position: relative;
+}
+.hm-panel .ai-btn:last-child { margin-bottom: 0 !important; }
+.hm-panel .ai-btn i { width: 20px; text-align: center; font-size: 16px; }
+.hm-panel .ai-btn::after { content: attr(title); font-weight: 600; color: #fff; }
+.hm-panel .ai-btn:active { transform: scale(.97); }
+.hm-panel #friend-requests-badge { top: 50% !important; right: 12px !important; transform: translateY(-50%); }
+
+.hm-panel.open > * { animation: hmItemIn .55s var(--ios-spring) both; }
+.hm-panel.open > *:nth-child(1) { animation-delay: .06s; }
+.hm-panel.open > *:nth-child(2) { animation-delay: .11s; }
+.hm-panel.open > *:nth-child(3) { animation-delay: .16s; }
+.hm-panel.open > *:nth-child(4) { animation-delay: .21s; }
+.hm-panel.open > *:nth-child(5) { animation-delay: .26s; }
+.hm-panel.open > *:nth-child(6) { animation-delay: .31s; }
+.hm-panel.open > *:nth-child(7) { animation-delay: .36s; }
+.hm-panel.open > *:nth-child(8) { animation-delay: .41s; }
+.hm-panel.open > *:nth-child(9) { animation-delay: .46s; }
+@keyframes hmItemIn {
+    from { opacity: 0; transform: translateX(-18px) skewX(-8deg); filter: blur(4px); }
+    to   { opacity: 1; transform: none; filter: none; }
 }
