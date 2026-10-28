@@ -3090,5 +3090,82 @@
             if (btn) btn.style.display = 'none';
         });
     </script>
+
+    <script>
+    // ===== قائمة الإعدادات + قائمة الأدمن/المودريتور (تعيد استعمال نفس الأزرار والـIDs) =====
+    (function () {
+        const screen = document.getElementById('chat-screen');
+        const side = screen.querySelector('.sidebar');
+        const row = screen.querySelector('.media-actions-row');
+        if (!side || !row) return;
+
+        const mk = (tag, cls, id) => { const e = document.createElement(tag); if (cls) e.className = cls; if (id) e.id = id; return e; };
+        const menu = mk('div', 'hm-panel', 'menu-panel');
+        const staff = mk('div', 'hm-panel', 'staff-panel');
+
+        const lab1 = mk('div', 'hm-label'); lab1.textContent = 'Settings';
+        const sw = mk('div', 'hm-swatches');
+        side.querySelectorAll('.bg-btn').forEach(b => sw.appendChild(b));
+        menu.append(lab1, sw);
+
+        const lab2 = mk('div', 'hm-label'); lab2.textContent = 'Staff';
+        staff.appendChild(lab2);
+
+        const staffIds = ['btn-admin', 'btn-clear-chat', 'btn-lock-chat'];
+        const titles = ['AI Assistant', 'Friends'];
+        let i = 0;
+        side.querySelectorAll('.ai-btn').forEach(b => {
+            if (staffIds.includes(b.id)) { staff.appendChild(b); return; }
+            if (!b.id && i < 2) { // AI / Friends
+                if (i === 0) b.innerHTML = '<i class="fas fa-robot"></i>';
+                b.title = titles[i++];
+            }
+            menu.appendChild(b);
+        });
+        const names = { 'btn-friend-requests': 'Friend Requests', 'btn-install-app': 'Install App', 'btn-logout': 'Logout' };
+        Object.keys(names).forEach(id => { const el = document.getElementById(id); if (el) el.title = names[id]; });
+
+        const btnMenu = mk('button', 'icon-btn', 'btn-menu');
+        btnMenu.type = 'button'; btnMenu.title = 'Settings';
+        btnMenu.innerHTML = '<i class="fas fa-sliders"></i><span class="menu-dot"></span>';
+        const btnStaff = mk('button', 'icon-btn', 'btn-staff');
+        btnStaff.type = 'button'; btnStaff.title = 'Admin / Moderator'; btnStaff.style.display = 'none';
+        btnStaff.innerHTML = '<i class="fas fa-user-shield"></i>';
+        row.append(btnMenu, btnStaff, menu, staff);
+
+        const pairs = [[btnMenu, menu], [btnStaff, staff]];
+        const closeAll = (except) => pairs.forEach(([b, p]) => { if (p !== except) { p.classList.remove('open'); b.classList.remove('panel-open'); } });
+        pairs.forEach(([b, p]) => b.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const willOpen = !p.classList.contains('open');
+            closeAll(willOpen ? p : null);
+            p.classList.toggle('open', willOpen);
+            b.classList.toggle('panel-open', willOpen);
+        }));
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('.hm-panel .ai-btn')) { closeAll(null); return; }
+            if (!e.target.closest('.hm-panel')) closeAll(null);
+        });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAll(null); });
+
+        // زر الـstaff يبان كان كان المستخدم أدمن/مودريتور (JS الأصلي يبين الأزرار)
+        const staffEls = staffIds.map(id => document.getElementById(id));
+        const syncStaff = () => {
+            btnStaff.style.display = staffEls.some(el => el && el.style.display !== 'none') ? 'flex' : 'none';
+        };
+        const mo = new MutationObserver(syncStaff);
+        staffEls.forEach(el => el && mo.observe(el, { attributes: true, attributeFilter: ['style'] }));
+        syncStaff();
+
+        // نقطة حمراء على زر الإعدادات كي تجي طلبات صداقة
+        const badge = document.getElementById('friend-requests-badge');
+        const dot = btnMenu.querySelector('.menu-dot');
+        if (badge) {
+            const syncDot = () => { dot.style.display = (badge.style.display !== 'none' && badge.textContent.trim()) ? 'block' : 'none'; };
+            new MutationObserver(syncDot).observe(badge, { attributes: true, childList: true, characterData: true, subtree: true });
+            syncDot();
+        }
+    })();
+    </script>
 </body>
 </html>
