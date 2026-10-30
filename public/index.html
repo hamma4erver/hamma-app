@@ -769,6 +769,11 @@
         <div class="modal-card">
             <h3><i class="fas fa-desktop"></i> Desktop Recommendation</h3>
             <p>Open this site on PC for better resolution and the best chatting experience!</p>
+            <label class="hm-check" id="pc-notice-check-row" style="display: none;">
+                <input type="checkbox" id="pc-notice-dont-show">
+                <span class="hm-check-box"><i class="fas fa-check"></i></span>
+                <span class="hm-check-text">Don't show me again</span>
+            </label>
             <div class="modal-buttons">
                 <button class="modal-btn confirm" style="width: 100%; font-size: 15px;" onclick="closePcNotice()">OK</button>
             </div>
@@ -1400,12 +1405,24 @@
                 loginScreen.style.display = 'none';
                 chatScreen.style.display = 'flex';
                 chatScreen.style.opacity = '1';
-                document.getElementById('pc-notice-modal').style.display = 'flex';
+                // Guests can tick "Don't show me again" (remembered on this device)
+                let hidePcNotice = false;
+                try { hidePcNotice = isGuest && localStorage.getItem('hamma_hide_pc_notice') === '1'; } catch (e) {}
+                if (!hidePcNotice) {
+                    const cb = document.getElementById('pc-notice-dont-show');
+                    if (cb) cb.checked = false;
+                    document.getElementById('pc-notice-check-row').style.display = isGuest ? 'flex' : 'none';
+                    document.getElementById('pc-notice-modal').style.display = 'flex';
+                }
                 refreshFriendRequests();
             }, 300);
         }
 
         function closePcNotice() {
+            const cb = document.getElementById('pc-notice-dont-show');
+            if (isGuest && cb && cb.checked) {
+                try { localStorage.setItem('hamma_hide_pc_notice', '1'); } catch (e) {}
+            }
             document.getElementById('pc-notice-modal').style.display = 'none';
         }
 
