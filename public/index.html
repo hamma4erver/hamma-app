@@ -1405,13 +1405,13 @@
                 loginScreen.style.display = 'none';
                 chatScreen.style.display = 'flex';
                 chatScreen.style.opacity = '1';
-                // Guests can tick "Don't show me again" (remembered on this device)
+                // Everyone can tick "Don't show me again" (remembered on this device)
                 let hidePcNotice = false;
-                try { hidePcNotice = isGuest && localStorage.getItem('hamma_hide_pc_notice') === '1'; } catch (e) {}
+                try { hidePcNotice = localStorage.getItem('hamma_hide_pc_notice') === '1'; } catch (e) {}
                 if (!hidePcNotice) {
                     const cb = document.getElementById('pc-notice-dont-show');
                     if (cb) cb.checked = false;
-                    document.getElementById('pc-notice-check-row').style.display = isGuest ? 'flex' : 'none';
+                    document.getElementById('pc-notice-check-row').style.display = 'flex';
                     document.getElementById('pc-notice-modal').style.display = 'flex';
                 }
                 refreshFriendRequests();
@@ -1420,7 +1420,7 @@
 
         function closePcNotice() {
             const cb = document.getElementById('pc-notice-dont-show');
-            if (isGuest && cb && cb.checked) {
+            if (cb && cb.checked) {
                 try { localStorage.setItem('hamma_hide_pc_notice', '1'); } catch (e) {}
             }
             document.getElementById('pc-notice-modal').style.display = 'none';
