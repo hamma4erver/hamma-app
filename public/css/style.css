@@ -1196,3 +1196,18 @@ input:focus, .input-group input:focus {
     from { opacity: 0; transform: translateX(-18px) skewX(-8deg); filter: blur(4px); }
     to   { opacity: 1; transform: none; filter: none; }
 }
+
+/* خانة "Don't show me again" */
+.hm-check { display: flex; align-items: center; gap: 10px; margin: 4px 0 16px; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
+.hm-check input { position: absolute; opacity: 0; pointer-events: none; }
+.hm-check-box {
+    width: 22px; height: 22px; flex-shrink: 0; border-radius: 6px;
+    border: 1.5px solid rgba(235,235,245,.35); background: rgba(0,0,0,.25);
+    display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px;
+    transition: background .2s ease, border-color .2s ease, transform .25s var(--ios-spring);
+}
+.hm-check-box i { transform: scale(0); transition: transform .25s var(--ios-spring); }
+.hm-check input:checked + .hm-check-box { background: var(--ios-blue); border-color: var(--ios-blue); transform: scale(1.06); }
+.hm-check input:checked + .hm-check-box i { transform: scale(1); }
+.hm-check input:focus-visible + .hm-check-box { box-shadow: 0 0 0 3px rgba(10,132,255,.35); }
+.hm-check-text { font-size: 14px; color: var(--ios-label-2); }
