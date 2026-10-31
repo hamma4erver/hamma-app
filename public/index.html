@@ -765,6 +765,22 @@
         </div>
     </div>
 
+
+    <div id="legal-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-card" style="max-width: 420px; text-align: left;">
+            <h3><i class="fas fa-shield-halved"></i> Terms &amp; Privacy</h3>
+            <div class="legal-body">
+                <p><strong>Be respectful.</strong> No harassment, hate speech, spam or illegal content. Staff may mute, ban or delete content that breaks these rules.</p>
+                <p><strong>Your data.</strong> Messages in the public chat are visible to everyone who is online. Accounts use Firebase Authentication; we store your username, email and the content you send so the chat works.</p>
+                <p><strong>Guests</strong> get a random name and are stored on this device only.</p>
+                <p><strong>Reports &amp; deletion.</strong> You can delete your own messages at any time. To remove your account or report abuse, contact an admin.</p>
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-btn confirm" style="width: 100%; font-size: 15px;" onclick="document.getElementById('legal-modal').style.display='none'">Got it</button>
+            </div>
+        </div>
+    </div>
+
     <div id="pc-notice-modal" class="modal-overlay" style="display: none;">
         <div class="modal-card">
             <h3><i class="fas fa-desktop"></i> Desktop Recommendation</h3>
@@ -3182,6 +3198,199 @@
             new MutationObserver(syncDot).observe(badge, { attributes: true, childList: true, characterData: true, subtree: true });
             syncDot();
         }
+    })();
+    </script>
+
+    <script>
+    // ===== Terms/Privacy link + online counter + smooth screen transitions =====
+    (function () {
+        const openLegal = () => { document.getElementById('legal-modal').style.display = 'flex'; };
+        window.openLegal = openLegal;
+        // رابط في قائمة الإعدادات
+        const menu = document.getElementById('menu-panel');
+        if (menu) {
+            const it = document.createElement('div');
+            it.className = 'ai-btn'; it.title = 'Terms & Privacy';
+            it.style.cssText = 'background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2);';
+            it.innerHTML = '<i class="fas fa-shield-halved"></i>';
+            it.addEventListener('click', openLegal);
+            const logout = document.getElementById('btn-logout');
+            menu.insertBefore(it, logout || null);
+        }
+        // رابط تحت الـlogin
+        const card = document.querySelector('#login-screen .login-card');
+        if (card && !card.querySelector('.legal-link')) {
+            const a = document.createElement('button');
+            a.type = 'button'; a.className = 'legal-link'; a.textContent = 'Terms & Privacy';
+            a.addEventListener('click', openLegal);
+            card.appendChild(a);
+        }
+        // عداد المتصلين في الـheader
+        const header = document.querySelector('#chat-screen .chat-header');
+        if (header && !document.getElementById('online-pill')) {
+            const pill = document.createElement('span');
+            pill.id = 'online-pill'; pill.className = 'online-pill';
+            pill.innerHTML = '<i></i><b id="online-count">0</b> online';
+            header.insertBefore(pill, header.querySelector('.user-badge'));
+        }
+        let tries = 0;
+        const hook = setInterval(() => {
+            if (window.socket && window.socket.on) {
+                clearInterval(hook);
+                window.socket.on('status-lists', (d) => {
+                    const n = (d && d.online) ? d.online.length : 0;
+                    const el = document.getElementById('online-count');
+                    if (el) el.textContent = n;
+                });
+            } else if (++tries > 60) clearInterval(hook);
+        }, 500);
+    })();
+    </script>
+
+    <script>
+    // ===== Report (users) + Reports queue & Audit log (staff) =====
+    (function () {
+        const $ = (id) => document.getElementById(id);
+        document.body.insertAdjacentHTML('beforeend', `
+        <div id="report-modal" class="modal-overlay" style="display:none;">
+            <div class="modal-card" style="max-width:340px;width:90%;">
+                <h3><i class="fas fa-flag"></i> Report message</h3>
+                <p>Why are you reporting this?</p>
+                <div id="report-reasons" class="rp-reasons">
+                    <button class="modal-btn cancel" data-reason="spam">Spam</button>
+                    <button class="modal-btn cancel" data-reason="harassment">Harassment</button>
+                    <button class="modal-btn cancel" data-reason="hate">Hate speech</button>
+                    <button class="modal-btn cancel" data-reason="inappropriate">Inappropriate</button>
+                    <button class="modal-btn cancel" data-reason="other">Other</button>
+                </div>
+                <button class="modal-btn cancel" style="width:100%;margin-top:8px;" id="report-cancel">Cancel</button>
+            </div>
+        </div>
+        <div id="reports-modal" class="modal-overlay" style="display:none;">
+            <div class="modal-card" style="max-width:560px;width:92%;text-align:left;border:1px solid rgba(255,215,0,.5);">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                    <h3 id="reports-title" style="margin:0;color:#ffd700;"><i class="fas fa-flag"></i> Reports</h3>
+                    <button id="reports-close" style="background:none;border:none;color:#fff;font-size:20px;cursor:pointer;">✕</button>
+                </div>
+                <div id="reports-list" class="rp-list"></div>
+            </div>
+        </div>`);
+
+        // زر Report في قائمة الرسالة
+        const rb = document.createElement('button');
+        rb.className = 'btn-primary'; rb.id = 'btn-msg-report';
+        rb.style.cssText = 'margin-bottom:10px;background:#334155;display:none;';
+        rb.innerHTML = '<i class="fas fa-flag"></i> Report';
+        $('btn-msg-edit').after(rb);
+        new MutationObserver(() => {
+            if ($('msg-options-modal').style.display !== 'flex') return;
+            const own = selectedSenderName === window.currentUsername;
+            const gone = selectedMsgElem && selectedMsgElem.dataset.deleted === 'true';
+            rb.style.display = (!own && !gone && selectedMsgElem && selectedMsgElem.dataset.id) ? 'flex' : 'none';
+        }).observe($('msg-options-modal'), { attributes: true, attributeFilter: ['style'] });
+
+        let pendingMsgId = null;
+        rb.addEventListener('click', () => {
+            pendingMsgId = selectedMsgElem && selectedMsgElem.dataset.id;
+            closeMsgModal();
+            if (pendingMsgId) $('report-modal').style.display = 'flex';
+        });
+        $('report-cancel').addEventListener('click', () => { $('report-modal').style.display = 'none'; });
+        $('report-reasons').addEventListener('click', async (e) => {
+            const b = e.target.closest('button[data-reason]');
+            if (!b || !pendingMsgId) return;
+            $('report-modal').style.display = 'none';
+            const idToken = await getIdTokenSafe();
+            window.socket.emit('report-message', { msgId: pendingMsgId, reason: b.dataset.reason, idToken });
+            pendingMsgId = null;
+        });
+
+        // صفوف في قائمة الـstaff
+        const staff = $('staff-panel');
+        const mkRow = (title, icon) => {
+            const r = document.createElement('div');
+            r.className = 'ai-btn'; r.title = title;
+            r.style.cssText = 'background:rgba(255,215,0,.10);border:1px solid rgba(255,215,0,.35);';
+            r.innerHTML = '<i class="fas ' + icon + '"></i><span class="rp-count" style="display:none"></span>';
+            staff.appendChild(r); return r;
+        };
+        const rowReports = mkRow('Reports', 'fa-flag');
+        const rowAudit = mkRow('Audit Log', 'fa-clipboard-list');
+        const countEl = rowReports.querySelector('.rp-count');
+
+        let mode = 'reports';
+        const list = $('reports-list');
+        const empty = (t) => { list.innerHTML = ''; const p = document.createElement('p'); p.className = 'rp-empty'; p.textContent = t; list.appendChild(p); };
+        async function fetchMode() {
+            const idToken = await getIdTokenSafe();
+            window.socket.emit(mode === 'reports' ? 'get-reports' : 'get-audit-log', { idToken });
+        }
+        function openMode(m) {
+            mode = m;
+            $('reports-title').innerHTML = m === 'reports' ? '<i class="fas fa-flag"></i> Reports' : '<i class="fas fa-clipboard-list"></i> Audit Log';
+            empty('Loading…');
+            $('reports-modal').style.display = 'flex';
+            fetchMode();
+        }
+        rowReports.addEventListener('click', () => openMode('reports'));
+        rowAudit.addEventListener('click', () => { if (!window.isUserAdmin) { appendSystemMessage('Audit log is for admins only.', 'error'); return; } openMode('audit'); });
+        $('reports-close').addEventListener('click', () => { $('reports-modal').style.display = 'none'; });
+
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        function renderReports(rows) {
+            countEl.textContent = rows.length; countEl.style.display = rows.length ? 'inline-block' : 'none';
+            if (mode !== 'reports' || $('reports-modal').style.display !== 'flex') return;
+            if (!rows.length) return empty('No open reports 🎉');
+            list.innerHTML = '';
+            rows.forEach(r => {
+                const card = el('div', 'rp-item');
+                const head = el('div', 'rp-head');
+                head.append(el('b', '', r.reportedUser), el('span', 'rp-reason', r.reason));
+                const body = el('div', 'rp-text', r.text || '');
+                const meta = el('div', 'rp-meta', 'by ' + r.reporter + ' · ' + new Date(r.createdAt).toLocaleString());
+                const act = el('div', 'rp-actions');
+                const done = async (a) => {
+                    const idToken = await getIdTokenSafe();
+                    window.socket.emit('resolve-report', { reportId: r.id || r.msgId, action: a, idToken });
+                };
+                const bDis = el('button', 'modal-btn cancel', 'Dismiss'); bDis.onclick = () => done('dismiss');
+                const bMute = el('button', 'modal-btn cancel', 'Mute 15m');
+                bMute.onclick = async () => { const idToken = await getIdTokenSafe(); window.socket.emit('mute-user', { username: r.reportedUser, idToken, minutes: 15 }); done('actioned'); };
+                act.append(bDis, bMute);
+                if (window.isUserAdmin) {
+                    const bBan = el('button', 'modal-btn cancel rp-danger', 'Ban');
+                    bBan.onclick = async () => { const idToken = await getIdTokenSafe(); window.socket.emit('block-user', { username: r.reportedUser, idToken }); done('actioned'); };
+                    act.append(bBan);
+                }
+                card.append(head, body, meta, act); list.append(card);
+            });
+        }
+        function renderAudit(rows) {
+            if (mode !== 'audit' || $('reports-modal').style.display !== 'flex') return;
+            if (!rows.length) return empty('No actions logged yet.');
+            list.innerHTML = '';
+            rows.forEach(a => {
+                const row = el('div', 'rp-item rp-audit');
+                row.append(el('b', '', a.action), el('span', '', ' · ' + a.actor + (a.target ? ' → ' + a.target : '') + (a.details ? ' (' + a.details + ')' : '')), el('div', 'rp-meta', new Date(a.at).toLocaleString()));
+                list.append(row);
+            });
+        }
+
+        let tries = 0;
+        const hook = setInterval(() => {
+            const s = window.socket;
+            if (s && s.on) {
+                clearInterval(hook);
+                s.on('reports-list', renderReports);
+                s.on('audit-log', renderAudit);
+                s.on('reports-changed', async () => {
+                    if (!window.isUserAdminOrMod) return;
+                    const idToken = await getIdTokenSafe();
+                    s.emit('get-reports', { idToken });
+                });
+                s.on('connect', async () => { if (window.isUserAdminOrMod) { const idToken = await getIdTokenSafe(); s.emit('get-reports', { idToken }); } });
+            } else if (++tries > 120) clearInterval(hook);
+        }, 500);
     })();
     </script>
 </body>
