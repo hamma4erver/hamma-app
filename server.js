@@ -127,6 +127,15 @@ app.post('/api/verify-code', async (req, res) => {
 // The owner accounts are always treated as "admin".
 // ==================================================
 const OWNER_NAMES = ["hamma", "hamma admin", "othmani hiba"];
+// Owners are identified by Firebase UID (a display name can be copied, a UID can't).
+// Set OWNER_UIDS on Render as a comma-separated list. Until it's set, the old
+// name-based check stays active as a fallback so nobody gets locked out.
+const OWNER_UIDS = (process.env.OWNER_UIDS || '').split(',').map(x => x.trim()).filter(Boolean);
+if (!OWNER_UIDS.length) console.warn("⚠️ OWNER_UIDS is not set — falling back to name-based owner check (spoofable). Set OWNER_UIDS in your environment.");
+function isOwnerIdentity(uid, name) {
+    if (OWNER_UIDS.length) return OWNER_UIDS.includes(uid);
+    return !!name && OWNER_NAMES.includes(String(name).toLowerCase());
+}
 
 async function verifyRole(idToken) {
     if (!idToken || !db) return { ok: false, role: null };
@@ -134,7 +143,7 @@ async function verifyRole(idToken) {
         const decoded = await admin.auth().verifyIdToken(idToken);
         const userDoc = await db.collection('users').doc(decoded.uid).get();
         const dbRole = userDoc.exists ? userDoc.data().role : null;
-        const isOwner = decoded.name && OWNER_NAMES.includes(decoded.name.toLowerCase());
+        const isOwner = isOwnerIdentity(decoded.uid, decoded.name);
 
         let role = null;
         if (isOwner || dbRole === "admin") role = "admin";
@@ -230,18 +239,49 @@ app.get('/vapid-public-key', (req, res) => {
 // even though the chat itself only knows people by their display name.
 async function getRoleByUsername(username) {
     if (!username) return null;
-    if (OWNER_NAMES.includes(username.toLowerCase())) return "admin";
+    if (!OWNER_UIDS.length && OWNER_NAMES.includes(username.toLowerCase())) return "admin";
     if (!db) return null;
     try {
         let snap = await db.collection('users').where('username', '==', username).limit(1).get();
         if (snap.empty) snap = await db.collection('users').where('displayName', '==', username).limit(1).get();
         if (snap.empty) return null;
+        if (OWNER_UIDS.includes(snap.docs[0].id)) return "admin";
         const role = snap.docs[0].data().role;
         return role === "admin" ? "admin" : (role === "moderator" ? "moderator" : "user");
     } catch (e) {
         console.error("Role lookup failed:", e.message);
         return null;
     }
+}
+
+// ==================================================
+// Reports + audit log
+// recentMessages keeps the last messages the SERVER saw, so a report uses the
+// server's copy of who wrote what — a reporter can't invent a message.
+// ==================================================
+const recentMessages = new Map(); // msgId -> { user, msg, mediaType, at }
+function rememberMessage(d) {
+    if (!d || !d.id) return;
+    recentMessages.set(String(d.id), { user: d.user, msg: String(d.msg || '').slice(0, 500), mediaType: d.mediaType || null, at: Date.now() });
+    if (recentMessages.size > 300) recentMessages.delete(recentMessages.keys().next().value);
+}
+const auditBuffer = [];
+function audit(action, actor, target, details) {
+    const e = { action, actor: actor || 'unknown', target: target || null, details: details || null, at: Date.now() };
+    auditBuffer.unshift(e);
+    if (auditBuffer.length > 200) auditBuffer.pop();
+    if (db) db.collection('auditLog').add(e).catch(() => {});
+}
+const reportsMem = [];            // fallback when Firestore isn't available
+const reportKeys = new Set();     // reporter|msgId -> one report per person per message
+const reportLog = new Map();      // socket.id -> timestamps (anti report-spam)
+const REPORT_REASONS = ['spam', 'harassment', 'hate', 'inappropriate', 'other'];
+
+async function nameFromToken(idToken, claimed) {
+    if (idToken && db) {
+        try { return (await admin.auth().verifyIdToken(idToken)).name || null; } catch (e) { return null; }
+    }
+    return /^Guest_\d{4}$/.test(String(claimed || '')) ? claimed : null;
 }
 
 // AI chat endpoint
@@ -366,6 +406,7 @@ function scheduleAutoUnmute(username, ms) {
 }
 
 function performChatClear(by) {
+    audit('clear-chat', by);
     pinnedMessage = null;
     io.emit('chat-cleared', { by: by || 'Admin' });
     io.emit('pinned-message-update', null);
@@ -445,9 +486,24 @@ io.on('connection', (socket) => {
     });
 
     socket.on('chat-message', async (data) => {
+        if (!data || typeof data !== 'object') return;
         if (isRateLimited(socket.id)) {
             return socket.emit('system-msg', { text: "You're sending messages too fast — slow down a bit.", kind: 'error' });
         }
+        // Identity comes from the verified token (or the Guest_#### pattern), never from the
+        // client-sent name — otherwise anyone could post as "Hamma" or dodge a mute/ban.
+        let verifiedName = null;
+        if (data.idToken && db) {
+            try { verifiedName = (await admin.auth().verifyIdToken(data.idToken)).name || null; } catch (e) { verifiedName = null; }
+        } else if (/^Guest_\d{4}$/.test(String(data.user || ''))) {
+            verifiedName = data.user;
+        }
+        if (!verifiedName) {
+            return socket.emit('system-msg', { text: 'Could not verify your identity — please log in again.', kind: 'error' });
+        }
+        const staffToken = data.idToken;
+        data.user = verifiedName;
+        delete data.idToken; // never broadcast Firebase tokens to the other clients
         if (blockedUsers.has(data.user)) {
             return socket.emit('system-msg', { text: 'You are banned from sending messages.', kind: 'error' });
         }
@@ -457,12 +513,77 @@ io.on('connection', (socket) => {
             return socket.emit('system-msg', { text: `You are muted, try again in ${remaining} minute(s).`, kind: 'error' });
         }
         if (chatLocked) {
-            const { ok } = await verifyAdmin(data.idToken);
+            const { ok } = await verifyAdmin(staffToken);
             if (!ok) {
                 return socket.emit('system-msg', { text: 'Chat is currently locked by an admin.', kind: 'error' });
             }
         }
+        rememberMessage(data);
         io.emit('chat-message', data);
+    });
+
+    // ---- Reports -------------------------------------------------
+    socket.on('report-message', async ({ msgId, reason, idToken }) => {
+        const now = Date.now();
+        const log = (reportLog.get(socket.id) || []).filter(t => now - t < 10 * 60 * 1000);
+        if (log.length >= 5) return socket.emit('system-msg', { text: "You've sent too many reports — try again later.", kind: 'error' });
+        const reporter = await nameFromToken(idToken, socketUsers.get(socket.id));
+        if (!reporter) return socket.emit('system-msg', { text: 'Could not verify your identity.', kind: 'error' });
+        const msg = recentMessages.get(String(msgId));
+        if (!msg) return socket.emit('system-msg', { text: 'This message is too old to report.', kind: 'error' });
+        if (msg.user === reporter) return socket.emit('system-msg', { text: "You can't report your own message.", kind: 'error' });
+        const key = reporter + '|' + msgId;
+        if (reportKeys.has(key)) return socket.emit('system-msg', { text: 'You already reported this message.', kind: 'info' });
+        reportKeys.add(key);
+        log.push(now); reportLog.set(socket.id, log);
+
+        const report = {
+            msgId: String(msgId), reportedUser: msg.user, text: msg.mediaType ? `[${msg.mediaType}]` : msg.msg,
+            reason: REPORT_REASONS.includes(reason) ? reason : 'other', reporter, status: 'open', createdAt: now
+        };
+        if (db) {
+            try { await db.collection('reports').add(report); } catch (e) { reportsMem.unshift(report); }
+        } else { reportsMem.unshift(report); }
+        socket.emit('system-msg', { text: '✅ Report sent. Thank you — staff will review it.', kind: 'info' });
+        io.emit('reports-changed'); // no content, staff clients refetch
+    });
+
+    socket.on('get-reports', async ({ idToken }) => {
+        const { ok } = await verifyRole(idToken);
+        if (!ok) return;
+        let list = reportsMem.filter(r => r.status === 'open');
+        if (db) {
+            try {
+                const snap = await db.collection('reports').where('status', '==', 'open').limit(100).get();
+                list = list.concat(snap.docs.map(d => Object.assign({ id: d.id }, d.data())));
+            } catch (e) { console.error('get-reports failed:', e.message); }
+        }
+        list.sort((a, b) => b.createdAt - a.createdAt);
+        socket.emit('reports-list', list.slice(0, 100));
+    });
+
+    socket.on('resolve-report', async ({ reportId, action, idToken }) => {
+        const { ok, name } = await verifyRole(idToken);
+        if (!ok || !reportId) return;
+        const status = action === 'dismiss' ? 'dismissed' : 'actioned';
+        const mem = reportsMem.find(r => r.id === reportId || r.msgId === reportId);
+        if (mem) mem.status = status;
+        if (db) { try { await db.collection('reports').doc(String(reportId)).update({ status, resolvedBy: name || null, resolvedAt: Date.now() }); } catch (e) {} }
+        audit('report-' + status, name, null, String(reportId));
+        io.emit('reports-changed');
+    });
+
+    socket.on('get-audit-log', async ({ idToken }) => {
+        const { ok, role } = await verifyRole(idToken);
+        if (!ok || role !== 'admin') return; // admins only
+        let list = auditBuffer.slice(0, 100);
+        if (db) {
+            try {
+                const snap = await db.collection('auditLog').orderBy('at', 'desc').limit(100).get();
+                if (!snap.empty) list = snap.docs.map(d => d.data());
+            } catch (e) {}
+        }
+        socket.emit('audit-log', list);
     });
 
     // Relay typing status to everyone else (Instagram-style "X is typing…" indicator)
@@ -498,6 +619,7 @@ io.on('connection', (socket) => {
             }
         }
 
+        if (isStaff && !isSelf) audit('delete-message', name, messageSender, String(msgId));
         io.emit('delete-message', { msgId, staffDeleted: isStaff && !isSelf });
     });
 
@@ -543,6 +665,7 @@ io.on('connection', (socket) => {
         }
 
         mutedUsers.set(target, expiresAt);
+        audit('mute', name, target, duration + 'm' + (backfired ? ' (backfired)' : ''));
         scheduleAutoUnmute(target, ms);
 
         if (backfired) {
@@ -556,7 +679,7 @@ io.on('connection', (socket) => {
     // Unmuting a moderator is reserved for the owners (Hamma Admin / Othmani Hiba) —
     // a regular admin can't lift a moderator's mute.
     socket.on('unmute-user', async ({ username, idToken }) => {
-        const { ok, role, uid } = await verifyRole(idToken);
+        const { ok, role, uid, name } = await verifyRole(idToken);
         if (!ok) return socket.emit('system-msg', { text: 'You are not allowed to unmute users.', kind: 'error' });
 
         if (role === 'moderator') {
@@ -570,6 +693,7 @@ io.on('connection', (socket) => {
         }
 
         mutedUsers.delete(username);
+        audit('unmute', name, username);
         if (muteTimers.has(username)) {
             clearTimeout(muteTimers.get(username));
             muteTimers.delete(username);
@@ -580,7 +704,7 @@ io.on('connection', (socket) => {
 
     // Permanent ban (admins only — moderators can only mute/pin)
     socket.on('block-user', async ({ username, idToken }) => {
-        const { ok, role } = await verifyRole(idToken);
+        const { ok, role, name } = await verifyRole(idToken);
         if (!ok || role !== 'admin') return socket.emit('system-msg', { text: 'You are not allowed to ban users.', kind: 'error' });
 
         // Admins can't ban other admins — only mute them
@@ -590,16 +714,18 @@ io.on('connection', (socket) => {
         }
 
         blockedUsers.add(username);
+        audit('ban', name, username);
         io.emit('system-msg', { text: `🚫 ${username} has been banned from the chat.`, kind: 'ban' });
         kickUserSockets(username, 'You have been banned by an admin.');
         broadcastStatusLists();
     });
 
     socket.on('unblock-user', async ({ username, idToken }) => {
-        const { ok, role } = await verifyRole(idToken);
+        const { ok, role, name } = await verifyRole(idToken);
         if (!ok || role !== 'admin') return socket.emit('system-msg', { text: 'You are not allowed to unban users.', kind: 'error' });
 
         blockedUsers.delete(username);
+        audit('unban', name, username);
         io.emit('system-msg', { text: `✅ ${username} has been unbanned.`, kind: 'info' });
         broadcastStatusLists();
     });
@@ -645,17 +771,19 @@ io.on('connection', (socket) => {
 
     // Lock / unlock the chat (admins only; while locked, only admins/mods can send)
     socket.on('lock-chat', async ({ idToken }) => {
-        const { ok, role } = await verifyRole(idToken);
+        const { ok, role, name } = await verifyRole(idToken);
         if (!ok || role !== 'admin') return socket.emit('system-msg', { text: 'You are not allowed to lock the chat.', kind: 'error' });
         chatLocked = true;
+        audit('lock-chat', name);
         io.emit('chat-lock-status', { locked: true });
         io.emit('system-msg', { text: '🔒 The chat has been locked by an admin.', kind: 'ban' });
     });
 
     socket.on('unlock-chat', async ({ idToken }) => {
-        const { ok, role } = await verifyRole(idToken);
+        const { ok, role, name } = await verifyRole(idToken);
         if (!ok || role !== 'admin') return socket.emit('system-msg', { text: 'You are not allowed to unlock the chat.', kind: 'error' });
         chatLocked = false;
+        audit('unlock-chat', name);
         io.emit('chat-lock-status', { locked: false });
         io.emit('system-msg', { text: '🔓 The chat has been unlocked.', kind: 'info' });
     });
