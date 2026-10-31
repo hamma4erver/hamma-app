@@ -1211,3 +1211,49 @@ input:focus, .input-group input:focus {
 .hm-check input:checked + .hm-check-box i { transform: scale(1); }
 .hm-check input:focus-visible + .hm-check-box { box-shadow: 0 0 0 3px rgba(10,132,255,.35); }
 .hm-check-text { font-size: 14px; color: var(--ios-label-2); }
+
+/* =====================================================================
+   حركة موحّدة + تفاصيل professional
+   ===================================================================== */
+:root { --t-fast: .18s; --t-med: .35s; }
+.main-layout, .login-container { animation: screenIn .45s var(--ios-spring) both; }
+@keyframes screenIn { from { opacity: 0; transform: scale(.985) translateY(8px); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
+button, .ai-btn, .bg-btn, .icon-btn, .modal-btn { transition: transform var(--t-fast) var(--ios-spring), opacity var(--t-fast) ease, background var(--t-med) ease, box-shadow var(--t-med) ease; -webkit-tap-highlight-color: transparent; }
+button:active, .bg-btn:active { transform: scale(.94); }
+@media (hover: hover) { .bg-btn:hover { transform: scale(1.12); } .icon-btn:hover { transform: translateY(-2px); } }
+.modal-overlay { animation: fadeIn .25s ease both; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.modal-card { animation: sheetIn .5s var(--ios-spring) both; }
+@keyframes sheetIn { from { opacity: 0; transform: translateY(30px) scale(.94); } to { opacity: 1; transform: none; } }
+
+/* شات فارغ */
+#chat-box:empty::before { content: "No messages yet — say hi 👋"; margin: auto; color: var(--ios-label-2); font-size: 14px; animation: fadeIn .6s ease both; }
+
+/* عداد المتصلين */
+.online-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ios-label-2); background: var(--ios-surface-2); border-radius: 999px; padding: 5px 10px; margin-left: auto; margin-right: 8px; }
+.online-pill i { width: 8px; height: 8px; border-radius: 50%; background: #30d158; box-shadow: 0 0 8px #30d158; animation: livePulse 2s ease-in-out infinite; }
+.online-pill b { color: #fff; font-weight: 600; }
+@keyframes livePulse { 50% { opacity: .35; transform: scale(.8); } }
+
+/* Terms */
+.legal-body { max-height: 46vh; overflow-y: auto; margin: 8px 0 16px; padding-right: 4px; }
+.legal-body p { font-size: 14px; line-height: 1.5; margin: 0 0 12px; color: var(--ios-label-2); }
+.legal-body strong { color: #fff; }
+.legal-link { display: block; margin: 14px auto 0; background: none; border: 0; color: rgba(255,255,255,.55); font-size: 12px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.legal-link:hover { color: #00f2fe; }
+
+/* Reports / Audit */
+.rp-reasons { display: grid; gap: 8px; margin: 10px 0; }
+.rp-list { max-height: 56vh; overflow-y: auto; display: grid; gap: 10px; }
+.rp-item { background: var(--ios-surface-2); border: .5px solid var(--ios-separator); border-radius: 14px; padding: 12px; animation: sheetIn .4s var(--ios-spring) both; }
+.rp-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.rp-reason { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; background: rgba(255,69,58,.18); color: #ff6b61; border-radius: 999px; padding: 3px 9px; }
+.rp-text { font-size: 14px; color: #fff; word-break: break-word; margin-bottom: 6px; }
+.rp-meta { font-size: 12px; color: var(--ios-label-2); margin-top: 2px; }
+.rp-actions { display: flex; gap: 8px; margin-top: 10px; }
+.rp-actions .modal-btn { flex: 1; padding: 9px 6px; font-size: 13px; background: rgba(255,255,255,.08); }
+.rp-danger { color: var(--ios-red) !important; }
+.rp-audit { font-size: 13px; color: #fff; padding: 10px 12px; }
+.rp-audit b { color: #ffd700; }
+.rp-empty { text-align: center; color: var(--ios-label-2); margin: 20px 0; }
+.rp-count { margin-left: auto; background: var(--ios-red); color: #fff; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 2px 8px; }
