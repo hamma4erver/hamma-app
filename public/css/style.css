@@ -1295,51 +1295,51 @@ html[data-theme="light"] {
     --ios-label-2: rgba(60, 60, 67, 0.62);
     --ios-blue: #007aff;
 }
-html[data-theme="light"] body { background: var(--ios-bg) !important; animation: none; color: #1c1c1e; }
+html[data-theme="light"] body { background: var(--ios-bg) !important; animation: none; color: #2a2d34; }
 html[data-theme="light"] .blob, html[data-theme="light"] .glow-orb { opacity: .25; }
 
 /* login */
 html[data-theme="light"] .login-container { background: radial-gradient(circle at 50% 30%, #ffffff 0%, #eaf1fb 100%); }
 html[data-theme="light"] .login-container::before { opacity: .55; }
 html[data-theme="light"] .parallax-blob { opacity: .28; }
-html[data-theme="light"] .login-card { background: rgba(255,255,255,.72); border-color: rgba(0,122,255,.28); box-shadow: 0 20px 50px rgba(0,0,0,.10), 0 0 30px rgba(0,122,255,.18); color: #1c1c1e; }
+html[data-theme="light"] .login-card { background: rgba(240,241,245,.82); border-color: rgba(0,122,255,.28); box-shadow: 0 20px 50px rgba(0,0,0,.10), 0 0 30px rgba(0,122,255,.18); color: #2a2d34; }
 html[data-theme="light"] .login-card h1 { color: #0a84ff; text-shadow: 0 0 14px rgba(0,122,255,.28); }
 html[data-theme="light"] .login-card p, html[data-theme="light"] .login-card label, html[data-theme="light"] .legal-link { color: rgba(60,60,67,.7); }
 html[data-theme="light"] .login-container .btn-primary { background: linear-gradient(45deg, #0a84ff, #5ac8fa); box-shadow: 0 4px 16px rgba(10,132,255,.35); color: #fff; }
 
 /* chat */
-html[data-theme="light"] .chat-title { color: #1c1c1e; }
-html[data-theme="light"] .user-badge { background: var(--ios-surface-2); color: #1c1c1e; }
+html[data-theme="light"] .chat-title { color: #2a2d34; }
+html[data-theme="light"] .user-badge { background: var(--ios-surface-2); color: #2a2d34; }
 html[data-theme="light"] #chat-box { background: var(--ios-surface); box-shadow: 0 1px 8px rgba(0,0,0,.06); }
 html[data-theme="light"] #chat-box::-webkit-scrollbar-thumb { background: rgba(0,0,0,.25); }
-html[data-theme="light"] .other-msg, html[data-theme="light"] .other-msg:hover { background: #e9e9eb; color: #1c1c1e; }
-html[data-theme="light"] .sidebar { background: rgba(255,255,255,.75); border-color: var(--ios-separator); }
-html[data-theme="light"] input, html[data-theme="light"] .input-group input, html[data-theme="light"] #message { background: var(--ios-surface-2); color: #1c1c1e; }
+html[data-theme="light"] .other-msg, html[data-theme="light"] .other-msg:hover { background: #e9e9eb; color: #2a2d34; }
+html[data-theme="light"] .sidebar { background: rgba(236,238,243,.8); border-color: var(--ios-separator); }
+html[data-theme="light"] input, html[data-theme="light"] .input-group input, html[data-theme="light"] #message { background: var(--ios-surface-2); color: #2a2d34; }
 html[data-theme="light"] .icon-btn { background: var(--ios-surface-2); color: var(--ios-blue); }
 html[data-theme="light"] .online-pill { background: var(--ios-surface-2); }
-html[data-theme="light"] .online-pill b { color: #1c1c1e; }
-html[data-theme="light"] .new-msg-pill { background: rgba(255,255,255,.92); color: #1c1c1e; }
+html[data-theme="light"] .online-pill b { color: #2a2d34; }
+html[data-theme="light"] .new-msg-pill { background: rgba(240,241,245,.95); color: #2a2d34; }
 html[data-theme="light"] #chat-box:empty::before { color: var(--ios-label-2); }
 
 /* modals + panels */
 html[data-theme="light"] .modal-overlay { background: rgba(0,0,0,.28); }
-html[data-theme="light"] .modal-card { background: rgba(255,255,255,.94); color: #1c1c1e; border-color: var(--ios-separator); box-shadow: 0 24px 60px rgba(0,0,0,.18); }
-html[data-theme="light"] .modal-card h3, html[data-theme="light"] .legal-body strong, html[data-theme="light"] .rp-text, html[data-theme="light"] .rp-audit, html[data-theme="light"] .hm-check-text { color: #1c1c1e; }
-html[data-theme="light"] .btn-secondary, html[data-theme="light"] .modal-btn.cancel { background: var(--ios-surface-2); color: #1c1c1e; }
+html[data-theme="light"] .modal-card { background: rgba(240,241,245,.96); color: #2a2d34; border-color: var(--ios-separator); box-shadow: 0 24px 60px rgba(0,0,0,.18); }
+html[data-theme="light"] .modal-card h3, html[data-theme="light"] .legal-body strong, html[data-theme="light"] .rp-text, html[data-theme="light"] .rp-audit, html[data-theme="light"] .hm-check-text { color: #2a2d34; }
+html[data-theme="light"] .btn-secondary, html[data-theme="light"] .modal-btn.cancel { background: var(--ios-surface-2); color: #2a2d34; }
 html[data-theme="light"] .rp-actions .modal-btn { background: rgba(0,0,0,.06); }
 html[data-theme="light"] .rp-item { background: #f4f4f8; }
 html[data-theme="light"] .rp-audit b { color: #b07d00; }
 html[data-theme="light"] #reports-title { color: #b07d00 !important; }
-html[data-theme="light"] .hm-panel { background: rgba(255,255,255,.88); border-color: rgba(0,122,255,.45); box-shadow: 0 0 0 1px rgba(0,122,255,.10), 0 18px 44px rgba(0,0,0,.18); }
+html[data-theme="light"] .hm-panel { background: rgba(240,241,245,.93); border-color: rgba(0,122,255,.45); box-shadow: 0 0 0 1px rgba(0,122,255,.10), 0 18px 44px rgba(0,0,0,.18); }
 html[data-theme="light"] #staff-panel { border-color: rgba(176,125,0,.5); }
 html[data-theme="light"] .hm-panel .ai-btn { background: rgba(0,0,0,.05) !important; border-color: rgba(0,0,0,.10) !important; }
-html[data-theme="light"] .hm-panel .ai-btn::after { color: #1c1c1e; }
+html[data-theme="light"] .hm-panel .ai-btn::after { color: #2a2d34; }
 html[data-theme="light"] .hm-label { color: #007aff; }
 html[data-theme="light"] #staff-panel .hm-label { color: #b07d00; }
 html[data-theme="light"] .hm-swatches { border-bottom-color: rgba(0,0,0,.10); }
 html[data-theme="light"] .hm-check-box { border-color: rgba(60,60,67,.4); background: rgba(0,0,0,.03); }
 html[data-theme="light"] .react-picker, html[data-theme="light"] .av-grid button { background: rgba(0,0,0,.06); }
-html[data-theme="light"] .react-chip { background: rgba(0,0,0,.08); color: #1c1c1e; }
+html[data-theme="light"] .react-chip { background: rgba(0,0,0,.08); color: #2a2d34; }
 html[data-theme="light"] .my-msg .react-chip { background: rgba(255,255,255,.25); color: #fff; }
 html[data-theme="light"] .react-chip.mine { background: rgba(0,122,255,.18); border-color: #007aff; }
 html[data-theme="light"] .my-msg .react-chip.mine { background: rgba(255,255,255,.35); border-color: #fff; }
@@ -1363,5 +1363,36 @@ html[data-theme="light"] .av-grid button.sel, html[data-theme="light"] .av-color
 .st-chip { background: var(--ios-surface-2); border-radius: 999px; padding: 5px 12px; font-size: 13px; }
 .st-skel { height: 70px; border-radius: 14px; margin-bottom: 10px; background: linear-gradient(90deg, var(--ios-surface-2) 25%, rgba(255,255,255,.12) 50%, var(--ios-surface-2) 75%); background-size: 200% 100%; animation: skel 1.2s linear infinite; }
 @keyframes skel { to { background-position: -200% 0; } }
-html[data-theme="light"] .st-card-wrap { color: #1c1c1e; }
+html[data-theme="light"] .st-card-wrap { color: #2a2d34; }
 html[data-theme="light"] .st-chip { background: rgba(0,0,0,.06); }
+
+/* ---- Light mode: ألين على العين (بلا أبيض صافي، تباين أقل، نيون أخف) ---- */
+html[data-theme="light"] {
+    --ios-bg: #e6e8ed;
+    --ios-surface: #f1f2f5;
+    --ios-surface-2: #dfe2e8;
+    --ios-separator: rgba(40, 44, 52, 0.14);
+    --ios-label-2: rgba(50, 55, 65, 0.66);
+    --ios-blue: #3478d6;
+}
+html[data-theme="light"] body { color: #2a2d34; }
+html[data-theme="light"] .login-container { background: radial-gradient(circle at 50% 30%, #eef0f4 0%, #dde2eb 100%); }
+html[data-theme="light"] .login-container::before { opacity: .32; }
+html[data-theme="light"] .parallax-blob { opacity: .16; }
+html[data-theme="light"] .login-card { border-color: rgba(52,120,214,.22); box-shadow: 0 14px 36px rgba(30,40,60,.12), 0 0 18px rgba(52,120,214,.10); }
+html[data-theme="light"] .login-card h1 { color: #3a6fc4; text-shadow: none; }
+html[data-theme="light"] .login-container .btn-primary { background: linear-gradient(45deg, #3478d6, #5a9bd8); box-shadow: 0 4px 12px rgba(52,120,214,.28); }
+html[data-theme="light"] #chat-box { box-shadow: 0 1px 6px rgba(30,40,60,.07); }
+html[data-theme="light"] .other-msg, html[data-theme="light"] .other-msg:hover { background: #dcdfe6; color: #2a2d34; }
+html[data-theme="light"] .my-msg, html[data-theme="light"] .my-msg:hover { background: #3478d6; }
+html[data-theme="light"] .modal-card { box-shadow: 0 18px 44px rgba(30,40,60,.16); }
+html[data-theme="light"] .modal-overlay { background: rgba(30,36,48,.32); }
+html[data-theme="light"] .hm-panel { border-color: rgba(52,120,214,.35); box-shadow: 0 12px 32px rgba(30,40,60,.18); }
+html[data-theme="light"] .hm-panel .ai-btn { background: rgba(30,40,60,.06) !important; border-color: rgba(30,40,60,.10) !important; }
+html[data-theme="light"] .hm-label { color: #3478d6; }
+html[data-theme="light"] .rp-item, html[data-theme="light"] .st-kpi { background: #e6e8ed; }
+html[data-theme="light"] .st-bar { background: linear-gradient(180deg, #3478d6, #7fb0e6); }
+html[data-theme="light"] .react-chip.mine { background: rgba(52,120,214,.18); border-color: #3478d6; }
+html[data-theme="light"] .icon-btn, html[data-theme="light"] .online-pill { background: var(--ios-surface-2); }
+html[data-theme="light"] .icon-btn.panel-open { box-shadow: 0 0 10px rgba(52,120,214,.28); }
+html[data-theme="light"] #btn-staff { box-shadow: 0 0 8px rgba(176,125,0,.22); }
