@@ -260,10 +260,23 @@ async function getRoleByUsername(username) {
 // server's copy of who wrote what — a reporter can't invent a message.
 // ==================================================
 const recentMessages = new Map(); // msgId -> { user, msg, mediaType, at }
+const reactionsByMsg = new Map(); // msgId -> Map(username -> emoji)  (one reaction per person per message)
+const reactionLog = new Map();    // socket.id -> timestamps (anti-spam)
+const ALLOWED_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
+function reactionSummary(msgId) {
+    const out = {};
+    const m = reactionsByMsg.get(String(msgId));
+    if (m) for (const [user, emoji] of m) (out[emoji] = out[emoji] || []).push(user);
+    return out;
+}
 function rememberMessage(d) {
     if (!d || !d.id) return;
     recentMessages.set(String(d.id), { user: d.user, msg: String(d.msg || '').slice(0, 500), mediaType: d.mediaType || null, at: Date.now() });
-    if (recentMessages.size > 300) recentMessages.delete(recentMessages.keys().next().value);
+    if (recentMessages.size > 300) {
+        const oldest = recentMessages.keys().next().value;
+        recentMessages.delete(oldest);
+        reactionsByMsg.delete(oldest);
+    }
 }
 const auditBuffer = [];
 function audit(action, actor, target, details) {
@@ -282,6 +295,31 @@ async function nameFromToken(idToken, claimed) {
         try { return (await admin.auth().verifyIdToken(idToken)).name || null; } catch (e) { return null; }
     }
     return /^Guest_\d{4}$/.test(String(claimed || '')) ? claimed : null;
+}
+
+// ---- Avatars (emoji + colour). Names -> avatar, cached; persisted on users/{uid}.avatar ----
+const AVATAR_EMOJIS = ["😀", "😎", "🤩", "😇", "🥳", "🤓", "😈", "🤖", "👻", "👽", "🦊", "🐱", "🐶", "🐼", "🦁", "🐸", "🐵", "🦄", "🔥", "⚡", "🌙", "🍀", "🎮", "🚀"];
+const AVATAR_COLORS = ["#0a84ff", "#30d158", "#ff9f0a", "#ff453a", "#bf5af2", "#64d2ff", "#ff375f", "#ffd60a"];
+const avatarCache = new Map(); // username -> {e,c} | null
+const avatarCooldown = new Map();
+function cleanAvatar(a) {
+    if (!a || !AVATAR_EMOJIS.includes(a.e) || !AVATAR_COLORS.includes(a.c)) return null;
+    return { e: a.e, c: a.c };
+}
+async function avatarFor(name) {
+    if (!name) return null;
+    if (avatarCache.has(name)) return avatarCache.get(name);
+    let av = null;
+    if (db && !/^Guest_\d{4}$/.test(name)) {
+        try {
+            let snap = await db.collection('users').where('username', '==', name).limit(1).get();
+            if (snap.empty) snap = await db.collection('users').where('displayName', '==', name).limit(1).get();
+            if (!snap.empty) av = cleanAvatar(snap.docs[0].data().avatar);
+        } catch (e) {}
+    }
+    if (avatarCache.size > 2000) avatarCache.clear();
+    avatarCache.set(name, av);
+    return av;
 }
 
 // AI chat endpoint
@@ -406,6 +444,7 @@ function scheduleAutoUnmute(username, ms) {
 }
 
 function performChatClear(by) {
+    reactionsByMsg.clear();
     audit('clear-chat', by);
     pinnedMessage = null;
     io.emit('chat-cleared', { by: by || 'Admin' });
@@ -504,6 +543,7 @@ io.on('connection', (socket) => {
         const staffToken = data.idToken;
         data.user = verifiedName;
         delete data.idToken; // never broadcast Firebase tokens to the other clients
+        data.avatar = await avatarFor(verifiedName); // server decides the avatar, not the client
         if (blockedUsers.has(data.user)) {
             return socket.emit('system-msg', { text: 'You are banned from sending messages.', kind: 'error' });
         }
@@ -520,6 +560,61 @@ io.on('connection', (socket) => {
         }
         rememberMessage(data);
         io.emit('chat-message', data);
+    });
+
+    // ---- Avatars -------------------------------------------------
+    socket.on('set-avatar', async ({ avatar, idToken }) => {
+        const av = cleanAvatar(avatar);
+        if (!av) return;
+        const now = Date.now();
+        if (now - (avatarCooldown.get(socket.id) || 0) < 1500) return;
+        avatarCooldown.set(socket.id, now);
+        let name = null, uid = null;
+        if (idToken && db) {
+            try { const d = await admin.auth().verifyIdToken(idToken); name = d.name || null; uid = d.uid; } catch (e) {}
+        } else if (/^Guest_\d{4}$/.test(String(socketUsers.get(socket.id) || ''))) {
+            name = socketUsers.get(socket.id);
+        }
+        if (!name) return;
+        avatarCache.set(name, av);
+        if (uid && db) db.collection('users').doc(uid).set({ avatar: av }, { merge: true }).catch(() => {});
+        io.emit('avatar-update', { user: name, avatar: av });
+    });
+
+    socket.on('get-avatar', async ({ idToken }) => {
+        const name = await nameFromToken(idToken, socketUsers.get(socket.id));
+        if (!name) return;
+        socket.emit('avatar-update', { user: name, avatar: await avatarFor(name) });
+    });
+
+    socket.on('get-avatars', async ({ names }) => {
+        if (!Array.isArray(names)) return;
+        const out = {};
+        for (const n of names.slice(0, 60)) { if (typeof n === 'string') out[n] = await avatarFor(n); }
+        socket.emit('avatars-bulk', out);
+    });
+
+    // ---- Reactions (one per person per message; same emoji again = remove) ----
+    socket.on('react-message', async ({ msgId, emoji, idToken }) => {
+        if (!ALLOWED_REACTIONS.includes(emoji) || msgId == null) return;
+        const now = Date.now();
+        const log = (reactionLog.get(socket.id) || []).filter(t => now - t < 10000);
+        if (log.length >= 15) return;
+        log.push(now); reactionLog.set(socket.id, log);
+
+        const user = await nameFromToken(idToken, socketUsers.get(socket.id));
+        if (!user) return;
+        if (blockedUsers.has(user)) return;
+        const exp = mutedUsers.get(user);
+        if (exp && exp > now) return; // muted people can't react either
+        const key = String(msgId);
+        if (!recentMessages.has(key)) return; // only messages the server actually saw
+
+        let m = reactionsByMsg.get(key);
+        if (!m) { m = new Map(); reactionsByMsg.set(key, m); }
+        if (m.get(user) === emoji) m.delete(user); else m.set(user, emoji);
+        if (!m.size) reactionsByMsg.delete(key);
+        io.emit('reaction-update', { msgId: key, reactions: reactionSummary(key) });
     });
 
     // ---- Reports -------------------------------------------------
@@ -1142,6 +1237,9 @@ io.on('connection', (socket) => {
         if (username) removeUsernameSocket(username, socket.id);
         socketUsers.delete(socket.id);
         rateLimitLog.delete(socket.id);
+        reactionLog.delete(socket.id);
+        avatarCooldown.delete(socket.id);
+        reportLog.delete(socket.id);
         activeDMView.delete(socket.id);
         onlineUsersCount = Math.max(0, onlineUsersCount - 1);
         io.emit('update-online', onlineUsersCount);
