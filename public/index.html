@@ -257,6 +257,16 @@
             30% { transform: translateY(-4px); opacity: 1; }
         }
     </style>
+    <script>
+    // Theme is applied before first paint (no dark flash): saved choice, else the device setting
+    (function () {
+        try {
+            var t = localStorage.getItem('hamma_theme') || 'auto';
+            var light = t === 'light' || (t === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches);
+            document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark');
+        } catch (e) {}
+    })();
+    </script>
 </head>
 <body>
 
@@ -3617,6 +3627,140 @@
             }
             if (++tries > 7200) clearInterval(hook);
         }, 1000);
+    })();
+    </script>
+
+    <script>
+    // ===== Light / Dark / Auto =====
+    (function () {
+        const KEY = 'hamma_theme';
+        const get = () => { try { return localStorage.getItem(KEY) || 'auto'; } catch (e) { return 'auto'; } };
+        const mq = window.matchMedia ? matchMedia('(prefers-color-scheme: light)') : null;
+        const ICON = { auto: 'fa-circle-half-stroke', light: 'fa-sun', dark: 'fa-moon' };
+        const LABEL = { auto: 'Theme: Auto', light: 'Theme: Light', dark: 'Theme: Dark' };
+        const row = document.createElement('div');
+        row.className = 'ai-btn'; row.id = 'btn-theme';
+        row.style.cssText = 'background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);';
+        function apply() {
+            const t = get();
+            const light = t === 'light' || (t === 'auto' && mq && mq.matches);
+            document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark');
+            const meta = document.querySelector('meta[name="theme-color"]');
+            if (meta) meta.setAttribute('content', light ? '#f2f2f7' : '#000000');
+            row.title = LABEL[t];
+            row.innerHTML = '<i class="fas ' + ICON[t] + '"></i>';
+        }
+        row.addEventListener('click', () => {
+            const next = { auto: 'light', light: 'dark', dark: 'auto' }[get()];
+            try { localStorage.setItem(KEY, next); } catch (e) {}
+            apply();
+        });
+        if (mq && mq.addEventListener) mq.addEventListener('change', () => { if (get() === 'auto') apply(); });
+        const menu = document.getElementById('menu-panel');
+        if (menu) menu.insertBefore(row, document.getElementById('btn-logout') || null);
+        apply();
+    })();
+    </script>
+
+    <script>
+    // ===== Admin statistics =====
+    (function () {
+        const $ = (id) => document.getElementById(id);
+        const staff = $('staff-panel');
+        if (!staff) return;
+        document.body.insertAdjacentHTML('beforeend', `
+        <div id="stats-modal" class="modal-overlay" style="display:none;">
+            <div class="modal-card st-card-wrap">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                    <h3 style="margin:0;color:#ffd700;"><i class="fas fa-chart-line"></i> Statistics</h3>
+                    <button id="stats-close" style="background:none;border:none;color:inherit;font-size:20px;cursor:pointer;">✕</button>
+                </div>
+                <div id="stats-body"></div>
+            </div>
+        </div>`);
+        const row = document.createElement('div');
+        row.className = 'ai-btn'; row.title = 'Statistics';
+        row.style.cssText = 'background:rgba(255,215,0,.10);border:1px solid rgba(255,215,0,.35);';
+        row.innerHTML = '<i class="fas fa-chart-line"></i>';
+        staff.appendChild(row);
+
+        const body = $('stats-body');
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        row.addEventListener('click', async () => {
+            if (!window.isUserAdmin) { appendSystemMessage('Statistics are for admins only.', 'error'); return; }
+            body.innerHTML = '<div class="st-skel"></div><div class="st-skel"></div><div class="st-skel"></div>';
+            $('stats-modal').style.display = 'flex';
+            const idToken = await getIdTokenSafe();
+            window.socket.emit('get-stats', { idToken });
+        });
+        $('stats-close').onclick = () => { $('stats-modal').style.display = 'none'; };
+
+        function countUp(node, to) {
+            const t0 = performance.now(), D = 700;
+            const step = (t) => { const p = Math.min(1, (t - t0) / D); node.textContent = Math.round(to * (1 - Math.pow(1 - p, 3))).toLocaleString(); if (p < 1) requestAnimationFrame(step); };
+            requestAnimationFrame(step);
+        }
+        function kpi(label, value, sub) {
+            const c = el('div', 'st-kpi'); const n = el('div', 'st-num', '0');
+            c.append(n, el('div', 'st-lbl', label)); if (sub) c.append(el('div', 'st-sub', sub));
+            if (typeof value === 'number') countUp(n, value); else n.textContent = value == null ? '—' : value;
+            return c;
+        }
+        function bars(values, labels, every) {
+            const wrap = el('div', 'st-chart'); const box = el('div', 'st-bars');
+            const max = Math.max(1, ...values);
+            values.forEach((v, i) => {
+                const col = el('div', 'st-col'); const b = el('div', 'st-bar'); b.style.height = Math.max(v ? 4 : 1, (v / max) * 100) + '%';
+                b.style.transitionDelay = (i * 25) + 'ms'; b.title = labels[i] + ': ' + v;
+                col.append(b); box.append(col);
+            });
+            const lab = el('div', 'st-labels');
+            labels.forEach((l, i) => lab.append(el('span', '', i % every === 0 ? l : '')));
+            wrap.append(box, lab);
+            requestAnimationFrame(() => requestAnimationFrame(() => wrap.classList.add('grown')));
+            return wrap;
+        }
+        function render(d) {
+            if (!$('stats-modal') || $('stats-modal').style.display !== 'flex') return;
+            body.innerHTML = '';
+            const t = d.today;
+            const grid = el('div', 'st-grid');
+            grid.append(
+                kpi('Messages today', t.messages), kpi('Active users', t.users),
+                kpi('Online now', d.online, 'peak ' + t.peak), kpi('Registered', d.registered),
+                kpi('Open reports', d.openReports), kpi('Reactions', t.reactions),
+                kpi('Banned', d.banned), kpi('Muted', d.muted)
+            );
+            body.append(grid);
+
+            const off = Math.round(-new Date().getTimezoneOffset() / 60);
+            const local = new Array(24).fill(0);
+            (t.hours || []).forEach((v, h) => { local[(h + off + 24) % 24] += v; });
+            body.append(el('div', 'st-title', 'Messages by hour (today)'));
+            body.append(bars(local, local.map((_, h) => String(h).padStart(2, '0')), 6));
+
+            body.append(el('div', 'st-title', 'Last 7 days · messages'));
+            const days = d.days || [];
+            if (days.length) body.append(bars(days.map(x => x.messages), days.map(x => new Date(x.day + 'T12:00:00Z').toLocaleDateString(undefined, { weekday: 'short' })), 1));
+            else body.append(el('p', 'rp-empty', 'History starts today.'));
+
+            body.append(el('div', 'st-title', 'Top chatters (since last restart)'));
+            if (d.top && d.top.length) d.top.forEach(([n, c], i) => {
+                const r = el('div', 'rp-item on-row'); r.append(el('b', '', (i + 1) + '.'), el('span', '', ' ' + n), el('small', '', c + ' msgs')); body.append(r);
+            }); else body.append(el('p', 'rp-empty', 'No messages yet.'));
+
+            body.append(el('div', 'st-title', 'Moderation (last 24h)'));
+            const acts = Object.keys(d.actions || {});
+            const chips = el('div', 'st-chips');
+            if (acts.length) acts.forEach(a => chips.append(el('span', 'st-chip', a + ' × ' + d.actions[a])));
+            else chips.append(el('span', 'st-chip', 'Quiet day ✨'));
+            body.append(chips);
+        }
+        let tries = 0;
+        const hook = setInterval(() => {
+            if (window.socket && window.socket.on) { clearInterval(hook); window.socket.on('stats-data', render); }
+            else if (++tries > 120) clearInterval(hook);
+        }, 500);
     })();
     </script>
 </body>
