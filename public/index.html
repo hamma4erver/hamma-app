@@ -3393,5 +3393,231 @@
         }, 500);
     })();
     </script>
+
+    <script>
+    // ===== Reactions =====
+    (function () {
+        const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
+        const modal = document.getElementById('msg-options-modal');
+        const title = document.getElementById('msg-sender-title');
+        if (!modal || !title) return;
+
+        const picker = document.createElement('div');
+        picker.className = 'react-picker'; picker.style.display = 'none';
+        EMOJIS.forEach(e => {
+            const b = document.createElement('button');
+            b.type = 'button'; b.textContent = e; b.dataset.emoji = e;
+            picker.appendChild(b);
+        });
+        title.after(picker);
+
+        new MutationObserver(() => {
+            if (modal.style.display !== 'flex') return;
+            const ok = selectedMsgElem && selectedMsgElem.dataset.id && selectedMsgElem.dataset.deleted !== 'true';
+            picker.style.display = ok ? 'flex' : 'none';
+        }).observe(modal, { attributes: true, attributeFilter: ['style'] });
+
+        async function send(msgId, emoji) {
+            const idToken = await getIdTokenSafe();
+            window.socket.emit('react-message', { msgId, emoji, idToken });
+        }
+        picker.addEventListener('click', (e) => {
+            const b = e.target.closest('button[data-emoji]');
+            if (!b || !selectedMsgElem) return;
+            const id = selectedMsgElem.dataset.id;
+            closeMsgModal();
+            send(id, b.dataset.emoji);
+        });
+
+        function render(msgId, reactions) {
+            const msg = document.querySelector('#chat-box [data-id="' + CSS.escape(String(msgId)) + '"]');
+            if (!msg) return;
+            let bar = msg.querySelector(':scope > .react-bar');
+            const keys = Object.keys(reactions || {});
+            if (!keys.length) { if (bar) bar.remove(); return; }
+            if (!bar) { bar = document.createElement('div'); bar.className = 'react-bar'; msg.appendChild(bar); }
+            const before = {};
+            bar.querySelectorAll('.react-chip').forEach(c => { before[c.dataset.emoji] = c.dataset.n; });
+            bar.innerHTML = '';
+            keys.forEach(emoji => {
+                const users = reactions[emoji];
+                const chip = document.createElement('button');
+                chip.type = 'button'; chip.className = 'react-chip';
+                chip.dataset.emoji = emoji; chip.dataset.n = users.length;
+                chip.title = users.join(', ');
+                if (users.includes(window.currentUsername)) chip.classList.add('mine');
+                if (before[emoji] !== String(users.length)) chip.classList.add('pop');
+                chip.textContent = emoji + (users.length > 1 ? ' ' + users.length : '');
+                chip.addEventListener('click', (ev) => { ev.stopPropagation(); send(msgId, emoji); });
+                bar.appendChild(chip);
+            });
+        }
+
+        let tries = 0;
+        const hook = setInterval(() => {
+            if (window.socket && window.socket.on) {
+                clearInterval(hook);
+                window.socket.on('reaction-update', (d) => render(d.msgId, d.reactions));
+            } else if (++tries > 120) clearInterval(hook);
+        }, 500);
+    })();
+    </script>
+
+    <script>
+    // ===== Avatars (emoji + colour): chat, profile card, online list, editor =====
+    (function () {
+        const EMOJIS = ["😀", "😎", "🤩", "😇", "🥳", "🤓", "😈", "🤖", "👻", "👽", "🦊", "🐱", "🐶", "🐼", "🦁", "🐸", "🐵", "🦄", "🔥", "⚡", "🌙", "🍀", "🎮", "🚀"];
+        const COLORS = ["#0a84ff", "#30d158", "#ff9f0a", "#ff453a", "#bf5af2", "#64d2ff", "#ff375f", "#ffd60a"];
+        window.avatars = window.avatars || {};
+        const $ = (id) => document.getElementById(id);
+        const hash = (s) => { let h = 0; for (const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h; };
+        const avOf = (name) => window.avatars[name] || { e: null, c: COLORS[hash(name) % COLORS.length] };
+        function paint(el, name) {
+            const a = avOf(name);
+            el.style.background = a.c;
+            el.textContent = a.e || (String(name).trim()[0] || '?').toUpperCase();
+        }
+        function avEl(name, cls) {
+            const s = document.createElement('span');
+            s.className = 'av' + (cls ? ' ' + cls : ''); s.dataset.user = name; paint(s, name);
+            return s;
+        }
+        function setAv(name, avatar) {
+            if (!name) return;
+            if (avatar) window.avatars[name] = avatar; else delete window.avatars[name];
+            document.querySelectorAll('.av[data-user]').forEach(el => { if (el.dataset.user === name) paint(el, name); });
+        }
+
+        // avatar جنب كل رسالة نصية
+        const chat = $('chat-box');
+        const decorate = (node) => {
+            if (!(node instanceof HTMLElement) || !node.classList.contains('msg')) return;
+            if (node.classList.contains('msg-media') || node.classList.contains('msg-sticker')) return;
+            if (!node.dataset.sender || node.querySelector(':scope > .av')) return;
+            node.insertBefore(avEl(node.dataset.sender), node.firstChild);
+        };
+        if (chat) new MutationObserver(m => m.forEach(r => r.addedNodes.forEach(decorate))).observe(chat, { childList: true });
+
+        // بطاقة البروفايل (كي تدوس على الavatar)
+        document.body.insertAdjacentHTML('beforeend', `
+        <div id="profile-card-modal" class="modal-overlay" style="display:none;">
+            <div class="modal-card" style="max-width:300px;width:86%;">
+                <div id="pc-av-slot"></div>
+                <h3 id="pc-name" style="margin:4px 0 6px;"></h3>
+                <p id="pc-status" style="margin:0 0 16px;"></p>
+                <button class="modal-btn cancel" style="width:100%;" id="pc-close">Close</button>
+            </div>
+        </div>
+        <div id="online-modal" class="modal-overlay" style="display:none;">
+            <div class="modal-card" style="max-width:340px;width:90%;text-align:left;">
+                <h3 style="margin:0 0 12px;"><span class="live-dot"></span> Online now</h3>
+                <div id="online-list" class="rp-list"></div>
+                <button class="modal-btn cancel" style="width:100%;margin-top:12px;" id="online-close">Close</button>
+            </div>
+        </div>
+        <div id="avatar-modal" class="modal-overlay" style="display:none;">
+            <div class="modal-card" style="max-width:340px;width:90%;">
+                <h3 style="margin:0 0 10px;">My avatar</h3>
+                <div id="avatar-preview-slot"></div>
+                <div id="avatar-emojis" class="av-grid"></div>
+                <div id="avatar-colors" class="av-colors"></div>
+                <div style="display:flex;gap:8px;margin-top:14px;">
+                    <button class="modal-btn cancel" style="flex:1;" id="avatar-cancel">Cancel</button>
+                    <button class="modal-btn confirm" style="flex:1;" id="avatar-save">Save</button>
+                </div>
+            </div>
+        </div>`);
+        const open = (id) => { $(id).style.display = 'flex'; };
+        const close = (id) => { $(id).style.display = 'none'; };
+        $('pc-close').onclick = () => close('profile-card-modal');
+        $('online-close').onclick = () => close('online-modal');
+
+        document.addEventListener('click', (e) => {
+            const av = e.target.closest('.av');
+            if (!av || !av.closest('#chat-box') || !av.dataset.user) return;
+            e.stopPropagation();
+            const name = av.dataset.user;
+            const slot = $('pc-av-slot'); slot.innerHTML = ''; slot.appendChild(avEl(name, 'lg'));
+            $('pc-name').innerHTML = window.formatUsername ? window.formatUsername(name) : '';
+            const on = window.onlineSet && window.onlineSet.has(name);
+            $('pc-status').textContent = on ? '● Online' : 'Offline';
+            $('pc-status').style.color = on ? '#30d158' : 'rgba(235,235,245,.6)';
+            open('profile-card-modal');
+        }, true);
+
+        // قائمة المتصلين (تتحل من العداد في الheader)
+        const pill = $('online-pill');
+        if (pill) {
+            pill.style.cursor = 'pointer';
+            pill.addEventListener('click', () => {
+                const names = Array.from(window.onlineSet || []).sort((a, b) => a.localeCompare(b));
+                const box = $('online-list'); box.innerHTML = '';
+                names.forEach(n => {
+                    const row = document.createElement('div'); row.className = 'rp-item on-row';
+                    row.appendChild(avEl(n));
+                    const t = document.createElement('span'); t.innerHTML = window.formatUsername ? window.formatUsername(n) : '';
+                    row.appendChild(t);
+                    if (n === window.currentUsername) { const y = document.createElement('small'); y.textContent = ' (you)'; row.appendChild(y); }
+                    box.appendChild(row);
+                });
+                if (!names.length) box.innerHTML = '<p class="rp-empty">Nobody online</p>';
+                if (window.socket) window.socket.emit('get-avatars', { names });
+                open('online-modal');
+            });
+        }
+
+        // محرر الavatar
+        let draft = { e: null, c: COLORS[0] };
+        const prev = $('avatar-preview-slot');
+        const redraw = () => {
+            prev.innerHTML = '';
+            const p = document.createElement('span'); p.className = 'av lg';
+            p.style.background = draft.c; p.textContent = draft.e || (String(window.currentUsername || '?')[0] || '?').toUpperCase();
+            prev.appendChild(p);
+            $('avatar-emojis').querySelectorAll('button').forEach(b => b.classList.toggle('sel', b.dataset.v === draft.e));
+            $('avatar-colors').querySelectorAll('button').forEach(b => b.classList.toggle('sel', b.dataset.v === draft.c));
+        };
+        EMOJIS.forEach(e => { const b = document.createElement('button'); b.type = 'button'; b.dataset.v = e; b.textContent = e; b.onclick = () => { draft.e = e; redraw(); }; $('avatar-emojis').appendChild(b); });
+        COLORS.forEach(c => { const b = document.createElement('button'); b.type = 'button'; b.dataset.v = c; b.style.background = c; b.onclick = () => { draft.c = c; redraw(); }; $('avatar-colors').appendChild(b); });
+        $('avatar-cancel').onclick = () => close('avatar-modal');
+        $('avatar-save').onclick = async () => {
+            if (!draft.e) { close('avatar-modal'); return; }
+            const idToken = await getIdTokenSafe();
+            window.socket.emit('set-avatar', { avatar: { e: draft.e, c: draft.c }, idToken });
+            close('avatar-modal');
+        };
+        const menu = $('menu-panel');
+        if (menu) {
+            const row = document.createElement('div');
+            row.className = 'ai-btn'; row.title = 'My Avatar';
+            row.style.cssText = 'background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);';
+            row.innerHTML = '<i class="fas fa-face-smile"></i>';
+            row.addEventListener('click', () => {
+                const mine = window.avatars[window.currentUsername];
+                draft = mine ? { e: mine.e, c: mine.c } : { e: null, c: avOf(window.currentUsername || '').c };
+                redraw(); open('avatar-modal');
+            });
+            menu.insertBefore(row, $('btn-logout') || null);
+        }
+
+        // ربط السوكت: تحديثات الavatar + تحميل avatar متاعي
+        let asked = null, tries = 0;
+        const hook = setInterval(() => {
+            const s = window.socket;
+            if (s && s.on && !hook.done) {
+                hook.done = true;
+                s.on('avatar-update', d => setAv(d.user, d.avatar));
+                s.on('avatars-bulk', map => Object.keys(map || {}).forEach(n => setAv(n, map[n])));
+                s.on('chat-message', d => { if (d && d.user && d.avatar) setAv(d.user, d.avatar); });
+                s.on('connect', () => { asked = null; });
+            }
+            if (s && window.currentUsername && asked !== window.currentUsername) {
+                asked = window.currentUsername;
+                getIdTokenSafe().then(idToken => s.emit('get-avatar', { idToken }));
+            }
+            if (++tries > 7200) clearInterval(hook);
+        }, 1000);
+    })();
+    </script>
 </body>
 </html>
