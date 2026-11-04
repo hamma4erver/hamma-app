@@ -322,6 +322,48 @@ async function avatarFor(name) {
     return av;
 }
 
+// ---- Admin statistics: counted in memory, flushed to Firestore (stats/{YYYY-MM-DD}) every minute ----
+const dayKey = (t = Date.now()) => new Date(t).toISOString().slice(0, 10);
+function newStat() {
+    return {
+        day: dayKey(), messages: 0, reports: 0, reactions: 0, media: 0, peak: 0,
+        hours: new Array(24).fill(0), users: new Set(), top: new Map(),
+        flushed: { messages: 0, reports: 0, reactions: 0, media: 0, hours: new Array(24).fill(0), users: new Set() }
+    };
+}
+let stat = newStat();
+function rollStat() {
+    if (stat.day !== dayKey()) { const old = stat; stat = newStat(); flushStats(old); }
+}
+function statMessage(user, mediaType) {
+    rollStat();
+    stat.messages++;
+    stat.hours[new Date().getUTCHours()]++;
+    stat.users.add(user);
+    stat.top.set(user, (stat.top.get(user) || 0) + 1);
+    if (mediaType) stat.media++;
+}
+async function flushStats(s = stat) {
+    if (!db) return;
+    const FV = admin.firestore.FieldValue;
+    const d = {}; let any = false;
+    for (const k of ['messages', 'reports', 'reactions', 'media']) {
+        const dl = s[k] - s.flushed[k];
+        if (dl) { d[k] = FV.increment(dl); s.flushed[k] = s[k]; any = true; }
+    }
+    const hours = {};
+    s.hours.forEach((v, i) => { const dl = v - s.flushed.hours[i]; if (dl) { hours[i] = FV.increment(dl); s.flushed.hours[i] = v; any = true; } });
+    if (Object.keys(hours).length) d.hours = hours;
+    const fresh = [...s.users].filter(u => !s.flushed.users.has(u)).slice(0, 400);
+    if (fresh.length) { d.users = FV.arrayUnion(...fresh); fresh.forEach(u => s.flushed.users.add(u)); any = true; }
+    if (!any) return;
+    d.day = s.day;
+    try { await db.collection('stats').doc(s.day).set(d, { merge: true }); }
+    catch (e) { console.error('stats flush failed:', e.message); }
+}
+setInterval(() => { rollStat(); flushStats(); }, 60 * 1000);
+process.on('SIGTERM', async () => { try { await flushStats(); } catch (e) {} process.exit(0); });
+
 // AI chat endpoint
 app.post('/api/gemini', async (req, res) => {
     const { prompt } = req.body;
@@ -467,6 +509,7 @@ function kickUserSockets(username, reason) {
 
 io.on('connection', (socket) => {
     onlineUsersCount++;
+    rollStat(); if (onlineUsersCount > stat.peak) stat.peak = onlineUsersCount;
     io.emit('update-online', onlineUsersCount);
 
     // Send current state to the newly connected client
@@ -559,7 +602,43 @@ io.on('connection', (socket) => {
             }
         }
         rememberMessage(data);
+        statMessage(data.user, data.mediaType);
         io.emit('chat-message', data);
+    });
+
+    // ---- Statistics (admins only) ----------------------------------
+    socket.on('get-stats', async ({ idToken }) => {
+        const { ok, role } = await verifyRole(idToken);
+        if (!ok || role !== 'admin') return;
+        rollStat();
+        await flushStats();
+        let days = [], registered = null, openReports = reportsMem.filter(r => r.status === 'open').length;
+        if (db) {
+            try {
+                const snap = await db.collection('stats').orderBy('day', 'desc').limit(7).get();
+                days = snap.docs.map(d => {
+                    const x = d.data();
+                    return {
+                        day: x.day || d.id, messages: x.messages || 0, users: (x.users || []).length,
+                        reports: x.reports || 0, reactions: x.reactions || 0, media: x.media || 0,
+                        hours: Array.from({ length: 24 }, (_, i) => (x.hours && x.hours[i]) || 0)
+                    };
+                }).reverse();
+            } catch (e) { console.error('stats read failed:', e.message); }
+            try { registered = (await db.collection('users').count().get()).data().count; } catch (e) {}
+            try { openReports += (await db.collection('reports').where('status', '==', 'open').get()).size; } catch (e) {}
+        }
+        const doc = days.find(d => d.day === stat.day);
+        const today = doc ? Object.assign({ peak: stat.peak }, doc)
+            : { day: stat.day, messages: stat.messages, users: stat.users.size, reports: stat.reports, reactions: stat.reactions, media: stat.media, hours: stat.hours, peak: stat.peak };
+        const dayAgo = Date.now() - 86400000, actions = {};
+        auditBuffer.filter(a => a.at > dayAgo).forEach(a => { actions[a.action] = (actions[a.action] || 0) + 1; });
+        const now = Date.now();
+        socket.emit('stats-data', {
+            today, days, online: usernameSockets.size, registered, openReports, actions,
+            banned: blockedUsers.size, muted: [...mutedUsers.values()].filter(t => t > now).length,
+            top: [...stat.top.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
+        });
     });
 
     // ---- Avatars -------------------------------------------------
@@ -612,7 +691,7 @@ io.on('connection', (socket) => {
 
         let m = reactionsByMsg.get(key);
         if (!m) { m = new Map(); reactionsByMsg.set(key, m); }
-        if (m.get(user) === emoji) m.delete(user); else m.set(user, emoji);
+        if (m.get(user) === emoji) m.delete(user); else { m.set(user, emoji); rollStat(); stat.reactions++; }
         if (!m.size) reactionsByMsg.delete(key);
         io.emit('reaction-update', { msgId: key, reactions: reactionSummary(key) });
     });
@@ -630,6 +709,7 @@ io.on('connection', (socket) => {
         const key = reporter + '|' + msgId;
         if (reportKeys.has(key)) return socket.emit('system-msg', { text: 'You already reported this message.', kind: 'info' });
         reportKeys.add(key);
+        rollStat(); stat.reports++;
         log.push(now); reportLog.set(socket.id, log);
 
         const report = {
