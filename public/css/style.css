@@ -1257,3 +1257,28 @@ button:active, .bg-btn:active { transform: scale(.94); }
 .rp-audit b { color: #ffd700; }
 .rp-empty { text-align: center; color: var(--ios-label-2); margin: 20px 0; }
 .rp-count { margin-left: auto; background: var(--ios-red); color: #fff; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 2px 8px; }
+
+/* Reactions */
+.react-picker { display: flex; justify-content: space-between; gap: 4px; margin: 0 0 14px; padding: 6px; border-radius: 999px; background: rgba(255,255,255,.08); }
+.react-picker button { background: none; border: 0; font-size: 24px; line-height: 1; padding: 6px; border-radius: 50%; cursor: pointer; transition: transform .25s var(--ios-spring); }
+@media (hover: hover) { .react-picker button:hover { transform: scale(1.3) translateY(-3px); } }
+.react-picker button:active { transform: scale(.9); }
+.react-bar { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.react-chip { background: rgba(255,255,255,.16); border: 1px solid transparent; color: #fff; border-radius: 999px; padding: 1px 8px; font-size: 13px; line-height: 1.5; cursor: pointer; }
+.react-chip.mine { background: rgba(10,132,255,.35); border-color: rgba(10,132,255,.9); }
+.my-msg .react-chip.mine { background: rgba(255,255,255,.3); border-color: #fff; }
+.react-chip.pop { animation: chipPop .45s var(--ios-spring); }
+@keyframes chipPop { 0% { transform: scale(.4); opacity: 0; } 60% { transform: scale(1.25); } 100% { transform: none; opacity: 1; } }
+
+/* Avatars */
+.av { width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; color: #fff; margin-right: 8px; vertical-align: middle; flex-shrink: 0; cursor: pointer; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.35); transition: transform .2s var(--ios-spring); user-select: none; }
+.av:active { transform: scale(.9); }
+.av.lg { width: 76px; height: 76px; font-size: 40px; margin: 0 auto 8px; display: flex; cursor: default; }
+.on-row { display: flex; align-items: center; padding: 8px 12px; }
+.on-row small { color: var(--ios-label-2); margin-left: 6px; }
+.live-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #30d158; box-shadow: 0 0 8px #30d158; margin-right: 6px; }
+.av-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin: 12px 0; }
+.av-grid button { background: rgba(255,255,255,.08); border: 2px solid transparent; border-radius: 12px; font-size: 22px; padding: 6px 0; cursor: pointer; }
+.av-grid button.sel, .av-colors button.sel { border-color: #fff; transform: scale(1.08); }
+.av-colors { display: flex; justify-content: space-between; gap: 6px; }
+.av-colors button { width: 30px; height: 30px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; }
