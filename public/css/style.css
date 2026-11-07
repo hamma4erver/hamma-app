@@ -1406,3 +1406,8 @@ html.gsap-on .modal-card { animation: none; transition: none !important; }
 .hm-panel .ai-btn { height: 38px; border-radius: 11px; gap: 10px; padding: 0 11px; font-size: 13px; margin: 0 0 6px !important; }
 .hm-panel .ai-btn i { width: 18px; font-size: 14px; }
 .hm-panel .ai-btn::after { font-size: 13px; }
+
+/* Lenis */
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
+.lenis.lenis-scrolling iframe { pointer-events: none; }
