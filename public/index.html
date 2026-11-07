@@ -3772,12 +3772,8 @@
         if (!window.gsap) return;
         const g = window.gsap;
         document.documentElement.classList.add('gsap-on');
-        // Animations: Auto (follows the device's Reduce Motion) / Full / Reduced — changeable from the settings menu
-        const MKEY = 'hamma_motion';
-        const getMotion = () => { try { return localStorage.getItem(MKEY) || 'auto'; } catch (e) { return 'auto'; } };
-        const osReduce = window.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : null;
-        const isReduced = () => { const m = getMotion(); return m === 'reduced' || (m === 'auto' && !!osReduce && osReduce.matches); };
-        document.documentElement.setAttribute('data-motion', getMotion());
+        // Animations are always full (the site is meant to be animated); no Reduce Motion gating
+        const isReduced = () => false;
         g.defaults({ ease: 'power3.out' });
 
         // الخلفية تتنفّس (الـlogin)
@@ -3856,25 +3852,6 @@
                 b.addEventListener('mouseenter', () => { if (!isReduced()) g.to(b, { scale: 1.05, duration: .35, ease: 'back.out(2)' }); });
                 b.addEventListener('mouseleave', () => { if (!isReduced()) g.to(b, { scale: 1, duration: .35, clearProps: 'transform' }); });
             });
-        }
-
-        // صف "Animations" في قائمة الإعدادات
-        const menu = document.getElementById('menu-panel');
-        if (menu) {
-            const ICON = { auto: 'fa-gauge', full: 'fa-wand-magic-sparkles', reduced: 'fa-leaf' };
-            const LABEL = { auto: 'Animations: Auto', full: 'Animations: Full', reduced: 'Animations: Reduced' };
-            const row = document.createElement('div');
-            row.className = 'ai-btn'; row.id = 'btn-motion';
-            row.style.cssText = 'background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);';
-            const paint = () => { const m = getMotion(); row.title = LABEL[m]; row.innerHTML = '<i class="fas ' + ICON[m] + '"></i>'; document.documentElement.setAttribute('data-motion', m); };
-            row.addEventListener('click', () => {
-                const next = { auto: 'full', full: 'reduced', reduced: 'auto' }[getMotion()];
-                try { localStorage.setItem(MKEY, next); } catch (e) {}
-                paint();
-                if (next === 'full') g.fromTo(row, { scale: .6, rotation: -25 }, { scale: 1, rotation: 0, duration: .6, ease: 'back.out(2.5)', clearProps: 'transform' });
-            });
-            menu.insertBefore(row, document.getElementById('btn-logout') || null);
-            paint();
         }
 
         // تبديل الثيم: وميض ناعم
