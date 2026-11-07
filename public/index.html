@@ -4031,7 +4031,7 @@
         (function () {
             if (!window.matchMedia || !matchMedia('(hover: hover) and (pointer: fine)').matches) return;
             const SEL = '.btn-primary, .send-btn, .icon-btn';
-            const PAD = 70, STRENGTH = 5, MAX = 8;
+            const PAD = 40, STRENGTH = 9, MAX = 4;
             const state = new Map(); // el -> {x,y,tx,ty}
             let mx = -9999, my = -9999, looping = false, pending = false;
             function targets() {
@@ -4051,7 +4051,7 @@
             function tick() {
                 let moving = false;
                 state.forEach((s, el) => {
-                    s.x += (s.tx - s.x) * 0.18; s.y += (s.ty - s.y) * 0.18;
+                    s.x += (s.tx - s.x) * 0.1; s.y += (s.ty - s.y) * 0.1;
                     if (Math.abs(s.x - s.tx) < 0.05 && Math.abs(s.y - s.ty) < 0.05) { s.x = s.tx; s.y = s.ty; }
                     else moving = true;
                     el.style.translate = (s.x || s.y) ? s.x.toFixed(2) + 'px ' + s.y.toFixed(2) + 'px' : '';
