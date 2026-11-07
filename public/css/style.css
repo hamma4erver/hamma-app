@@ -1411,3 +1411,47 @@ html.gsap-on .modal-card { animation: none; transition: none !important; }
 .lenis.lenis-smooth { scroll-behavior: auto !important; }
 .lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
 .lenis.lenis-scrolling iframe { pointer-events: none; }
+
+/* ===== React Bits–style effects ===== */
+:root { --shiny-base: #7fdcff; --shiny-hi: #ffffff; --spot: rgba(0, 242, 254, 0.16); }
+html[data-theme="light"] { --shiny-base: #3a6fc4; --shiny-hi: #a9cdf7; --spot: rgba(52, 120, 214, 0.15); }
+.shiny {
+    background: linear-gradient(110deg, var(--shiny-base) 35%, var(--shiny-hi) 50%, var(--shiny-base) 65%);
+    background-size: 250% 100%;
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent !important; text-shadow: none !important;
+    filter: drop-shadow(0 0 8px rgba(0, 242, 254, .35));
+    animation: shinySweep 3.2s linear infinite;
+}
+html[data-theme="light"] .shiny { filter: none; }
+@keyframes shinySweep { from { background-position: 150% 0; } to { background-position: -50% 0; } }
+
+.login-card, .modal-card, .st-kpi, .rp-item { position: relative; }
+.login-card::after, .modal-card::after, .st-kpi::after, .rp-item::after {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    opacity: 0; transition: opacity .35s ease;
+    background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), var(--spot), transparent 70%);
+}
+@media (hover: hover) { .login-card:hover::after, .modal-card:hover::after, .st-kpi:hover::after, .rp-item:hover::after { opacity: 1; } }
+
+#spark-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 99999; }
+
+/* ===== Aurora background ===== */
+#aurora-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: -1; opacity: .9; transition: opacity .8s ease; }
+html[data-theme="light"] #aurora-canvas { opacity: .5; }
+html.aurora-on.in-chat #aurora-canvas { opacity: .42; }
+html[data-theme="light"].aurora-on.in-chat #aurora-canvas { opacity: .3; }
+html.aurora-on .login-container { background: transparent !important; }
+html.aurora-on .login-container::before { display: none; }
+html.aurora-on .parallax-blob { opacity: .16; }
+
+/* shiny يغلب على قاعدة h1 الأصلية (specificity) + إصلاح أزرار Google/Apple في Light */
+.login-card h1.shiny, h1.chat-title.shiny {
+    background: linear-gradient(110deg, var(--shiny-base) 35%, var(--shiny-hi) 50%, var(--shiny-base) 65%);
+    background-size: 250% 100%;
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; text-shadow: none;
+}
+html[data-theme="light"] .social-btn { color: #2a2d34; background: rgba(30, 40, 60, .06); border-color: rgba(30, 40, 60, .14); }
+html[data-theme="light"] .social-btn:hover { background: rgba(30, 40, 60, .12); }
+html[data-theme="light"] #aurora-canvas { opacity: .65; }
