@@ -1088,11 +1088,6 @@ input:focus, .input-group input:focus {
 
 /* Accessibility: Focus ring + Reduce Motion */
 :focus-visible { outline: 2px solid var(--ios-blue); outline-offset: 2px; }
-@media (prefers-reduced-motion: reduce) {
-    html:not([data-motion="full"]) .msg, html:not([data-motion="full"]) .modal-card, html:not([data-motion="full"]) .hm-panel, html:not([data-motion="full"]) .hm-panel * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
-}
-html[data-motion="reduced"] .msg, html[data-motion="reduced"] .modal-card, html[data-motion="reduced"] .hm-panel, html[data-motion="reduced"] .hm-panel * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
-
 /* =====================================================================
    LOGIN: النيون رجع + الخلفية تتحرك
    ===================================================================== */
@@ -1401,3 +1396,13 @@ html[data-theme="light"] #btn-staff { box-shadow: 0 0 8px rgba(176,125,0,.22); }
 /* GSAP تاخذ المقود: نوقفو animations الـCSS اللي تتعارض معاها */
 html.gsap-on .login-container, html.gsap-on .main-layout, html.gsap-on .login-card, html.gsap-on .msg { animation: none; }
 html.gsap-on .modal-card { animation: none; transition: none !important; }
+
+/* نوافذ الإعدادات والـstaff: أصغر وأخف */
+.hm-panel { width: min(206px, calc(100vw - 40px)); padding: 9px; border-radius: 16px; bottom: calc(100% + 10px); }
+#staff-panel { left: 50px; }
+.hm-label { font-size: 9px; margin: 0 2px 6px; }
+.hm-swatches { gap: 8px; padding: 0 2px 9px; margin-bottom: 8px; }
+.hm-swatches .bg-btn { width: 30px; height: 30px; }
+.hm-panel .ai-btn { height: 38px; border-radius: 11px; gap: 10px; padding: 0 11px; font-size: 13px; margin: 0 0 6px !important; }
+.hm-panel .ai-btn i { width: 18px; font-size: 14px; }
+.hm-panel .ai-btn::after { font-size: 13px; }
