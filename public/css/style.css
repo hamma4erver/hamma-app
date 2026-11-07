@@ -1089,8 +1089,9 @@ input:focus, .input-group input:focus {
 /* Accessibility: Focus ring + Reduce Motion */
 :focus-visible { outline: 2px solid var(--ios-blue); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) {
-    .msg, .modal-card, .hm-panel, .hm-panel * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+    html:not([data-motion="full"]) .msg, html:not([data-motion="full"]) .modal-card, html:not([data-motion="full"]) .hm-panel, html:not([data-motion="full"]) .hm-panel * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+html[data-motion="reduced"] .msg, html[data-motion="reduced"] .modal-card, html[data-motion="reduced"] .hm-panel, html[data-motion="reduced"] .hm-panel * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 
 /* =====================================================================
    LOGIN: النيون رجع + الخلفية تتحرك
