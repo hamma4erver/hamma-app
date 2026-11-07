@@ -3763,5 +3763,100 @@
         }, 500);
     })();
     </script>
+
+    <!-- GSAP (animation engine) — pinned version; the site keeps working with plain CSS animations if this fails to load -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
+    <script>
+    // ===== GSAP animation layer =====
+    window.addEventListener('DOMContentLoaded', function () {
+        if (!window.gsap) return;
+        const g = window.gsap;
+        document.documentElement.classList.add('gsap-on');
+        const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+        g.defaults({ ease: 'power3.out' });
+
+        // الخلفية تتنفّس (الـlogin)
+        g.to('.parallax-bg', { rotation: 7, scale: 1.08, duration: 14, ease: 'sine.inOut', yoyo: true, repeat: -1, transformOrigin: '50% 50%' });
+
+        // دخول شاشات الـlogin / البروفايل / التفعيل
+        function enterLogin(screen) {
+            const card = screen.querySelector('.login-card');
+            if (!card || reduce) return;
+            g.killTweensOf(card);
+            const tl = g.timeline({ onComplete: () => g.to(card, { y: -6, duration: 3, ease: 'sine.inOut', yoyo: true, repeat: -1 }) });
+            tl.fromTo(card, { opacity: 0, y: 50, scale: .92, filter: 'blur(10px)' },
+                            { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)', duration: .9, ease: 'expo.out', clearProps: 'filter' })
+              .from(Array.from(card.children), { opacity: 0, y: 18, duration: .5, stagger: .06, clearProps: 'opacity,transform' }, '-=.55');
+        }
+        document.querySelectorAll('.login-container').forEach(screen => {
+            let shown = screen.style.display !== 'none';
+            if (shown) enterLogin(screen);
+            new MutationObserver(() => {
+                const now = screen.style.display !== 'none';
+                if (now && !shown) enterLogin(screen);
+                shown = now;
+            }).observe(screen, { attributes: true, attributeFilter: ['style'] });
+        });
+
+        // دخول شاشة الشات
+        const chatScreen = document.getElementById('chat-screen');
+        if (chatScreen) {
+            let shown = chatScreen.style.display !== 'none';
+            new MutationObserver(() => {
+                const now = chatScreen.style.display !== 'none';
+                if (now && !shown && !reduce) {
+                    g.from('#chat-screen .chat-container > *', { opacity: 0, y: 26, duration: .65, stagger: .09, ease: 'expo.out', clearProps: 'opacity,transform' });
+                }
+                shown = now;
+            }).observe(chatScreen, { attributes: true, attributeFilter: ['style'] });
+        }
+
+        // الرسائل تدخل بنطّة (spring)
+        const chat = document.getElementById('chat-box');
+        if (chat && !reduce) {
+            new MutationObserver(muts => {
+                const nodes = [];
+                muts.forEach(m => m.addedNodes.forEach(n => { if (n instanceof HTMLElement && n.classList.contains('msg')) nodes.push(n); }));
+                if (!nodes.length || nodes.length > 8) return; // history load: no flood of animations
+                nodes.forEach(n => {
+                    g.from(n, {
+                        opacity: 0, y: 16, scale: .9, duration: .6, ease: 'back.out(1.7)',
+                        transformOrigin: n.classList.contains('my-msg') ? 'right bottom' : 'left bottom',
+                        onStart: () => { n.style.transition = 'none'; },
+                        onComplete: () => { n.style.transition = ''; g.set(n, { clearProps: 'opacity,transform,transformOrigin' }); }
+                    });
+                });
+            }).observe(chat, { childList: true });
+        }
+
+        // النوافذ: spring كي تتحل، ونزول ناعم كي تتسكّر (يتزامن مع كلاس modal-visible الموجود)
+        document.querySelectorAll('.modal-overlay').forEach(modal => {
+            const card = () => modal.querySelector('.modal-card');
+            let visible = modal.classList.contains('modal-visible');
+            new MutationObserver(() => {
+                const now = modal.classList.contains('modal-visible');
+                const c = card();
+                if (c && !reduce) {
+                    if (now && !visible) g.fromTo(c, { y: 44, scale: .9, opacity: 0 }, { y: 0, scale: 1, opacity: 1, duration: .6, ease: 'back.out(1.5)', overwrite: true, clearProps: 'transform,opacity' });
+                    else if (!now && visible) g.to(c, { y: 22, scale: .96, opacity: 0, duration: .25, ease: 'power2.in', overwrite: true, onComplete: () => g.set(c, { clearProps: 'transform,opacity' }) });
+                }
+                visible = now;
+            }).observe(modal, { attributes: true, attributeFilter: ['class'] });
+        });
+
+        // أزرار: hover مرن على الكمبيوتر
+        if (window.matchMedia && matchMedia('(hover: hover)').matches && !reduce) {
+            document.querySelectorAll('.login-container .btn-primary, .send-btn').forEach(b => {
+                b.addEventListener('mouseenter', () => g.to(b, { scale: 1.05, duration: .35, ease: 'back.out(2)' }));
+                b.addEventListener('mouseleave', () => g.to(b, { scale: 1, duration: .35, clearProps: 'transform' }));
+            });
+        }
+
+        // تبديل الثيم: وميض ناعم
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('#btn-theme') && !reduce) g.fromTo('body > *:not(script)', { opacity: .55 }, { opacity: 1, duration: .5, ease: 'power2.out', clearProps: 'opacity' });
+        });
+    });
+    </script>
 </body>
 </html>
