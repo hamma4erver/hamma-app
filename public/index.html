@@ -3772,7 +3772,12 @@
         if (!window.gsap) return;
         const g = window.gsap;
         document.documentElement.classList.add('gsap-on');
-        const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+        // Animations: Auto (follows the device's Reduce Motion) / Full / Reduced — changeable from the settings menu
+        const MKEY = 'hamma_motion';
+        const getMotion = () => { try { return localStorage.getItem(MKEY) || 'auto'; } catch (e) { return 'auto'; } };
+        const osReduce = window.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+        const isReduced = () => { const m = getMotion(); return m === 'reduced' || (m === 'auto' && !!osReduce && osReduce.matches); };
+        document.documentElement.setAttribute('data-motion', getMotion());
         g.defaults({ ease: 'power3.out' });
 
         // الخلفية تتنفّس (الـlogin)
@@ -3781,7 +3786,7 @@
         // دخول شاشات الـlogin / البروفايل / التفعيل
         function enterLogin(screen) {
             const card = screen.querySelector('.login-card');
-            if (!card || reduce) return;
+            if (!card || isReduced()) return;
             g.killTweensOf(card);
             const tl = g.timeline({ onComplete: () => g.to(card, { y: -6, duration: 3, ease: 'sine.inOut', yoyo: true, repeat: -1 }) });
             tl.fromTo(card, { opacity: 0, y: 50, scale: .92, filter: 'blur(10px)' },
@@ -3804,7 +3809,7 @@
             let shown = chatScreen.style.display !== 'none';
             new MutationObserver(() => {
                 const now = chatScreen.style.display !== 'none';
-                if (now && !shown && !reduce) {
+                if (now && !shown && !isReduced()) {
                     g.from('#chat-screen .chat-container > *', { opacity: 0, y: 26, duration: .65, stagger: .09, ease: 'expo.out', clearProps: 'opacity,transform' });
                 }
                 shown = now;
@@ -3813,8 +3818,9 @@
 
         // الرسائل تدخل بنطّة (spring)
         const chat = document.getElementById('chat-box');
-        if (chat && !reduce) {
+        if (chat) {
             new MutationObserver(muts => {
+                if (isReduced()) return;
                 const nodes = [];
                 muts.forEach(m => m.addedNodes.forEach(n => { if (n instanceof HTMLElement && n.classList.contains('msg')) nodes.push(n); }));
                 if (!nodes.length || nodes.length > 8) return; // history load: no flood of animations
@@ -3836,7 +3842,7 @@
             new MutationObserver(() => {
                 const now = modal.classList.contains('modal-visible');
                 const c = card();
-                if (c && !reduce) {
+                if (c && !isReduced()) {
                     if (now && !visible) g.fromTo(c, { y: 44, scale: .9, opacity: 0 }, { y: 0, scale: 1, opacity: 1, duration: .6, ease: 'back.out(1.5)', overwrite: true, clearProps: 'transform,opacity' });
                     else if (!now && visible) g.to(c, { y: 22, scale: .96, opacity: 0, duration: .25, ease: 'power2.in', overwrite: true, onComplete: () => g.set(c, { clearProps: 'transform,opacity' }) });
                 }
@@ -3845,16 +3851,35 @@
         });
 
         // أزرار: hover مرن على الكمبيوتر
-        if (window.matchMedia && matchMedia('(hover: hover)').matches && !reduce) {
+        if (window.matchMedia && matchMedia('(hover: hover)').matches) {
             document.querySelectorAll('.login-container .btn-primary, .send-btn').forEach(b => {
-                b.addEventListener('mouseenter', () => g.to(b, { scale: 1.05, duration: .35, ease: 'back.out(2)' }));
-                b.addEventListener('mouseleave', () => g.to(b, { scale: 1, duration: .35, clearProps: 'transform' }));
+                b.addEventListener('mouseenter', () => { if (!isReduced()) g.to(b, { scale: 1.05, duration: .35, ease: 'back.out(2)' }); });
+                b.addEventListener('mouseleave', () => { if (!isReduced()) g.to(b, { scale: 1, duration: .35, clearProps: 'transform' }); });
             });
+        }
+
+        // صف "Animations" في قائمة الإعدادات
+        const menu = document.getElementById('menu-panel');
+        if (menu) {
+            const ICON = { auto: 'fa-gauge', full: 'fa-wand-magic-sparkles', reduced: 'fa-leaf' };
+            const LABEL = { auto: 'Animations: Auto', full: 'Animations: Full', reduced: 'Animations: Reduced' };
+            const row = document.createElement('div');
+            row.className = 'ai-btn'; row.id = 'btn-motion';
+            row.style.cssText = 'background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);';
+            const paint = () => { const m = getMotion(); row.title = LABEL[m]; row.innerHTML = '<i class="fas ' + ICON[m] + '"></i>'; document.documentElement.setAttribute('data-motion', m); };
+            row.addEventListener('click', () => {
+                const next = { auto: 'full', full: 'reduced', reduced: 'auto' }[getMotion()];
+                try { localStorage.setItem(MKEY, next); } catch (e) {}
+                paint();
+                if (next === 'full') g.fromTo(row, { scale: .6, rotation: -25 }, { scale: 1, rotation: 0, duration: .6, ease: 'back.out(2.5)', clearProps: 'transform' });
+            });
+            menu.insertBefore(row, document.getElementById('btn-logout') || null);
+            paint();
         }
 
         // تبديل الثيم: وميض ناعم
         document.addEventListener('click', (e) => {
-            if (e.target.closest('#btn-theme') && !reduce) g.fromTo('body > *:not(script)', { opacity: .55 }, { opacity: 1, duration: .5, ease: 'power2.out', clearProps: 'opacity' });
+            if (e.target.closest('#btn-theme') && !isReduced()) g.fromTo('body > *:not(script)', { opacity: .55 }, { opacity: 1, duration: .5, ease: 'power2.out', clearProps: 'opacity' });
         });
     });
     </script>
