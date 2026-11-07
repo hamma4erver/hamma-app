@@ -1396,3 +1396,7 @@ html[data-theme="light"] .react-chip.mine { background: rgba(52,120,214,.18); bo
 html[data-theme="light"] .icon-btn, html[data-theme="light"] .online-pill { background: var(--ios-surface-2); }
 html[data-theme="light"] .icon-btn.panel-open { box-shadow: 0 0 10px rgba(52,120,214,.28); }
 html[data-theme="light"] #btn-staff { box-shadow: 0 0 8px rgba(176,125,0,.22); }
+
+/* GSAP تاخذ المقود: نوقفو animations الـCSS اللي تتعارض معاها */
+html.gsap-on .login-container, html.gsap-on .main-layout, html.gsap-on .login-card, html.gsap-on .msg { animation: none; }
+html.gsap-on .modal-card { animation: none; transition: none !important; }
