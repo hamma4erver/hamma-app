@@ -3860,5 +3860,43 @@
         });
     });
     </script>
+
+    <!-- Lenis (smooth scrolling) — pinned version; native scrolling stays if it fails to load -->
+    <script src="https://cdn.jsdelivr.net/npm/lenis@1.3.4/dist/lenis.min.js" defer></script>
+    <script>
+    // ===== Lenis smooth scroll for the chat + scrollable windows =====
+    window.addEventListener('DOMContentLoaded', function () {
+        if (typeof window.Lenis === 'undefined') return;
+        const targets = [document.getElementById('chat-box')]
+            .concat(Array.from(document.querySelectorAll('.rp-list, .legal-body, .st-card-wrap')))
+            .filter(Boolean);
+        const instances = [];
+        targets.forEach(el => {
+            let lenis;
+            try {
+                lenis = new window.Lenis({
+                    wrapper: el, content: el, eventsTarget: el,
+                    duration: 1.1,
+                    easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+                    smoothWheel: true, syncTouch: false, // اللمس يبقى native (أحسن على iPhone)
+                    gestureOrientation: 'vertical'
+                });
+            } catch (e) { return; }
+            instances.push({ el, lenis });
+            // المحتوى يكبر (رسائل جديدة) → نعلّم Lenis باش يحدّث الحد الأقصى ويتزامن مع أي scroll عملو الكود الأصلي
+            let queued = false;
+            new MutationObserver(() => {
+                if (queued) return; queued = true;
+                requestAnimationFrame(() => {
+                    queued = false;
+                    lenis.resize();
+                    if (el.id === 'chat-box') lenis.scrollTo(el.scrollTop, { immediate: true, force: true });
+                });
+            }).observe(el, { childList: true, subtree: true });
+        });
+        function raf(time) { instances.forEach(i => i.lenis.raf(time)); requestAnimationFrame(raf); }
+        if (instances.length) requestAnimationFrame(raf);
+    });
+    </script>
 </body>
 </html>
