@@ -364,6 +364,127 @@ async function flushStats(s = stat) {
 setInterval(() => { rollStat(); flushStats(); }, 60 * 1000);
 process.on('SIGTERM', async () => { try { await flushStats(); } catch (e) {} process.exit(0); });
 
+// ---- Rooms + 1-hour message history ----
+// Fixed list of rooms (edit here to rename/add). Messages are kept for 1 hour only,
+// in memory and (text only) in Firestore `chatHistory`, so a restart doesn't wipe the last hour.
+const ROOMS = [
+    { id: 'general', name: 'General', icon: '💬' },
+    { id: 'gaming',  name: 'Gaming',  icon: '🎮' },
+    { id: 'study',   name: 'Study',   icon: '📚' },
+    { id: 'music',   name: 'Music',   icon: '🎵' }
+];
+const ROOM_IDS = ROOMS.map(r => r.id);
+const HISTORY_MS = 60 * 60 * 1000;
+const HISTORY_MAX = 150;          // per room
+const MEDIA_KEEP_MAX = 60000;     // chars of media data we keep in history; bigger media becomes a placeholder
+const history = new Map(ROOM_IDS.map(id => [id, []])); // room -> [{ data, at }]
+const histDocId = (id) => String(id).replace(/[\/\s]/g, '_').slice(0, 100);
+
+function pruneHistory() {
+    const cut = Date.now() - HISTORY_MS;
+    for (const [room, arr] of history) {
+        const i = arr.findIndex(e => e.at >= cut);
+        history.set(room, (i === -1 ? [] : arr.slice(i)).slice(-HISTORY_MAX));
+    }
+}
+function storeHistory(data) {
+    const copy = Object.assign({}, data);
+    delete copy.senderId;
+    if (copy.mediaType && copy.mediaType !== 'sticker' && String(copy.mediaUrl || '').length > MEDIA_KEEP_MAX) {
+        copy.mediaType = null; copy.mediaUrl = null; copy.msg = '📎 Media (too large to keep in history)';
+    }
+    const arr = history.get(copy.room) || [];
+    arr.push({ data: copy, at: Date.now() });
+    history.set(copy.room, arr.slice(-HISTORY_MAX));
+    if (db && !copy.mediaType) {
+        db.collection('chatHistory').doc(histDocId(copy.id))
+            .set({ data: JSON.parse(JSON.stringify(copy)), room: copy.room, at: Date.now() })
+            .catch(() => {});
+    }
+}
+function removeFromHistory(msgId) {
+    for (const [room, arr] of history) history.set(room, arr.filter(e => String(e.data.id) !== String(msgId)));
+    if (db) db.collection('chatHistory').doc(histDocId(msgId)).delete().catch(() => {});
+}
+function editInHistory(msgId, newText) {
+    for (const arr of history.values()) arr.forEach(e => { if (String(e.data.id) === String(msgId)) e.data.msg = newText; });
+    if (db) db.collection('chatHistory').doc(histDocId(msgId)).update({ 'data.msg': newText }).catch(() => {});
+}
+async function purgeHistoryDocs(olderThan) {
+    if (!db) return;
+    try {
+        for (let i = 0; i < 5; i++) {
+            const q = olderThan ? db.collection('chatHistory').where('at', '<', olderThan) : db.collection('chatHistory');
+            const snap = await q.limit(400).get();
+            if (snap.empty) break;
+            const batch = db.batch();
+            snap.docs.forEach(d => batch.delete(d.ref));
+            await batch.commit();
+            if (snap.size < 400) break;
+        }
+    } catch (e) { console.error('history purge failed:', e.message); }
+}
+function clearAllHistory() {
+    for (const id of ROOM_IDS) history.set(id, []);
+    purgeHistoryDocs(null);
+}
+async function loadHistory() {
+    if (!db) return;
+    try {
+        const snap = await db.collection('chatHistory').where('at', '>', Date.now() - HISTORY_MS).orderBy('at', 'asc').limit(600).get();
+        snap.docs.forEach(d => {
+            const x = d.data();
+            if (!x || !x.data || !history.has(x.room)) return;
+            history.get(x.room).push({ data: x.data, at: x.at });
+            rememberMessage(x.data); // so reports still work on messages from before a restart
+        });
+        pruneHistory();
+        console.log('📜 chat history loaded from Firestore');
+    } catch (e) { console.error('history load failed:', e.message); }
+}
+setInterval(pruneHistory, 60 * 1000);
+setInterval(() => purgeHistoryDocs(Date.now() - HISTORY_MS), 10 * 60 * 1000);
+setTimeout(loadHistory, 1500);
+
+function sendHistory(socket, room) {
+    pruneHistory();
+    const items = (history.get(room) || []).map(e => e.data);
+    socket.emit('chat-history', { room, messages: items });
+    items.forEach(m => {
+        const r = reactionSummary(m.id);
+        if (Object.keys(r).length) socket.emit('reaction-update', { msgId: String(m.id), reactions: r });
+    });
+}
+
+// Push to people who were replied to / @mentioned and aren't looking at that room right now
+function isViewingRoom(username, room) {
+    for (const [sid, uname] of socketUsers.entries()) {
+        if (uname !== username) continue;
+        const s = io.sockets.sockets.get(sid);
+        if (s && s.data && s.data.room === room) return true;
+    }
+    return false;
+}
+function notifyMentions(d) {
+    try {
+        const targets = new Set();
+        if (d.replyTo && d.replyTo.user) targets.add(String(d.replyTo.user));
+        const re = /@([\w.\-]{2,30})/g; let m;
+        while ((m = re.exec(String(d.msg || '')))) targets.add(m[1]);
+        targets.delete(d.user);
+        const text = d.mediaType ? '[media]' : String(d.msg || '');
+        [...targets].filter(t => !/^Guest_\d{4}$/.test(t)).slice(0, 3).forEach(t => {
+            if (isViewingRoom(t, d.room)) return;
+            const room = ROOMS.find(r => r.id === d.room);
+            sendPushToUser(t, {
+                title: `${d.user} in ${room ? room.name : 'chat'}`,
+                body: text.length > 100 ? text.slice(0, 97) + '…' : text,
+                tag: `mention-${t}`, url: '/'
+            });
+        });
+    } catch (e) { console.error('notifyMentions failed:', e.message); }
+}
+
 // AI chat endpoint
 app.post('/api/gemini', async (req, res) => {
     const { prompt } = req.body;
@@ -487,6 +608,7 @@ function scheduleAutoUnmute(username, ms) {
 
 function performChatClear(by) {
     reactionsByMsg.clear();
+    clearAllHistory();
     audit('clear-chat', by);
     pinnedMessage = null;
     io.emit('chat-cleared', { by: by || 'Admin' });
@@ -508,6 +630,9 @@ function kickUserSockets(username, reason) {
 }
 
 io.on('connection', (socket) => {
+    socket.data.room = 'general';
+    socket.join('general');
+    socket.emit('rooms', ROOMS);
     onlineUsersCount++;
     rollStat(); if (onlineUsersCount > stat.peak) stat.peak = onlineUsersCount;
     io.emit('update-online', onlineUsersCount);
@@ -601,9 +726,13 @@ io.on('connection', (socket) => {
                 return socket.emit('system-msg', { text: 'Chat is currently locked by an admin.', kind: 'error' });
             }
         }
+        data.room = ROOM_IDS.includes(socket.data.room) ? socket.data.room : 'general'; // room comes from the server, not the client
         rememberMessage(data);
         statMessage(data.user, data.mediaType);
-        io.emit('chat-message', data);
+        storeHistory(data);
+        io.to(data.room).emit('chat-message', data);
+        io.emit('room-ping', { room: data.room });
+        notifyMentions(data);
     });
 
     // ---- Statistics (admins only) ----------------------------------
@@ -635,7 +764,7 @@ io.on('connection', (socket) => {
         auditBuffer.filter(a => a.at > dayAgo).forEach(a => { actions[a.action] = (actions[a.action] || 0) + 1; });
         const now = Date.now();
         socket.emit('stats-data', {
-            today, days, online: usernameSockets.size, registered, openReports, actions,
+            today, days, online: usernameSockets.size, registered, openReports, actions, ownerUidsSet: OWNER_UIDS.length > 0,
             banned: blockedUsers.size, muted: [...mutedUsers.values()].filter(t => t > now).length,
             top: [...stat.top.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
         });
@@ -671,6 +800,18 @@ io.on('connection', (socket) => {
         const out = {};
         for (const n of names.slice(0, 60)) { if (typeof n === 'string') out[n] = await avatarFor(n); }
         socket.emit('avatars-bulk', out);
+    });
+
+    // ---- Rooms ---------------------------------------------------
+    socket.on('join-room', ({ room }) => {
+        if (!ROOM_IDS.includes(room)) return;
+        if (socket.data.room !== room) {
+            socket.leave(socket.data.room);
+            socket.join(room);
+            socket.data.room = room;
+        }
+        socket.emit('room-joined', { room });
+        sendHistory(socket, room);
     });
 
     // ---- Reactions (one per person per message; same emoji again = remove) ----
@@ -764,12 +905,12 @@ io.on('connection', (socket) => {
     // Relay typing status to everyone else (Instagram-style "X is typing…" indicator)
     socket.on('typing', ({ username }) => {
         if (!username) return;
-        socket.broadcast.emit('user-typing', { username });
+        socket.to(socket.data.room || 'general').emit('user-typing', { username });
     });
 
     socket.on('stop-typing', ({ username }) => {
         if (!username) return;
-        socket.broadcast.emit('user-stop-typing', { username });
+        socket.to(socket.data.room || 'general').emit('user-stop-typing', { username });
     });
 
     // Delete a message — the message's own sender can delete it, and so can
@@ -795,6 +936,7 @@ io.on('connection', (socket) => {
         }
 
         if (isStaff && !isSelf) audit('delete-message', name, messageSender, String(msgId));
+        removeFromHistory(msgId);
         io.emit('delete-message', { msgId, staffDeleted: isStaff && !isSelf });
     });
 
@@ -810,6 +952,7 @@ io.on('connection', (socket) => {
             return socket.emit('system-msg', { text: "You're doing that too fast — slow down a bit.", kind: 'error' });
         }
 
+        editInHistory(msgId, newText.trim());
         io.emit('edit-message', { msgId, newText: newText.trim() });
     });
 
