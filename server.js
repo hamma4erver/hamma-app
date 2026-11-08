@@ -369,7 +369,6 @@ process.on('SIGTERM', async () => { try { await flushStats(); } catch (e) {} pro
 // Fixed list of rooms (edit here to rename/add). Messages are kept for 1 hour only,
 // in memory and (text only) in Firestore `chatHistory`, so a restart doesn't wipe the last hour.
 const ROOMS = [
-    { id: 'welcome', name: 'Welcome', icon: '👋' },
     { id: 'general', name: 'General', icon: '💬' },
     { id: 'gaming',  name: 'Gaming',  icon: '🎮' },
     { id: 'study',   name: 'Study',   icon: '📚' },
@@ -621,18 +620,6 @@ function isRateLimited(socketId) {
 }
 let chatLocked = false;           // when true, only admins/mods can send messages
 const pinnedByRoom = new Map();   // room -> { id, user, text }
-// The Welcome room always starts with a pinned explanation (edit the text here or set WELCOME_TEXT in the environment)
-const WELCOME_TEXT = process.env.WELCOME_TEXT || [
-    '👋 Welcome to Hamma!',
-    'A free live chat to talk, play and study with other people.',
-    '• Pick a room above: General · Gaming · Study · Music',
-    '• Tap a message to reply or react 👍❤️😂 — tap an avatar to see who is online',
-    '• Messages disappear after 1 hour, and staff can mute or ban rude users',
-    '• Log in to send photos & voice notes and to use the AI assistant',
-    'Say hi in General 👇'
-].join('\n');
-function seedWelcomePin() { pinnedByRoom.set('welcome', { id: 'welcome-pin', user: 'Hamma', text: WELCOME_TEXT }); }
-seedWelcomePin();
 const modClearCooldowns = new Map(); // uid -> next-allowed-timestamp (ms) for moderators clearing chat
 const CLEAR_COOLDOWN_MS = 5 * 60 * 1000;
 const modUnmuteCooldowns = new Map(); // uid -> next-allowed-timestamp (ms) for moderators unmuting someone
@@ -672,7 +659,7 @@ function performChatClear(by) {
     reactionsByMsg.clear();
     clearAllHistory();
     audit('clear-chat', by);
-    pinnedByRoom.clear(); seedWelcomePin();
+    pinnedByRoom.clear();
     io.emit('chat-cleared', { by: by || 'Admin' });
     for (const r of ROOMS) io.to(r.id).emit('pinned-message-update', pinnedByRoom.get(r.id) || null);
 }
