@@ -781,7 +781,7 @@
             <h3><i class="fas fa-shield-halved"></i> Terms &amp; Privacy</h3>
             <div class="legal-body">
                 <p><strong>Be respectful.</strong> No harassment, hate speech, spam or illegal content. Staff may mute, ban or delete content that breaks these rules.</p>
-                <p><strong>Your data.</strong> Messages in the public chat are visible to everyone who is online. Accounts use Firebase Authentication; we store your username, email and the content you send so the chat works.</p>
+                <p><strong>Your data.</strong> Messages in the public rooms are visible to everyone in the room and are kept for 1 hour only, then erased. Private messages are not part of that history. Accounts use Firebase Authentication; we store your username, email and the content you send so the chat works.</p>
                 <p><strong>Guests</strong> get a random name and are stored on this device only.</p>
                 <p><strong>Reports &amp; deletion.</strong> You can delete your own messages at any time. To remove your account or report abuse, contact an admin.</p>
             </div>
@@ -3731,6 +3731,7 @@
                 kpi('Open reports', d.openReports), kpi('Reactions', t.reactions),
                 kpi('Banned', d.banned), kpi('Muted', d.muted)
             );
+            if (d.ownerUidsSet === false) { const w = el('div', 'st-warn', '⚠ OWNER_UIDS is not set on the server — owner rights still depend on usernames. Set it in Render.'); body.append(w); }
             body.append(grid);
 
             const off = Math.round(-new Date().getTimezoneOffset() / 60);
@@ -4066,6 +4067,81 @@
             }, { passive: true });
             document.addEventListener('pointerleave', () => { mx = my = -9999; if (!pending) { pending = true; requestAnimationFrame(targets); } });
         })();
+    });
+    </script>
+
+    <script>
+    // ===== Rooms + last-hour history + unread counters =====
+    window.addEventListener('DOMContentLoaded', function () {
+        const $ = (id) => document.getElementById(id);
+        const chat = $('chat-box');
+        const anchor = $('pinned-message-bar');
+        if (!chat || !anchor) return;
+        const bar = document.createElement('div');
+        bar.id = 'room-bar';
+        anchor.parentNode.insertBefore(bar, anchor);
+
+        const KEY = 'hamma_room';
+        let rooms = [], unread = {}, current = 'general', lastUser = null;
+        try { current = localStorage.getItem(KEY) || 'general'; } catch (e) {}
+
+        function renderBar() {
+            bar.innerHTML = '';
+            rooms.forEach(r => {
+                const b = document.createElement('button');
+                b.type = 'button'; b.className = 'room-chip' + (r.id === current ? ' active' : '');
+                b.innerHTML = '<span class="room-ico"></span><span class="room-name"></span>';
+                b.querySelector('.room-ico').textContent = r.icon;
+                b.querySelector('.room-name').textContent = r.name;
+                if (unread[r.id] > 0 && r.id !== current) {
+                    const u = document.createElement('b'); u.className = 'room-unread'; u.textContent = unread[r.id] > 9 ? '9+' : unread[r.id];
+                    b.appendChild(u);
+                }
+                b.addEventListener('click', () => { if (r.id !== current) join(r.id); });
+                bar.appendChild(b);
+            });
+        }
+        function join(id) {
+            if (!rooms.some(r => r.id === id)) id = 'general';
+            current = id; unread[id] = 0;
+            try { localStorage.setItem(KEY, id); } catch (e) {}
+            chat.innerHTML = ''; // نفرّغو الشات، والتاريخ يرجع من السيرفر
+            if (window.socket) window.socket.emit('join-room', { room: id });
+            renderBar();
+        }
+
+        function renderHistory(room, messages) {
+            if (room !== current || !messages.length) return;
+            const frag = document.createDocumentFragment();
+            const div = document.createElement('div');
+            div.className = 'hist-divider'; div.textContent = 'Last hour';
+            chat.appendChild(div);
+            messages.forEach(m => {
+                if (!m || document.querySelector('#chat-box [data-id="' + CSS.escape(String(m.id)) + '"]')) return;
+                if (m.avatar && m.user) window.avatars = Object.assign(window.avatars || {}, { [m.user]: m.avatar });
+                appendLocalMessage(m.id || Date.now(), m.user, m.msg, m.user === window.currentUsername, m.replyTo, m.mediaType, m.mediaUrl, m.sticker);
+            });
+        }
+
+        // عنوان التبويب: عدّاد الرسائل الجديدة كي يكون التطبيق مخفي
+        const baseTitle = document.title; let missed = 0;
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) { missed = 0; document.title = baseTitle; } });
+
+        let tries = 0;
+        const hook = setInterval(() => {
+            const s = window.socket;
+            if (s && s.on) {
+                clearInterval(hook);
+                s.on('rooms', (list) => { rooms = list || []; renderBar(); join(current); });
+                s.on('chat-history', (d) => renderHistory(d.room, d.messages || []));
+                s.on('room-ping', ({ room }) => { if (room !== current) { unread[room] = (unread[room] || 0) + 1; renderBar(); } });
+                s.on('chat-message', () => { if (document.hidden) { missed++; document.title = '(' + missed + ') ' + baseTitle; } });
+            } else if (++tries > 240) clearInterval(hook);
+        }, 500);
+        // أول ما يتسجّل المستخدم (ويتبدّل الاسم) نعاودو نحمّلو التاريخ باش رسائلو تتعرف
+        setInterval(() => {
+            if (window.currentUsername !== lastUser) { const first = lastUser === null; lastUser = window.currentUsername; if (!first && rooms.length) join(current); }
+        }, 1000);
     });
     </script>
 </body>
