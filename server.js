@@ -10,6 +10,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+app.set('trust proxy', 1); // behind Render's proxy: req.ip = real client IP (needed for rate limiting)
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -368,6 +369,7 @@ process.on('SIGTERM', async () => { try { await flushStats(); } catch (e) {} pro
 // Fixed list of rooms (edit here to rename/add). Messages are kept for 1 hour only,
 // in memory and (text only) in Firestore `chatHistory`, so a restart doesn't wipe the last hour.
 const ROOMS = [
+    { id: 'welcome', name: 'Welcome', icon: '👋' },
     { id: 'general', name: 'General', icon: '💬' },
     { id: 'gaming',  name: 'Gaming',  icon: '🎮' },
     { id: 'study',   name: 'Study',   icon: '📚' },
@@ -485,34 +487,82 @@ function notifyMentions(d) {
     } catch (e) { console.error('notifyMentions failed:', e.message); }
 }
 
-// AI chat endpoint
-app.post('/api/gemini', async (req, res) => {
-    const { prompt } = req.body;
-    if (!apiKey) return res.json({ reply: "GROQ_API_KEY is missing on Render." });
+// ==================================================
+// AI endpoint (/api/gemini → Groq). Every call costs money, so it is protected:
+//  • must be logged in (Firebase ID token in the Authorization header)
+//  • per-IP, per-user (per minute + per day) and a global daily cap (circuit breaker)
+//  • prompt length and answer length are capped
+// Tune with env vars: AI_PER_MIN, AI_PER_DAY, AI_GLOBAL_PER_DAY
+// ==================================================
+const AI_PER_MIN = Number(process.env.AI_PER_MIN) || 6;
+const AI_PER_DAY = Number(process.env.AI_PER_DAY) || 60;
+const AI_GLOBAL_PER_DAY = Number(process.env.AI_GLOBAL_PER_DAY) || 1000;
+const AI_MAX_PROMPT = 2000;
+const aiIpLog = new Map(), aiUserMin = new Map(), aiUserDay = new Map();
+let aiGlobal = { day: dayKey(), n: 0 };
+function hitLimit(map, key, windowMs, max) {
+    const now = Date.now();
+    const arr = (map.get(key) || []).filter(t => now - t < windowMs);
+    if (arr.length >= max) { map.set(key, arr); return true; }
+    arr.push(now); map.set(key, arr);
+    return false;
+}
+setInterval(() => {
+    const now = Date.now();
+    for (const [m, win] of [[aiIpLog, 60000], [aiUserMin, 60000], [aiUserDay, 86400000]]) {
+        for (const [k, arr] of m) { if (!arr.length || now - arr[arr.length - 1] > win) m.delete(k); }
+    }
+}, 10 * 60 * 1000);
 
+app.post('/api/gemini', async (req, res) => {
+    if (!apiKey) return res.status(503).json({ reply: 'The AI assistant is not available right now.' });
+    // 1) cheap IP limit first, so token verification can't be spammed
+    if (hitLimit(aiIpLog, req.ip, 60000, 30)) return res.status(429).json({ reply: '⏳ Too many requests — try again in a minute.' });
+    // 2) login required
+    const authz = String(req.headers.authorization || '');
+    const token = authz.startsWith('Bearer ') ? authz.slice(7) : null;
+    if (!token || !db) return res.status(401).json({ reply: '🔒 Please log in to use the AI assistant.' });
+    let decoded;
+    try { decoded = await admin.auth().verifyIdToken(token); }
+    catch (e) { return res.status(401).json({ reply: '🔒 Your session expired — please log in again.' }); }
+    if (decoded.name && blockedUsers.has(decoded.name)) return res.status(403).json({ reply: 'You are banned.' });
+    // 3) input validation (free for us, so it doesn't count against the user's quota)
+    const prompt = req.body && typeof req.body.prompt === 'string' ? req.body.prompt.trim() : '';
+    if (!prompt) return res.status(400).json({ reply: 'Please type a question.' });
+    if (prompt.length > AI_MAX_PROMPT) return res.status(400).json({ reply: `Your question is too long (max ${AI_MAX_PROMPT} characters).` });
+    // 4) per-user limits
+    if (hitLimit(aiUserMin, decoded.uid, 60000, AI_PER_MIN)) return res.status(429).json({ reply: `⏳ Slow down — max ${AI_PER_MIN} AI questions per minute.` });
+    if (hitLimit(aiUserDay, decoded.uid, 86400000, AI_PER_DAY)) return res.status(429).json({ reply: `You reached today's limit of ${AI_PER_DAY} AI questions. Come back tomorrow.` });
+    // 5) global daily circuit breaker
+    if (aiGlobal.day !== dayKey()) aiGlobal = { day: dayKey(), n: 0 };
+    if (aiGlobal.n >= AI_GLOBAL_PER_DAY) return res.status(503).json({ reply: 'The AI assistant reached its daily limit. Try again tomorrow.' });
+    aiGlobal.n++;
+
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 25000);
     try {
-        const apiResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        const apiResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-            },
+            signal: ctrl.signal,
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
             body: JSON.stringify({
-                model: "openai/gpt-oss-20b",
-                messages: [{ role: "user", content: prompt }]
+                model: 'openai/gpt-oss-20b',
+                max_completion_tokens: 800,
+                messages: [{ role: 'user', content: prompt }]
             })
         });
-
         const data = await apiResponse.json();
         if (data.choices && data.choices[0] && data.choices[0].message) {
             res.json({ reply: data.choices[0].message.content });
-        } else if (data.error) {
-            res.json({ reply: `Groq Error: ${data.error.message}` });
         } else {
-            res.json({ reply: "Received an invalid response structure." });
+            console.error('Groq error:', data.error ? data.error.message : 'invalid response');
+            res.status(502).json({ reply: 'The AI had a problem answering. Please try again.' });
         }
     } catch (error) {
-        res.json({ reply: `Fetch Error: ${error.message}` });
+        console.error('AI fetch failed:', error.message);
+        res.status(502).json({ reply: 'The AI is not reachable right now. Please try again.' });
+    } finally {
+        clearTimeout(timer);
     }
 });
 
@@ -570,7 +620,19 @@ function isRateLimited(socketId) {
     return arr.length > RATE_LIMIT_MAX;
 }
 let chatLocked = false;           // when true, only admins/mods can send messages
-let pinnedMessage = null;         // { id, user, text } or null
+const pinnedByRoom = new Map();   // room -> { id, user, text }
+// The Welcome room always starts with a pinned explanation (edit the text here or set WELCOME_TEXT in the environment)
+const WELCOME_TEXT = process.env.WELCOME_TEXT || [
+    '👋 Welcome to Hamma!',
+    'A free live chat to talk, play and study with other people.',
+    '• Pick a room above: General · Gaming · Study · Music',
+    '• Tap a message to reply or react 👍❤️😂 — tap an avatar to see who is online',
+    '• Messages disappear after 1 hour, and staff can mute or ban rude users',
+    '• Log in to send photos & voice notes and to use the AI assistant',
+    'Say hi in General 👇'
+].join('\n');
+function seedWelcomePin() { pinnedByRoom.set('welcome', { id: 'welcome-pin', user: 'Hamma', text: WELCOME_TEXT }); }
+seedWelcomePin();
 const modClearCooldowns = new Map(); // uid -> next-allowed-timestamp (ms) for moderators clearing chat
 const CLEAR_COOLDOWN_MS = 5 * 60 * 1000;
 const modUnmuteCooldowns = new Map(); // uid -> next-allowed-timestamp (ms) for moderators unmuting someone
@@ -610,9 +672,9 @@ function performChatClear(by) {
     reactionsByMsg.clear();
     clearAllHistory();
     audit('clear-chat', by);
-    pinnedMessage = null;
+    pinnedByRoom.clear(); seedWelcomePin();
     io.emit('chat-cleared', { by: by || 'Admin' });
-    io.emit('pinned-message-update', null);
+    for (const r of ROOMS) io.to(r.id).emit('pinned-message-update', pinnedByRoom.get(r.id) || null);
 }
 
 // Kicks every socket registered under this username (used on ban)
@@ -640,7 +702,7 @@ io.on('connection', (socket) => {
     // Send current state to the newly connected client
     socket.emit('status-lists', getStatusLists());
     socket.emit('chat-lock-status', { locked: chatLocked });
-    socket.emit('pinned-message-update', pinnedMessage);
+    socket.emit('pinned-message-update', pinnedByRoom.get('general') || null);
 
     // Client registers its username right after entering the chat,
     // so bans can be enforced immediately even for already-connected users
@@ -811,6 +873,7 @@ io.on('connection', (socket) => {
             socket.data.room = room;
         }
         socket.emit('room-joined', { room });
+        socket.emit('pinned-message-update', pinnedByRoom.get(room) || null);
         sendHistory(socket, room);
     });
 
@@ -1111,16 +1174,19 @@ io.on('connection', (socket) => {
         const { ok } = await verifyRole(idToken);
         if (!ok) return socket.emit('system-msg', { text: 'You are not allowed to pin messages.', kind: 'error' });
 
-        pinnedMessage = { id: msgId, user, text };
-        io.emit('pinned-message-update', pinnedMessage);
+        const room = socket.data.room || 'general';
+        const pin = { id: String(msgId || '').slice(0, 60), user: String(user || '').slice(0, 40), text: String(text || '').slice(0, 300) };
+        pinnedByRoom.set(room, pin); // pins are per room now
+        io.to(room).emit('pinned-message-update', pin);
     });
 
     socket.on('unpin-message', async ({ idToken }) => {
         const { ok } = await verifyRole(idToken);
         if (!ok) return socket.emit('system-msg', { text: 'You are not allowed to unpin messages.', kind: 'error' });
 
-        pinnedMessage = null;
-        io.emit('pinned-message-update', null);
+        const room = socket.data.room || 'general';
+        pinnedByRoom.delete(room);
+        io.to(room).emit('pinned-message-update', null);
     });
 
     // ==================================================
