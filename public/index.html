@@ -2140,7 +2140,19 @@
             const unpinBtn = window.isUserAdminOrMod
                 ? `<button class="pin-unpin-btn" onclick="unpinMessage()" title="Unpin"><i class="fas fa-times"></i></button>`
                 : '';
-            bar.innerHTML = `<i class="fas fa-thumbtack pin-icon"></i><span class="pin-content"><strong>${data.user}:</strong> ${data.text}</span>${unpinBtn}`;
+            bar.innerHTML = `<i class="fas fa-thumbtack pin-icon"></i><span class="pin-content"><strong>${escapeHtml(String(data.user || ''))}:</strong> ${escapeHtml(String(data.text || ''))}</span>${unpinBtn}`;
+            const pc = bar.querySelector('.pin-content');
+            pc.title = 'Tap to expand';
+            pc.addEventListener('click', () => bar.classList.toggle('expanded'));
+            // أول مرة: رسالة الترحيب تتفتح كاملة، وبعدها تبقى مطوية
+            let seen = false;
+            try { seen = localStorage.getItem('hamma_welcome_seen') === '1'; } catch (e) {}
+            if (data.id === 'welcome-pin' && !seen) {
+                bar.classList.add('expanded');
+                try { localStorage.setItem('hamma_welcome_seen', '1'); } catch (e) {}
+            } else if (data.id === 'welcome-pin') {
+                bar.classList.remove('expanded');
+            }
         }
 
         async function unpinMessage() {
@@ -3027,9 +3039,19 @@
             aiChatBox.scrollTop = aiChatBox.scrollHeight;
 
             try {
+                const idToken = await getIdTokenSafe();
+                if (!idToken) {
+                    typingDiv.remove();
+                    const lockDiv = document.createElement('div');
+                    lockDiv.classList.add('msg', 'other-msg');
+                    lockDiv.innerHTML = `<strong>Hamma AI 🤖:</strong> <span class="text-content">🔒 Log in or create an account to use the AI assistant.</span>`;
+                    aiChatBox.appendChild(lockDiv);
+                    aiChatBox.scrollTop = aiChatBox.scrollHeight;
+                    return;
+                }
                 const res = await fetch('/api/gemini', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
                     body: JSON.stringify({ prompt: userText })
                 });
                 const data = await res.json();
@@ -4082,8 +4104,8 @@
         anchor.parentNode.insertBefore(bar, anchor);
 
         const KEY = 'hamma_room';
-        let rooms = [], unread = {}, current = 'general', lastUser = null;
-        try { current = localStorage.getItem(KEY) || 'general'; } catch (e) {}
+        let rooms = [], unread = {}, current = 'welcome', lastUser = null;
+        try { current = localStorage.getItem(KEY) || 'welcome'; } catch (e) {}
 
         function renderBar() {
             bar.innerHTML = '';
