@@ -1468,3 +1468,11 @@ html[data-theme="light"] #aurora-canvas { opacity: .65; }
 .st-warn { background: rgba(255, 159, 10, .15); border: 1px solid rgba(255, 159, 10, .5); color: #ff9f0a; border-radius: 12px; padding: 10px 12px; font-size: 13px; margin-bottom: 12px; }
 html[data-theme="light"] .room-chip.active { box-shadow: 0 0 10px rgba(52,120,214,.3); }
 html[data-theme="light"] .st-warn { color: #a86400; }
+
+/* Pinned message: multi-line + expandable (used by the Welcome room) */
+#pinned-message-bar .pin-content { cursor: pointer; }
+#pinned-message-bar.expanded { align-items: flex-start; }
+#pinned-message-bar.expanded .pin-content { white-space: pre-line; overflow: visible; text-overflow: clip; line-height: 1.5; }
+#pinned-message-bar.expanded .pin-icon, #pinned-message-bar.expanded .pin-unpin-btn { margin-top: 3px; }
+html[data-theme="light"] #pinned-message-bar { background: rgba(52,120,214,.10); border-color: rgba(52,120,214,.35); color: #2a2d34; }
+html[data-theme="light"] #pinned-message-bar .pin-icon { color: #3478d6; }
