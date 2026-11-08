@@ -1455,3 +1455,16 @@ html.aurora-on .parallax-blob { opacity: .16; }
 html[data-theme="light"] .social-btn { color: #2a2d34; background: rgba(30, 40, 60, .06); border-color: rgba(30, 40, 60, .14); }
 html[data-theme="light"] .social-btn:hover { background: rgba(30, 40, 60, .12); }
 html[data-theme="light"] #aurora-canvas { opacity: .65; }
+
+/* Rooms + history */
+#room-bar { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 8px; scrollbar-width: none; flex-shrink: 0; }
+#room-bar::-webkit-scrollbar { display: none; }
+.room-chip { position: relative; display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; background: var(--ios-surface-2); color: var(--ios-label-2); border: .5px solid var(--ios-separator); border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .25s ease, color .25s ease, transform .25s var(--ios-spring), box-shadow .25s ease; }
+.room-chip:active { transform: scale(.94); }
+.room-chip.active { background: var(--ios-blue); color: #fff; border-color: transparent; box-shadow: 0 0 14px rgba(10,132,255,.45); }
+.room-unread { position: absolute; top: -5px; right: -3px; min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box; border-radius: 9px; background: var(--ios-red); color: #fff; font-size: 11px; line-height: 18px; text-align: center; animation: chipPop .4s var(--ios-spring); }
+.hist-divider { align-self: center; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ios-label-2); margin: 4px 0 10px; display: flex; align-items: center; gap: 10px; width: 100%; }
+.hist-divider::before, .hist-divider::after { content: ""; flex: 1; height: 1px; background: var(--ios-separator); }
+.st-warn { background: rgba(255, 159, 10, .15); border: 1px solid rgba(255, 159, 10, .5); color: #ff9f0a; border-radius: 12px; padding: 10px 12px; font-size: 13px; margin-bottom: 12px; }
+html[data-theme="light"] .room-chip.active { box-shadow: 0 0 10px rgba(52,120,214,.3); }
+html[data-theme="light"] .st-warn { color: #a86400; }
