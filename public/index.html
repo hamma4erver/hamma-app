@@ -2144,15 +2144,6 @@
             const pc = bar.querySelector('.pin-content');
             pc.title = 'Tap to expand';
             pc.addEventListener('click', () => bar.classList.toggle('expanded'));
-            // أول مرة: رسالة الترحيب تتفتح كاملة، وبعدها تبقى مطوية
-            let seen = false;
-            try { seen = localStorage.getItem('hamma_welcome_seen') === '1'; } catch (e) {}
-            if (data.id === 'welcome-pin' && !seen) {
-                bar.classList.add('expanded');
-                try { localStorage.setItem('hamma_welcome_seen', '1'); } catch (e) {}
-            } else if (data.id === 'welcome-pin') {
-                bar.classList.remove('expanded');
-            }
         }
 
         async function unpinMessage() {
@@ -3931,7 +3922,7 @@
         // 2) Spotlight Card: ضو يتبع الماوس فوق البطاقات والنوافذ
         document.addEventListener('pointermove', (e) => {
             if (e.pointerType === 'touch') return;
-            const card = e.target.closest && e.target.closest('.login-card, .modal-card, .st-kpi, .rp-item');
+            const card = e.target.closest && e.target.closest('.login-card, .modal-card, .st-kpi, .rp-item, .wl-card');
             if (!card) return;
             const r = card.getBoundingClientRect();
             card.style.setProperty('--mx', (e.clientX - r.left) + 'px');
@@ -4104,8 +4095,8 @@
         anchor.parentNode.insertBefore(bar, anchor);
 
         const KEY = 'hamma_room';
-        let rooms = [], unread = {}, current = 'welcome', lastUser = null;
-        try { current = localStorage.getItem(KEY) || 'welcome'; } catch (e) {}
+        let rooms = [], unread = {}, current = 'general', lastUser = null;
+        try { current = localStorage.getItem(KEY) || 'general'; } catch (e) {}
 
         function renderBar() {
             bar.innerHTML = '';
@@ -4164,6 +4155,119 @@
         setInterval(() => {
             if (window.currentUsername !== lastUser) { const first = lastUser === null; lastUser = window.currentUsername; if (!first && rooms.length) join(current); }
         }, 1000);
+    });
+    </script>
+
+    <script>
+    // ===== Welcome experience (first visit) — Aurora backdrop, Shiny title, Spotlight cards, GSAP + Lenis, Click Spark =====
+    window.addEventListener('DOMContentLoaded', function () {
+        const KEY = 'hamma_welcome_v2';
+        const $ = (id) => document.getElementById(id);
+        document.body.insertAdjacentHTML('beforeend', `
+        <div id="welcome-overlay" role="dialog" aria-modal="true" aria-label="Welcome to Hamma" style="display:none;">
+            <button id="wl-close" class="wl-x" aria-label="Close">✕</button>
+            <div class="wl-scroll" id="wl-scroll">
+                <div class="wl-wrap">
+                    <section class="wl-hero">
+                        <span class="wl-eyebrow"><i></i> LIVE CHAT</span>
+                        <h1 class="shiny">Welcome to Hamma</h1>
+                        <p class="wl-sub">A live community chat — talk, play and study with people in real time.</p>
+                        <div class="wl-cta">
+                            <button class="btn-primary wl-go" type="button">Get started <i class="fas fa-arrow-right"></i></button>
+                            <button class="wl-ghost" type="button" id="wl-more">See how it works <i class="fas fa-chevron-down"></i></button>
+                        </div>
+                        <p class="wl-note">Guests welcome — no account needed to start.</p>
+                    </section>
+
+                    <section class="wl-grid" id="wl-features">
+                        <article class="wl-card wl-reveal"><i class="fas fa-comments"></i><h3>Rooms for every vibe</h3><p>Jump between General, Gaming, Study and Music — each room has its own conversation.</p></article>
+                        <article class="wl-card wl-reveal"><i class="fas fa-face-smile"></i><h3>React, reply, stand out</h3><p>Emoji reactions, quoted replies and your own avatar make every message feel personal.</p></article>
+                        <article class="wl-card wl-reveal"><i class="fas fa-paper-plane"></i><h3>Private messages</h3><p>Chat one-to-one, send voice notes and photos, and get notified when someone replies.</p></article>
+                        <article class="wl-card wl-reveal"><i class="fas fa-robot"></i><h3>AI assistant</h3><p>Ask a question or get help any time. Available once you're logged in.</p></article>
+                    </section>
+
+                    <section class="wl-steps wl-reveal">
+                        <h2>Up and running in 30 seconds</h2>
+                        <ol>
+                            <li><b>1</b><span><strong>Pick a room</strong><small>Choose where you want to talk.</small></span></li>
+                            <li><b>2</b><span><strong>Say hi</strong><small>Type a message or drop a reaction.</small></span></li>
+                            <li><b>3</b><span><strong>Make it yours</strong><small>Set an avatar and switch light or dark theme.</small></span></li>
+                        </ol>
+                    </section>
+
+                    <section class="wl-trust wl-reveal">
+                        <span><i class="fas fa-clock"></i> Messages disappear after 1 hour</span>
+                        <span><i class="fas fa-shield-halved"></i> Moderated by staff</span>
+                        <span><i class="fas fa-flag"></i> Report in one tap</span>
+                        <span><i class="fas fa-user"></i> Guests welcome</span>
+                    </section>
+
+                    <section class="wl-final wl-reveal">
+                        <button class="btn-primary wl-go" type="button">Enter Hamma <i class="fas fa-arrow-right"></i></button>
+                        <button class="legal-link" type="button" id="wl-legal">Terms &amp; Privacy</button>
+                    </section>
+                </div>
+            </div>
+        </div>`);
+
+        const ov = $('welcome-overlay'), scroller = $('wl-scroll');
+        let lenis = null, rafId = 0, io = null, open = false;
+
+        function startLenis() {
+            if (typeof window.Lenis === 'undefined') return;
+            try { lenis = new window.Lenis({ wrapper: scroller, content: scroller, eventsTarget: scroller, duration: 1.1, easing: t => Math.min(1, 1.001 - Math.pow(2, -10 * t)), syncTouch: false }); } catch (e) { lenis = null; return; }
+            const loop = (t) => { if (!lenis) return; lenis.raf(t); rafId = requestAnimationFrame(loop); };
+            rafId = requestAnimationFrame(loop);
+        }
+        function stopLenis() { cancelAnimationFrame(rafId); if (lenis) { try { lenis.destroy(); } catch (e) {} lenis = null; } }
+
+        function show() {
+            if (open) return; open = true;
+            ov.style.display = 'flex';
+            requestAnimationFrame(() => ov.classList.add('open'));
+            scroller.scrollTop = 0;
+            startLenis();
+            // كشف تدريجي للأقسام وقت السكرول
+            io = new IntersectionObserver((es) => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { root: scroller, threshold: .15 });
+            ov.querySelectorAll('.wl-reveal').forEach((el, i) => { el.classList.remove('in'); el.style.transitionDelay = ((i % 4) * 80) + 'ms'; io.observe(el); });
+            // دخول الـhero بـGSAP
+            if (window.gsap) {
+                const g = window.gsap;
+                g.timeline({ defaults: { ease: 'expo.out' } })
+                    .from('.wl-eyebrow', { opacity: 0, y: 16, duration: .6, clearProps: 'all' })
+                    .from('.wl-hero h1', { opacity: 0, y: 34, scale: .94, filter: 'blur(12px)', duration: 1, clearProps: 'transform,opacity,filter' }, '-=.35')
+                    .from('.wl-sub', { opacity: 0, y: 18, duration: .7, clearProps: 'all' }, '-=.6')
+                    .from('.wl-cta > *', { opacity: 0, y: 18, duration: .6, stagger: .1, clearProps: 'all' }, '-=.5')
+                    .from('.wl-note', { opacity: 0, duration: .6, clearProps: 'all' }, '-=.3');
+            }
+        }
+        function hide() {
+            if (!open) return; open = false;
+            try { localStorage.setItem(KEY, '1'); } catch (e) {}
+            ov.classList.remove('open');
+            setTimeout(() => { ov.style.display = 'none'; stopLenis(); if (io) io.disconnect(); }, 450);
+        }
+        ov.querySelectorAll('.wl-go').forEach(b => b.addEventListener('click', hide));
+        $('wl-close').addEventListener('click', hide);
+        $('wl-more').addEventListener('click', () => { const t = $('wl-features'); if (lenis) lenis.scrollTo(t, { offset: -20 }); else t.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+        $('wl-legal').addEventListener('click', () => { if (window.openLegal) window.openLegal(); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && open) hide(); });
+
+        // أول زيارة (والمستخدم مازال في شاشة الـlogin) → تبان مرة وحدة
+        let seen = false; try { seen = localStorage.getItem(KEY) === '1'; } catch (e) {}
+        const login = $('login-screen');
+        if (!seen) setTimeout(() => { if (login && login.style.display !== 'none') show(); }, 600);
+
+        // صف في قائمة الإعدادات باش يعاود يشوفها
+        const menu = $('menu-panel');
+        if (menu) {
+            const row = document.createElement('div');
+            row.className = 'ai-btn'; row.title = 'Welcome tour';
+            row.style.cssText = 'background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);';
+            row.innerHTML = '<i class="fas fa-compass"></i>';
+            row.addEventListener('click', show);
+            menu.insertBefore(row, $('btn-logout') || null);
+        }
     });
     </script>
 </body>
