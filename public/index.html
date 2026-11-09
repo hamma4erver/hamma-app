@@ -3780,6 +3780,7 @@
 
     <!-- GSAP (animation engine) — pinned version; the site keeps working with plain CSS animations if this fails to load -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js" defer></script>
     <script>
     // ===== GSAP animation layer =====
     window.addEventListener('DOMContentLoaded', function () {
@@ -4159,106 +4160,272 @@
     </script>
 
     <script>
-    // ===== Welcome experience (first visit) — Aurora backdrop, Shiny title, Spotlight cards, GSAP + Lenis, Click Spark =====
+    // ===== WELCOME — scroll-driven experience (GSAP + ScrollTrigger + Lenis, Aurora backdrop, Spotlight, Click Spark) =====
     window.addEventListener('DOMContentLoaded', function () {
         const KEY = 'hamma_welcome_v2';
         const $ = (id) => document.getElementById(id);
+        const sparkles = '<span>✦</span>';
+        const marqueeItems = ['General', 'Gaming', 'Study', 'Music', 'Reactions', 'Voice notes', 'Private messages', 'AI assistant', 'Avatars', 'Light & dark'];
+        const marquee = marqueeItems.map(t => '<span>' + t + '</span>' + sparkles).join('');
         document.body.insertAdjacentHTML('beforeend', `
         <div id="welcome-overlay" role="dialog" aria-modal="true" aria-label="Welcome to Hamma" style="display:none;">
+            <div class="wl-progress"><i></i></div>
             <button id="wl-close" class="wl-x" aria-label="Close">✕</button>
-            <div class="wl-scroll" id="wl-scroll">
-                <div class="wl-wrap">
-                    <section class="wl-hero">
-                        <span class="wl-eyebrow"><i></i> LIVE CHAT</span>
-                        <h1 class="shiny">Welcome to Hamma</h1>
+            <div class="wl-orbs" aria-hidden="true"><span class="wl-orb o1"></span><span class="wl-orb o2"></span><span class="wl-orb o3"></span></div>
+            <div class="wl-scroll" id="wl-scroll"><div class="wl-inner" id="wl-inner">
+
+                <section class="wl-hero" id="wl-hero">
+                    <div class="wl-hero-in">
+                        <span class="wl-eyebrow"><i></i><b id="wl-online">LIVE CHAT</b></span>
+                        <h1 class="wl-title" id="wl-title" data-text="Welcome to Hamma">Welcome to Hamma</h1>
                         <p class="wl-sub">A live community chat — talk, play and study with people in real time.</p>
                         <div class="wl-cta">
                             <button class="btn-primary wl-go" type="button">Get started <i class="fas fa-arrow-right"></i></button>
                             <button class="wl-ghost" type="button" id="wl-more">See how it works <i class="fas fa-chevron-down"></i></button>
                         </div>
                         <p class="wl-note">Guests welcome — no account needed to start.</p>
-                    </section>
+                    </div>
+                    <div class="wl-hint" aria-hidden="true"><span>Scroll</span><i></i></div>
+                </section>
 
-                    <section class="wl-grid" id="wl-features">
-                        <article class="wl-card wl-reveal"><i class="fas fa-comments"></i><h3>Rooms for every vibe</h3><p>Jump between General, Gaming, Study and Music — each room has its own conversation.</p></article>
-                        <article class="wl-card wl-reveal"><i class="fas fa-face-smile"></i><h3>React, reply, stand out</h3><p>Emoji reactions, quoted replies and your own avatar make every message feel personal.</p></article>
-                        <article class="wl-card wl-reveal"><i class="fas fa-paper-plane"></i><h3>Private messages</h3><p>Chat one-to-one, send voice notes and photos, and get notified when someone replies.</p></article>
-                        <article class="wl-card wl-reveal"><i class="fas fa-robot"></i><h3>AI assistant</h3><p>Ask a question or get help any time. Available once you're logged in.</p></article>
-                    </section>
+                <div class="wl-marquee" aria-hidden="true"><div class="wl-track" id="wl-track">${marquee}${marquee}</div></div>
 
-                    <section class="wl-steps wl-reveal">
-                        <h2>Up and running in 30 seconds</h2>
-                        <ol>
-                            <li><b>1</b><span><strong>Pick a room</strong><small>Choose where you want to talk.</small></span></li>
-                            <li><b>2</b><span><strong>Say hi</strong><small>Type a message or drop a reaction.</small></span></li>
-                            <li><b>3</b><span><strong>Make it yours</strong><small>Set an avatar and switch light or dark theme.</small></span></li>
-                        </ol>
-                    </section>
+                <section class="wl-story" id="wl-story">
+                    <div class="wl-stage">
+                        <div class="wl-copy">
+                            <div class="wl-step"><small>01</small><h2>Rooms for every vibe</h2><p>General, Gaming, Study, Music. Hop between conversations in one tap — unread counts keep you in the loop.</p></div>
+                            <div class="wl-step"><small>02</small><h2>React, reply, stand out</h2><p>Emoji reactions, quoted replies and your own avatar make every message feel alive.</p></div>
+                            <div class="wl-step"><small>03</small><h2>Private by choice</h2><p>Chat one-to-one, send voice notes and photos, and get notified when someone replies or mentions you.</p></div>
+                            <div class="wl-step"><small>04</small><h2>Ask the AI</h2><p>Stuck on something? Ask the built-in assistant, right inside the app. Available when you're logged in.</p></div>
+                            <div class="wl-dots" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+                        </div>
+                        <div class="wl-phone" aria-hidden="true">
+                            <div class="ph-notch"></div>
+                            <div class="ph-head"><span class="ph-chip on">💬 General</span><span class="ph-chip">🎮 Gaming<b>2</b></span><span class="ph-chip">📚 Study</span><span class="ph-chip">🎵 Music</span></div>
+                            <div class="ph-body">
+                                <div class="ph-scene">
+                                    <div class="ph-msg them"><span class="ph-av" style="background:#bf5af2">S</span><p>Anyone up for a match tonight? 🎮</p></div>
+                                    <div class="ph-msg them"><span class="ph-av" style="background:#30d158">A</span><p>I'm in! Which room?</p></div>
+                                    <div class="ph-msg me"><p>Gaming 😎</p></div>
+                                </div>
+                                <div class="ph-scene">
+                                    <div class="ph-msg me"><p>Just joined — hi everyone! 👋</p></div>
+                                    <div class="ph-react"><span>❤️ 3</span><span>😂 2</span><span class="mine">👍 1</span></div>
+                                    <div class="ph-msg them"><span class="ph-av" style="background:#ff9f0a">N</span><p>Welcome!! 🎉</p></div>
+                                </div>
+                                <div class="ph-scene">
+                                    <div class="ph-toast"><b>💌</b><span><strong>Ali</strong><small>New private message</small></span></div>
+                                    <div class="ph-msg them"><span class="ph-av" style="background:#ff375f">A</span><p class="ph-voice"><i>▶</i><em><u></u><u></u><u></u><u></u><u></u><u></u><u></u><u></u><u></u><u></u></em><small>0:12</small></p></div>
+                                    <div class="ph-msg them"><span class="ph-av" style="background:#ff375f">A</span><p>Check this out 👀</p></div>
+                                </div>
+                                <div class="ph-scene">
+                                    <div class="ph-msg me"><p>Explain photosynthesis in one line</p></div>
+                                    <div class="ph-msg them"><span class="ph-av ai">🤖</span><p class="ph-typing"><u></u><u></u><u></u></p></div>
+                                    <div class="ph-msg them"><span class="ph-av ai">🤖</span><p>Plants turn sunlight, water and CO₂ into sugar and oxygen.</p></div>
+                                </div>
+                            </div>
+                            <div class="ph-input"><span>Type a message…</span><b></b></div>
+                        </div>
+                    </div>
+                </section>
 
-                    <section class="wl-trust wl-reveal">
-                        <span><i class="fas fa-clock"></i> Messages disappear after 1 hour</span>
-                        <span><i class="fas fa-shield-halved"></i> Moderated by staff</span>
-                        <span><i class="fas fa-flag"></i> Report in one tap</span>
-                        <span><i class="fas fa-user"></i> Guests welcome</span>
-                    </section>
+                <section class="wl-numbers wl-reveal">
+                    <div class="wl-num wl-card"><b data-n="4">4</b><span>rooms</span></div>
+                    <div class="wl-num wl-card"><b data-n="6">6</b><span>reactions</span></div>
+                    <div class="wl-num wl-card"><b data-n="24">24</b><span>avatars</span></div>
+                    <div class="wl-num wl-card"><b data-n="1">1</b><span>hour of memory</span></div>
+                </section>
 
-                    <section class="wl-final wl-reveal">
-                        <button class="btn-primary wl-go" type="button">Enter Hamma <i class="fas fa-arrow-right"></i></button>
-                        <button class="legal-link" type="button" id="wl-legal">Terms &amp; Privacy</button>
-                    </section>
-                </div>
-            </div>
+                <section class="wl-trust wl-reveal">
+                    <span><i class="fas fa-clock"></i> Messages disappear after 1 hour</span>
+                    <span><i class="fas fa-shield-halved"></i> Moderated by staff</span>
+                    <span><i class="fas fa-flag"></i> Report in one tap</span>
+                    <span><i class="fas fa-user"></i> Guests welcome</span>
+                </section>
+
+                <section class="wl-final wl-reveal">
+                    <h2>Ready when you are.</h2>
+                    <p>Jump in as a guest, or log in to unlock voice notes, photos and the AI.</p>
+                    <button class="btn-primary wl-go" type="button">Enter Hamma <i class="fas fa-arrow-right"></i></button>
+                    <button class="legal-link" type="button" id="wl-legal">Terms &amp; Privacy</button>
+                </section>
+            </div></div>
         </div>`);
 
-        const ov = $('welcome-overlay'), scroller = $('wl-scroll');
-        let lenis = null, rafId = 0, io = null, open = false;
+        const ov = $('welcome-overlay'), scroller = $('wl-scroll'), inner = $('wl-inner');
+        let open = false, lenis = null, ctx = null, io = null, tickFns = [], rafId = 0, onlineTimer = 0;
 
-        function startLenis() {
-            if (typeof window.Lenis === 'undefined') return;
-            try { lenis = new window.Lenis({ wrapper: scroller, content: scroller, eventsTarget: scroller, duration: 1.1, easing: t => Math.min(1, 1.001 - Math.pow(2, -10 * t)), syncTouch: false }); } catch (e) { lenis = null; return; }
-            const loop = (t) => { if (!lenis) return; lenis.raf(t); rafId = requestAnimationFrame(loop); };
-            rafId = requestAnimationFrame(loop);
+        // العنوان: كل حرف في span (للأنيميشن)
+        (function splitTitle() {
+            const t = $('wl-title'), text = t.dataset.text;
+            t.setAttribute('aria-label', text); t.innerHTML = '';
+            text.split(' ').forEach((w, wi, arr) => {
+                const word = document.createElement('span'); word.className = 'wl-word'; word.setAttribute('aria-hidden', 'true');
+                [...w].forEach(ch => { const c = document.createElement('span'); c.className = 'wl-ch'; c.textContent = ch; word.appendChild(c); });
+                t.appendChild(word);
+                if (wi < arr.length - 1) t.appendChild(document.createTextNode(' '));
+            });
+        })();
+
+        // عدد المتصلين الحقيقي (كان السوكت يعطيه)
+        function refreshOnline() {
+            const n = window.onlineSet ? window.onlineSet.size : 0;
+            const el = $('wl-online'); if (!el) return;
+            el.textContent = n > 0 ? n + ' online now' : 'LIVE CHAT';
         }
-        function stopLenis() { cancelAnimationFrame(rafId); if (lenis) { try { lenis.destroy(); } catch (e) {} lenis = null; } }
+
+        // ------- وضع lite (بلا مكتبات): كشف تدريجي بسيط -------
+        function startLite() {
+            ov.classList.add('wl-lite');
+            io = new IntersectionObserver((es) => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { root: scroller, threshold: .15 });
+            ov.querySelectorAll('.wl-reveal, .wl-step').forEach((el, i) => { el.classList.remove('in'); el.style.transitionDelay = ((i % 4) * 80) + 'ms'; io.observe(el); });
+        }
+
+        // ------- الوضع الكامل: GSAP + ScrollTrigger + Lenis -------
+        function startPro() {
+            const g = window.gsap, ST = window.ScrollTrigger;
+            g.registerPlugin(ST);
+            ov.classList.add('wl-pro');
+            const q = (s) => Array.from(ov.querySelectorAll(s));
+            const one = (s) => ov.querySelector(s);
+            const chars = q('.wl-ch'), steps = q('.wl-step'), scenes = q('.ph-scene'), dots = q('.wl-dots i'), chips = q('.ph-chip');
+            const phone = one('.wl-phone'), story = $('wl-story'), hero = $('wl-hero'), track = $('wl-track');
+            const fine = window.matchMedia && matchMedia('(pointer: fine)').matches;
+
+            // Lenis (سكرول ناعم) مربوط بـScrollTrigger عبر ticker متاع GSAP
+            if (typeof window.Lenis !== 'undefined') {
+                lenis = new window.Lenis({ wrapper: scroller, content: inner, eventsTarget: scroller, duration: 1.2, easing: t => Math.min(1, 1.001 - Math.pow(2, -10 * t)), smoothWheel: true, syncTouch: false });
+                lenis.on('scroll', ST.update);
+            }
+            ST.defaults({ scroller: scroller });
+            g.ticker.lagSmoothing(0);
+
+            let heroOn = true;
+            ctx = g.context(() => {
+                // --- Hero: دخول الحروف + الباقي ---
+                g.timeline({ defaults: { ease: 'expo.out' } })
+                    .from(one('.wl-eyebrow'), { autoAlpha: 0, y: 16, duration: .7 })
+                    .from(chars, { yPercent: 125, rotateX: -90, transformPerspective: 600, autoAlpha: 0, transformOrigin: '50% 100%', stagger: .04, duration: 1.15 }, '-=.35')
+                    .from(one('.wl-sub'), { autoAlpha: 0, y: 20, duration: .8 }, '-=.7')
+                    .from(q('.wl-cta > *'), { autoAlpha: 0, y: 22, stagger: .1, duration: .7 }, '-=.6')
+                    .from(one('.wl-note'), { autoAlpha: 0, duration: .8 }, '-=.4')
+                    .from(one('.wl-hint'), { autoAlpha: 0, y: 10, duration: .8 }, '-=.5');
+
+                // --- الـhero يتبخّر ويصغر كي تسكرول ---
+                g.to(one('.wl-hero-in'), { yPercent: -14, autoAlpha: .1, scale: .93, ease: 'none',
+                    scrollTrigger: { trigger: hero, start: 'top top', end: 'bottom top', scrub: true } });
+
+                // --- شريط تقدّم السكرول ---
+                g.to(one('.wl-progress i'), { scaleX: 1, ease: 'none',
+                    scrollTrigger: { trigger: inner, start: 'top top', end: 'bottom bottom', scrub: .3 } });
+
+                // --- أضواء الخلفية تعوم + تتبع الماوس ---
+                g.to(one('.o1'), { x: 140, y: 90, duration: 9, ease: 'sine.inOut', yoyo: true, repeat: -1 });
+                g.to(one('.o2'), { x: -120, y: 110, duration: 11, ease: 'sine.inOut', yoyo: true, repeat: -1 });
+                g.to(one('.o3'), { x: 90, y: -100, duration: 13, ease: 'sine.inOut', yoyo: true, repeat: -1 });
+                if (fine) {
+                    const qx = g.quickTo(one('.wl-orbs'), 'x', { duration: 1.4, ease: 'power3' }), qy = g.quickTo(one('.wl-orbs'), 'y', { duration: 1.4, ease: 'power3' });
+                    const mv = (e) => { qx((e.clientX / innerWidth - .5) * -50); qy((e.clientY / innerHeight - .5) * -50); };
+                    ov.addEventListener('pointermove', mv);
+                    tickFns.push(() => ov.removeEventListener('pointermove', mv));
+                }
+
+                // --- Marquee: يمشي بسرعة السكرول (velocity متاع Lenis) ---
+                const marq = g.to(track, { xPercent: -50, ease: 'none', duration: 30, repeat: -1 });
+                const decay = () => { const ts = marq.timeScale(); marq.timeScale(ts + (1 - ts) * .06); };
+                g.ticker.add(decay); tickFns.push(() => g.ticker.remove(decay));
+                if (lenis) lenis.on('scroll', (e) => { const v = e.velocity || 0; marq.timeScale((v < 0 ? -1 : 1) * (1 + Math.min(7, Math.abs(v) * .45))); });
+
+                // --- القصة: مرحلة بمرحلة مع الهاتف (sticky + scrub) ---
+                g.set(steps, { autoAlpha: 0, y: 40 }); g.set(steps[0], { autoAlpha: 1, y: 0 });
+                g.set(scenes, { autoAlpha: 0, scale: .94 }); g.set(scenes[0], { autoAlpha: 1, scale: 1 });
+                g.set(dots, { width: 8, opacity: .35 }); g.set(dots[0], { width: 28, opacity: 1 });
+                const setChip = (i) => chips.forEach((c, k) => c.classList.toggle('on', k === i));
+                const chipState = { i: 0 };
+                const tl = g.timeline({ defaults: { ease: 'power2.inOut' },
+                    scrollTrigger: { trigger: story, start: 'top top', end: 'bottom bottom', scrub: .7 } });
+                tl.fromTo(phone, { rotateY: -12, rotateX: 5 }, { rotateY: 12, rotateX: -5, duration: 4, ease: 'none' }, 0)
+                  .fromTo(Array.from(scenes[0].children), { y: 24, autoAlpha: 0 }, { y: 0, autoAlpha: 1, stagger: .06, duration: .3 }, 0)
+                  .to(chipState, { i: 1, duration: .05, onUpdate: () => setChip(Math.round(chipState.i)) }, .55);
+                for (let i = 1; i < 4; i++) {
+                    tl.to(steps[i - 1], { autoAlpha: 0, y: -40, duration: .35 }, i - .2)
+                      .to(scenes[i - 1], { autoAlpha: 0, scale: .94, duration: .35 }, i - .2)
+                      .to(dots[i - 1], { width: 8, opacity: .35, duration: .3 }, i - .2)
+                      .fromTo(steps[i], { autoAlpha: 0, y: 40 }, { autoAlpha: 1, y: 0, duration: .4 }, i + .05)
+                      .fromTo(scenes[i], { autoAlpha: 0, scale: .94 }, { autoAlpha: 1, scale: 1, duration: .4 }, i + .05)
+                      .to(dots[i], { width: 28, opacity: 1, duration: .3 }, i + .05)
+                      .fromTo(Array.from(scenes[i].children), { y: 26, autoAlpha: 0 }, { y: 0, autoAlpha: 1, stagger: .09, duration: .35 }, i + .12);
+                }
+
+                // --- أرقام: عدّاد كي توصلها ---
+                q('.wl-num b').forEach(b => {
+                    const n = +b.dataset.n, o = { v: 0 }; b.textContent = '0';
+                    ST.create({ trigger: b, start: 'top 90%', once: true, onEnter: () => g.to(o, { v: n, duration: 1.4, ease: 'power3.out', onUpdate: () => { b.textContent = Math.round(o.v); } }) });
+                });
+
+                // --- باقي الأقسام: تطلع من تحت ---
+                q('.wl-reveal').forEach(el => g.from(el, { autoAlpha: 0, y: 46, duration: 1, ease: 'expo.out',
+                    scrollTrigger: { trigger: el, start: 'top 90%', once: true } }));
+                ST.create({ trigger: hero, start: 'top top', end: 'bottom top', onToggle: (s) => { heroOn = s.isActive; } });
+            }, ov);
+
+            // موجة لون تعدّي على حروف العنوان (shiny wave)
+            const wave = (time) => {
+                if (!heroOn) return;
+                for (let i = 0; i < chars.length; i++) {
+                    const v = (Math.sin(time * 2.2 - i * .45) + 1) / 2;
+                    chars[i].style.color = 'hsl(' + (195 + v * 38) + ',88%,' + (68 + v * 26) + '%)';
+                }
+            };
+            g.ticker.add(wave); tickFns.push(() => g.ticker.remove(wave));
+
+            if (lenis) {
+                const lt = (t) => lenis.raf(t * 1000);
+                g.ticker.add(lt); tickFns.push(() => g.ticker.remove(lt));
+            }
+            ST.refresh();
+        }
+
+        function stopAll() {
+            tickFns.forEach(f => { try { f(); } catch (e) {} }); tickFns = [];
+            if (ctx) { try { ctx.revert(); } catch (e) {} ctx = null; }
+            if (lenis) { try { lenis.destroy(); } catch (e) {} lenis = null; }
+            if (window.gsap) { try { window.gsap.ticker.lagSmoothing(500, 33); } catch (e) {} }
+            if (io) { io.disconnect(); io = null; }
+            cancelAnimationFrame(rafId); clearInterval(onlineTimer);
+            ov.classList.remove('wl-pro', 'wl-lite');
+            $('wl-title').querySelectorAll('.wl-ch').forEach(c => { c.style.color = ''; });
+        }
 
         function show() {
             if (open) return; open = true;
             ov.style.display = 'flex';
-            requestAnimationFrame(() => ov.classList.add('open'));
             scroller.scrollTop = 0;
-            startLenis();
-            // كشف تدريجي للأقسام وقت السكرول
-            io = new IntersectionObserver((es) => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { root: scroller, threshold: .15 });
-            ov.querySelectorAll('.wl-reveal').forEach((el, i) => { el.classList.remove('in'); el.style.transitionDelay = ((i % 4) * 80) + 'ms'; io.observe(el); });
-            // دخول الـhero بـGSAP
-            if (window.gsap) {
-                const g = window.gsap;
-                g.timeline({ defaults: { ease: 'expo.out' } })
-                    .from('.wl-eyebrow', { opacity: 0, y: 16, duration: .6, clearProps: 'all' })
-                    .from('.wl-hero h1', { opacity: 0, y: 34, scale: .94, filter: 'blur(12px)', duration: 1, clearProps: 'transform,opacity,filter' }, '-=.35')
-                    .from('.wl-sub', { opacity: 0, y: 18, duration: .7, clearProps: 'all' }, '-=.6')
-                    .from('.wl-cta > *', { opacity: 0, y: 18, duration: .6, stagger: .1, clearProps: 'all' }, '-=.5')
-                    .from('.wl-note', { opacity: 0, duration: .6, clearProps: 'all' }, '-=.3');
-            }
+            requestAnimationFrame(() => ov.classList.add('open'));
+            refreshOnline(); onlineTimer = setInterval(refreshOnline, 3000);
+            if (window.gsap && window.ScrollTrigger) {
+                try { startPro(); }
+                catch (e) { console.error('Welcome pro mode failed, falling back:', e); stopAll(); startLite(); }
+            } else startLite();
         }
         function hide() {
             if (!open) return; open = false;
             try { localStorage.setItem(KEY, '1'); } catch (e) {}
             ov.classList.remove('open');
-            setTimeout(() => { ov.style.display = 'none'; stopLenis(); if (io) io.disconnect(); }, 450);
+            setTimeout(() => { ov.style.display = 'none'; stopAll(); }, 450);
         }
+
         ov.querySelectorAll('.wl-go').forEach(b => b.addEventListener('click', hide));
         $('wl-close').addEventListener('click', hide);
-        $('wl-more').addEventListener('click', () => { const t = $('wl-features'); if (lenis) lenis.scrollTo(t, { offset: -20 }); else t.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+        $('wl-more').addEventListener('click', () => { const t = $('wl-story'); if (lenis) lenis.scrollTo(t, { duration: 1.6 }); else t.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
         $('wl-legal').addEventListener('click', () => { if (window.openLegal) window.openLegal(); });
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && open) hide(); });
 
-        // أول زيارة (والمستخدم مازال في شاشة الـlogin) → تبان مرة وحدة
+        // أول زيارة (والمستخدم في شاشة الlogin) → تبان مرة وحدة؛ تستنى المكتبات (defer) باش تتحمل
         let seen = false; try { seen = localStorage.getItem(KEY) === '1'; } catch (e) {}
         const login = $('login-screen');
-        if (!seen) setTimeout(() => { if (login && login.style.display !== 'none') show(); }, 600);
+        if (!seen) setTimeout(() => { if (login && login.style.display !== 'none') show(); }, 700);
 
-        // صف في قائمة الإعدادات باش يعاود يشوفها
         const menu = $('menu-panel');
         if (menu) {
             const row = document.createElement('div');
