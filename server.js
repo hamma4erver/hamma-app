@@ -486,6 +486,26 @@ function notifyMentions(d) {
     } catch (e) { console.error('notifyMentions failed:', e.message); }
 }
 
+// ---- User feedback (6-star rating + optional comment) ----
+const feedbackMem = [];            // fallback / recent cache
+const feedbackLog = new Map();     // socket.id -> timestamps (anti-spam)
+const FEEDBACK_SOURCES = ['logout', 'exit', 'return', 'menu'];
+async function loadFeedback() {
+    let list = feedbackMem.slice();
+    if (db) {
+        try {
+            const snap = await db.collection('feedback').orderBy('createdAt', 'desc').limit(200).get();
+            list = snap.docs.map(d => d.data());
+        } catch (e) { console.error('feedback read failed:', e.message); }
+    }
+    const dist = [0, 0, 0, 0, 0, 0];
+    list.forEach(f => { if (f.rating >= 1 && f.rating <= 6) dist[f.rating - 1]++; });
+    const count = dist.reduce((a, b) => a + b, 0);
+    const avg = count ? dist.reduce((sum, n, i) => sum + n * (i + 1), 0) / count : null;
+    const latest = list.filter(f => f.comment).sort((a, b) => b.createdAt - a.createdAt).slice(0, 6);
+    return { count, avg, dist, latest };
+}
+
 // ==================================================
 // AI endpoint (/api/gemini → Groq). Every call costs money, so it is protected:
 //  • must be logged in (Firebase ID token in the Authorization header)
@@ -784,6 +804,28 @@ io.on('connection', (socket) => {
         notifyMentions(data);
     });
 
+    // ---- Feedback ------------------------------------------------
+    socket.on('submit-feedback', async ({ rating, comment, source, idToken }) => {
+        const r = Number(rating);
+        if (!Number.isInteger(r) || r < 1 || r > 6) return;
+        const now = Date.now();
+        const log = (feedbackLog.get(socket.id) || []).filter(t => now - t < 60 * 60 * 1000);
+        if (log.length >= 3) return;
+        log.push(now); feedbackLog.set(socket.id, log);
+        const user = (await nameFromToken(idToken, socketUsers.get(socket.id))) || 'anonymous';
+        const doc = {
+            rating: r,
+            comment: String(comment || '').trim().slice(0, 500),
+            user,
+            source: FEEDBACK_SOURCES.includes(source) ? source : 'other',
+            createdAt: now
+        };
+        feedbackMem.unshift(doc);
+        if (feedbackMem.length > 100) feedbackMem.pop();
+        if (db) db.collection('feedback').add(doc).catch(e => console.error('feedback save failed:', e.message));
+        socket.emit('feedback-ack');
+    });
+
     // ---- Statistics (admins only) ----------------------------------
     socket.on('get-stats', async ({ idToken }) => {
         const { ok, role } = await verifyRole(idToken);
@@ -812,8 +854,9 @@ io.on('connection', (socket) => {
         const dayAgo = Date.now() - 86400000, actions = {};
         auditBuffer.filter(a => a.at > dayAgo).forEach(a => { actions[a.action] = (actions[a.action] || 0) + 1; });
         const now = Date.now();
+        const feedback = await loadFeedback();
         socket.emit('stats-data', {
-            today, days, online: usernameSockets.size, registered, openReports, actions, ownerUidsSet: OWNER_UIDS.length > 0,
+            today, days, online: usernameSockets.size, registered, openReports, actions, ownerUidsSet: OWNER_UIDS.length > 0, feedback,
             banned: blockedUsers.size, muted: [...mutedUsers.values()].filter(t => t > now).length,
             top: [...stat.top.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
         });
@@ -1514,6 +1557,7 @@ io.on('connection', (socket) => {
         socketUsers.delete(socket.id);
         rateLimitLog.delete(socket.id);
         reactionLog.delete(socket.id);
+        feedbackLog.delete(socket.id);
         avatarCooldown.delete(socket.id);
         reportLog.delete(socket.id);
         activeDMView.delete(socket.id);
