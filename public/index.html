@@ -3758,6 +3758,21 @@
             if (days.length) body.append(bars(days.map(x => x.messages), days.map(x => new Date(x.day + 'T12:00:00Z').toLocaleDateString(undefined, { weekday: 'short' })), 1));
             else body.append(el('p', 'rp-empty', 'History starts today.'));
 
+            const fb = d.feedback;
+            if (fb) {
+                body.append(el('div', 'st-title', 'Feedback (' + fb.count + ')'));
+                if (fb.count) {
+                    const sum = el('div', 'fb-sum'); sum.append(el('b', '', '★ ' + fb.avg.toFixed(1)), el('span', '', ' / 6 average'));
+                    body.append(sum);
+                    body.append(bars(fb.dist, ['1★', '2★', '3★', '4★', '5★', '6★'], 1));
+                    (fb.latest || []).forEach(f => {
+                        const r = el('div', 'rp-item'), hd = el('div', 'rp-head');
+                        hd.append(el('b', '', '★'.repeat(f.rating) + ' ' + f.rating + '/6'), el('span', 'rp-reason', f.source));
+                        r.append(hd, el('div', 'rp-text', f.comment), el('div', 'rp-meta', (f.user || 'anonymous') + ' · ' + new Date(f.createdAt).toLocaleString()));
+                        body.append(r);
+                    });
+                } else body.append(el('p', 'rp-empty', 'No feedback yet.'));
+            }
             body.append(el('div', 'st-title', 'Top chatters (since last restart)'));
             if (d.top && d.top.length) d.top.forEach(([n, c], i) => {
                 const r = el('div', 'rp-item on-row'); r.append(el('b', '', (i + 1) + '.'), el('span', '', ' ' + n), el('small', '', c + ' msgs')); body.append(r);
@@ -4433,6 +4448,160 @@
             row.style.cssText = 'background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);';
             row.innerHTML = '<i class="fas fa-compass"></i>';
             row.addEventListener('click', show);
+            menu.insertBefore(row, $('btn-logout') || null);
+        }
+    });
+    </script>
+
+    <script>
+    // ===== Feedback popup: 6 animated stars + a face that reacts (logout / exit intent / next visit) =====
+    window.addEventListener('DOMContentLoaded', function () {
+        const $ = (id) => document.getElementById(id);
+        const LAST = 'hamma_fb_last', PENDING = 'hamma_fb_pending', COOLDOWN = 7 * 24 * 3600 * 1000;
+        const cfg = window.__hammaFb = { minSession: 45000 };
+        const FACES = [
+            { e: '🤗', t: 'How was your experience?', c: '#0a84ff' },
+            { e: '😡', t: 'Terrible', c: '#ff453a', p: '💢', ph: 'What went wrong? (optional)' },
+            { e: '😕', t: 'Not great', c: '#ff9f0a', p: '💧', ph: 'What could be better? (optional)' },
+            { e: '😐', t: 'It\'s okay', c: '#ffd60a', ph: 'Anything we should improve? (optional)' },
+            { e: '🙂', t: 'Good', c: '#64d2ff', ph: 'What did you like? (optional)' },
+            { e: '😍', t: 'Great!', c: '#ff375f', p: '💖', ph: 'What did you love? (optional)' },
+            { e: '🤩', t: 'Amazing!', c: '#bf5af2', p: '✨', ph: 'Tell us what made it amazing (optional)' }
+        ];
+        document.body.insertAdjacentHTML('beforeend', `
+        <div id="fb-overlay" role="dialog" aria-modal="true" aria-label="Feedback">
+            <div id="fb-card">
+                <button class="fb-x" id="fb-skip-x" aria-label="Close">✕</button>
+                <div class="fb-stage"><span class="fb-aura"></span><div id="fb-emoji"><span class="fb-face e0">🤗</span></div></div>
+                <h3 id="fb-label">How was your experience?</h3>
+                <p class="fb-sub" id="fb-sub">Your feedback helps us make Hamma better.</p>
+                <div class="fb-stars" id="fb-stars" role="radiogroup" aria-label="Rating">
+                    <button class="fb-star" data-v="1" aria-label="1 star">★</button><button class="fb-star" data-v="2" aria-label="2 stars">★</button><button class="fb-star" data-v="3" aria-label="3 stars">★</button><button class="fb-star" data-v="4" aria-label="4 stars">★</button><button class="fb-star" data-v="5" aria-label="5 stars">★</button><button class="fb-star" data-v="6" aria-label="6 stars">★</button>
+                </div>
+                <textarea id="fb-comment" maxlength="500" rows="3" placeholder="Tell us more (optional)"></textarea>
+                <div class="fb-actions">
+                    <button class="modal-btn cancel" id="fb-skip" type="button">Not now</button>
+                    <button class="btn-primary" id="fb-send" type="button" disabled>Send feedback</button>
+                </div>
+            </div>
+        </div>`);
+        const ov = $('fb-overlay'), card = $('fb-card'), emojiBox = $('fb-emoji'), stars = Array.from(ov.querySelectorAll('.fb-star'));
+        let open = false, rating = 0, source = 'menu', done = null, particleTimer = 0;
+
+        const recently = () => { try { return Date.now() - Number(localStorage.getItem(LAST) || 0) < COOLDOWN; } catch (e) { return false; } };
+        const mark = () => { try { localStorage.setItem(LAST, String(Date.now())); localStorage.removeItem(PENDING); } catch (e) {} };
+
+        function paintStars(n) { stars.forEach((s, i) => { s.classList.toggle('on', i < n); s.style.transitionDelay = (i * 40) + 'ms'; }); }
+        function face(n, animate) {
+            const f = FACES[n]; ov.style.setProperty('--fb-glow', f.c);
+            const inner = emojiBox.firstElementChild;
+            inner.textContent = f.e; inner.className = 'fb-face e' + n;
+            $('fb-label').textContent = f.t;
+            if (animate) {
+                if (window.gsap) window.gsap.fromTo(emojiBox, { scale: .25, rotate: -28 }, { scale: 1, rotate: 0, duration: .8, ease: 'elastic.out(1,.5)', overwrite: true, clearProps: 'transform' });
+                else { emojiBox.classList.remove('pop'); void emojiBox.offsetWidth; emojiBox.classList.add('pop'); }
+                burst(n);
+            }
+        }
+        function burst(n) {
+            const p = FACES[n].p; if (!p) return;
+            const stage = ov.querySelector('.fb-stage');
+            for (let i = 0; i < 7; i++) {
+                const s = document.createElement('span'); s.className = 'fb-p'; s.textContent = p;
+                s.style.setProperty('--x', (Math.random() * 150 - 75) + 'px'); s.style.setProperty('--r', (Math.random() * 60 - 30) + 'deg');
+                s.style.left = (45 + Math.random() * 10) + '%'; s.style.animationDelay = (i * 70) + 'ms';
+                stage.appendChild(s); setTimeout(() => s.remove(), 1700);
+            }
+        }
+        function select(n) {
+            const first = rating === 0; rating = n;
+            paintStars(n); stars.forEach((s, i) => { if (i < n) { s.classList.remove('pop'); void s.offsetWidth; s.classList.add('pop'); } });
+            face(n, true);
+            $('fb-send').disabled = false;
+            const ta = $('fb-comment'); ta.placeholder = FACES[n].ph; ta.classList.add('show');
+            if (first) $('fb-sub').textContent = 'Add a comment if you like, then send.';
+        }
+
+        stars.forEach((s, i) => {
+            s.addEventListener('click', () => select(i + 1));
+            s.addEventListener('mouseenter', () => { if (matchMedia('(hover: hover)').matches) { paintStars(i + 1); face(i + 1, false); } });
+        });
+        $('fb-stars').addEventListener('mouseleave', () => { if (matchMedia('(hover: hover)').matches) { paintStars(rating); face(rating, false); } });
+
+        function close(cb) {
+            if (!open) return; open = false;
+            ov.classList.remove('open');
+            setTimeout(() => { ov.style.display = 'none'; if (cb) cb(); }, 350);
+        }
+        function finish(sent) {
+            mark();
+            if (!sent) return close(done);
+            // شكر + خروج
+            card.classList.add('thanks');
+            $('fb-label').textContent = 'Thank you! 💙';
+            $('fb-sub').textContent = rating >= 5 ? 'We\'re so glad you enjoy Hamma.' : 'We read every message and we\'ll improve.';
+            burst(Math.max(rating, 5));
+            setTimeout(() => close(done), 1500);
+        }
+        $('fb-skip').addEventListener('click', () => finish(false));
+        $('fb-skip-x').addEventListener('click', () => finish(false));
+        $('fb-send').addEventListener('click', async () => {
+            if (!rating) return;
+            let idToken = null; try { idToken = await getIdTokenSafe(); } catch (e) {}
+            if (window.socket) window.socket.emit('submit-feedback', { rating, comment: $('fb-comment').value, source, idToken });
+            finish(true);
+        });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && open) finish(false); });
+
+        function openFb(src, onDone, title) {
+            if (open) return false;
+            open = true; source = src; done = onDone || null; rating = 0;
+            card.classList.remove('thanks'); paintStars(0); face(0, false);
+            $('fb-comment').value = ''; $('fb-comment').classList.remove('show'); $('fb-send').disabled = true;
+            $('fb-sub').textContent = 'Your feedback helps us make Hamma better.';
+            if (title) $('fb-label').textContent = title;
+            ov.style.display = 'flex';
+            requestAnimationFrame(() => ov.classList.add('open'));
+            if (window.gsap) window.gsap.fromTo(card, { y: 50, scale: .9, autoAlpha: 0 }, { y: 0, scale: 1, autoAlpha: 1, duration: .7, ease: 'expo.out', overwrite: true, clearProps: 'transform,opacity,visibility' });
+            return true;
+        }
+        window.openFeedback = (src) => openFb(src || 'menu');
+
+        const busy = () => open || ($('welcome-overlay') && $('welcome-overlay').style.display !== 'none') ;
+        const sessionMs = () => performance.now();
+
+        // 1) تسجيل الخروج: السؤال يجي قبل ما يخرج، وبعدها يكمّل الخروج
+        let bypass = false;
+        document.addEventListener('click', (e) => {
+            const t = e.target.closest && e.target.closest('#btn-logout');
+            if (!t || bypass || recently() || busy()) return;
+            e.preventDefault(); e.stopImmediatePropagation();
+            openFb('logout', () => { bypass = true; t.click(); bypass = false; });
+        }, true);
+
+        // 2) Exit intent على الكمبيوتر: الماوس يخرج من فوق (باش يسكّر التبويب)
+        let askedThisSession = false;
+        document.addEventListener('mouseout', (e) => {
+            if (e.relatedTarget || e.clientY > 0 || askedThisSession || recently() || busy() || sessionMs() < cfg.minSession) return;
+            if (!matchMedia('(pointer: fine)').matches) return;
+            askedThisSession = true; openFb('exit', null, 'Before you go…');
+        });
+
+        // 3) تلفون: ما نجمّوش نعرضو popup وقت يسكّر، فنعلّمو ونسألو في الزيارة الجاية
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && !open && !recently() && sessionMs() >= cfg.minSession) { try { localStorage.setItem(PENDING, '1'); } catch (e) {} }
+        });
+        let pending = false; try { pending = localStorage.getItem(PENDING) === '1'; } catch (e) {}
+        if (pending && !recently()) setTimeout(() => { if (!busy() && !askedThisSession) { askedThisSession = true; openFb('return', null, 'Welcome back! How was your last visit?'); } }, 12000);
+
+        // صف في قائمة الإعدادات
+        const menu = $('menu-panel');
+        if (menu) {
+            const row = document.createElement('div');
+            row.className = 'ai-btn'; row.title = 'Give feedback';
+            row.style.cssText = 'background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);';
+            row.innerHTML = '<i class="fas fa-star"></i>';
+            row.addEventListener('click', () => openFb('menu'));
             menu.insertBefore(row, $('btn-logout') || null);
         }
     });
