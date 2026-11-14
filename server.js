@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const crypto = require('crypto');
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
 const webpush = require('web-push');
@@ -11,7 +12,38 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 app.set('trust proxy', 1); // behind Render's proxy: req.ip = real client IP (needed for rate limiting)
-app.use(express.json());
+app.disable('x-powered-by');
+
+// ---- Security: force HTTPS + security headers ----
+// Render terminates TLS and tells us the original protocol in x-forwarded-proto.
+app.use((req, res, next) => {
+    if (req.headers['x-forwarded-proto'] === 'http' && (req.method === 'GET' || req.method === 'HEAD')) {
+        return res.redirect(301, 'https://' + req.headers.host + req.originalUrl);
+    }
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'geolocation=(), payment=(), usb=()');
+    // Report-Only on purpose: the page uses inline scripts + several CDNs, so an enforced CSP
+    // could break the site. Watch the browser console for violations, then switch the header
+    // name to "Content-Security-Policy" once it's quiet.
+    res.setHeader('Content-Security-Policy-Report-Only', [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net",
+        "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com",
+        "font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com data:",
+        "img-src 'self' data: blob: https://res.cloudinary.com https:",
+        "media-src 'self' blob: https://res.cloudinary.com",
+        "connect-src 'self' wss: https://*.googleapis.com https://*.firebaseio.com https://api.cloudinary.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com",
+        "frame-ancestors 'self'",
+        "base-uri 'self'",
+        "object-src 'none'"
+    ].join('; '));
+    next();
+});
+
+app.use(express.json({ limit: '100kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const apiKey = process.env.GROQ_API_KEY;
@@ -66,17 +98,36 @@ if (process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS) 
 const verificationCodes = new Map(); // email -> { code, expiresAt }
 
 function generateCode() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    return crypto.randomInt(100000, 1000000).toString(); // cryptographically secure, not Math.random
 }
 
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
+const codeIpLog = new Map(), codeEmailLog = new Map(), verifyIpLog = new Map();
+function safeEqual(a, b) {
+    const x = Buffer.from(String(a)), y = Buffer.from(String(b));
+    return x.length === y.length && crypto.timingSafeEqual(x, y);
+}
+setInterval(() => {
+    const now = Date.now();
+    for (const [k, v] of verificationCodes) if (now > v.expiresAt) verificationCodes.delete(k);
+    for (const [m, win] of [[codeIpLog, 3600000], [codeEmailLog, 600000], [verifyIpLog, 600000]]) {
+        for (const [k, arr] of m) { if (!arr.length || now - arr[arr.length - 1] > win) m.delete(k); }
+    }
+}, 5 * 60 * 1000);
+
 app.post('/api/send-verification-code', async (req, res) => {
-    const { email } = req.body;
+    const email = String((req.body && req.body.email) || '').trim().toLowerCase();
     if (!email) return res.status(400).json({ success: false, message: 'Email is required.' });
+    if (email.length > 254 || !EMAIL_RE.test(email)) return res.status(400).json({ success: false, message: 'Please enter a valid email address.' });
+    // Anti-abuse: stops people from using us to spam someone's inbox or burn the SMTP quota
+    if (hitLimit(codeIpLog, req.ip, 3600000, 10) || hitLimit(codeEmailLog, email, 600000, 3)) {
+        return res.status(429).json({ success: false, message: 'Too many code requests. Please wait a few minutes and try again.' });
+    }
     if (!mailer) return res.status(500).json({ success: false, message: 'Email service is not configured on the server.' });
 
     const code = generateCode();
     const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
-    verificationCodes.set(email, { code, expiresAt });
+    verificationCodes.set(email, { code, expiresAt, attempts: 0 });
 
     try {
         await mailer.sendMail({
@@ -94,8 +145,12 @@ app.post('/api/send-verification-code', async (req, res) => {
 });
 
 app.post('/api/verify-code', async (req, res) => {
-    const { email, code } = req.body;
+    const email = String((req.body && req.body.email) || '').trim().toLowerCase();
+    const code = req.body && req.body.code;
     if (!email || !code) return res.status(400).json({ success: false, message: 'Email and code are required.' });
+    if (hitLimit(verifyIpLog, req.ip, 600000, 30)) {
+        return res.status(429).json({ success: false, message: 'Too many attempts. Please wait a few minutes.' });
+    }
 
     const entry = verificationCodes.get(email);
     if (!entry) return res.status(400).json({ success: false, message: 'No code was sent to this email, or it already expired.' });
@@ -103,7 +158,13 @@ app.post('/api/verify-code', async (req, res) => {
         verificationCodes.delete(email);
         return res.status(400).json({ success: false, message: 'This code has expired. Please request a new one.' });
     }
-    if (entry.code !== String(code).trim()) {
+    // Max 5 guesses per code, otherwise a 6-digit code can be brute-forced
+    entry.attempts = (entry.attempts || 0) + 1;
+    if (entry.attempts > 5) {
+        verificationCodes.delete(email);
+        return res.status(429).json({ success: false, message: 'Too many wrong attempts. Please request a new code.' });
+    }
+    if (!safeEqual(entry.code, String(code).trim())) {
         return res.status(400).json({ success: false, message: 'Incorrect code.' });
     }
 
@@ -698,6 +759,64 @@ function kickUserSockets(username, reason) {
     }
 }
 
+// ==================================================
+// Input validation for everything that gets broadcast to other users.
+// The client is never trusted: only whitelisted fields, strict types/lengths.
+// ==================================================
+const MEDIA_TYPES = ['image', 'video', 'audio', 'sticker'];
+const MAX_MSG_LEN = 2000;
+const CLOUDINARY_CLOUD = process.env.CLOUDINARY_CLOUD_NAME || 'awyxkuzz';
+const SAFE_URL_RE = /^[A-Za-z0-9\-._~:/?#\[\]@!$&()*+,;=%]+$/; // no quotes, spaces or angle brackets
+function cleanStr(v, max) { return typeof v === 'string' ? v.slice(0, max) : ''; }
+function isSafeId(v) { return typeof v === 'string' && /^[\w.\-]{1,80}$/.test(v); }
+function isSafeMediaUrl(u) {
+    if (typeof u !== 'string' || u.length > 700 || !SAFE_URL_RE.test(u)) return false;
+    try {
+        const x = new URL(u);
+        return x.protocol === 'https:' && x.hostname === 'res.cloudinary.com' && x.pathname.startsWith('/' + CLOUDINARY_CLOUD + '/');
+    } catch (e) { return false; }
+}
+// Returns a clean { id, msg, mediaType?, mediaUrl?, sticker?, replyTo? } or null if invalid
+function sanitizeChatPayload(d) {
+    const out = {
+        id: isSafeId(d.id) ? d.id : `msg_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
+        msg: cleanStr(d.msg, MAX_MSG_LEN)
+    };
+    if (d.mediaType) {
+        if (!MEDIA_TYPES.includes(d.mediaType)) return null;
+        out.mediaType = d.mediaType;
+        if (d.mediaType === 'sticker') {
+            out.sticker = cleanStr(d.sticker, 16);
+            if (!out.sticker || /[<>&"'`]/.test(out.sticker)) return null;
+        } else {
+            if (!isSafeMediaUrl(d.mediaUrl)) return null;
+            out.mediaUrl = d.mediaUrl;
+        }
+    } else if (!out.msg.trim()) {
+        return null;
+    }
+    if (d.replyTo && typeof d.replyTo === 'object') {
+        out.replyTo = {
+            id: isSafeId(String(d.replyTo.id || '')) ? String(d.replyTo.id) : '',
+            user: cleanStr(d.replyTo.user, 40),
+            text: cleanStr(d.replyTo.text, 200)
+        };
+    }
+    return out;
+}
+// A socket may only act as a username it proved it owns (verified token), or a Guest_#### name.
+async function tokenOwnsUsername(idToken, username) {
+    if (!idToken || !db || typeof username !== 'string') return false;
+    try {
+        const d = await admin.auth().verifyIdToken(idToken);
+        if (d.name === username) return true;
+        // Token claims can be stale right after a rename — fall back to the stored profile
+        const doc = await db.collection('users').doc(d.uid).get();
+        const u = doc.exists ? doc.data() : null;
+        return !!u && (u.username === username || u.displayName === username);
+    } catch (e) { return false; }
+}
+
 io.on('connection', (socket) => {
     socket.data.room = 'general';
     socket.join('general');
@@ -713,8 +832,11 @@ io.on('connection', (socket) => {
 
     // Client registers its username right after entering the chat,
     // so bans can be enforced immediately even for already-connected users
-    socket.on('register-user', ({ username }) => {
-        if (!username) return;
+    socket.on('register-user', async ({ username, idToken } = {}) => {
+        if (!username || typeof username !== 'string' || username.length > 40) return;
+        // Without this check anyone could register as "Alice" and read/send her DMs
+        const isGuestName = /^Guest_\d{4}$/.test(username);
+        if (!isGuestName && !(await tokenOwnsUsername(idToken, username))) return;
         if (blockedUsers.has(username)) {
             socket.emit('you-are-banned', { reason: 'You are banned from this chat.' });
             socket.disconnect(true);
@@ -731,12 +853,10 @@ io.on('connection', (socket) => {
     // mute/ban status over from the old name to the new one.
     socket.on('rename-user', async ({ oldUsername, newUsername, idToken }) => {
         if (!oldUsername || !newUsername || oldUsername === newUsername) return;
-        try {
-            if (!idToken || !db) return; // require a logged-in user
-            await admin.auth().verifyIdToken(idToken);
-        } catch (e) {
-            return; // invalid token, ignore silently
-        }
+        if (typeof oldUsername !== 'string' || typeof newUsername !== 'string' || newUsername.length > 40) return;
+        // You can only rename the identity THIS socket proved earlier, and only to a name your account owns
+        if (socketUsers.get(socket.id) !== oldUsername) return;
+        if (!(await tokenOwnsUsername(idToken, newUsername))) return;
 
         if (blockedUsers.has(oldUsername)) {
             blockedUsers.delete(oldUsername);
@@ -778,8 +898,13 @@ io.on('connection', (socket) => {
             return socket.emit('system-msg', { text: 'Could not verify your identity — please log in again.', kind: 'error' });
         }
         const staffToken = data.idToken;
+        const clean = sanitizeChatPayload(data); // whitelist fields: no raw client object is ever broadcast
+        if (!clean) {
+            return socket.emit('system-msg', { text: 'That message could not be sent (invalid content).', kind: 'error' });
+        }
+        data = clean;
         data.user = verifiedName;
-        delete data.idToken; // never broadcast Firebase tokens to the other clients
+        data.senderId = socket.id; // server decides who "me" is, not the client
         data.avatar = await avatarFor(verifiedName); // server decides the avatar, not the client
         if (blockedUsers.has(data.user)) {
             return socket.emit('system-msg', { text: 'You are banned from sending messages.', kind: 'error' });
@@ -996,12 +1121,14 @@ io.on('connection', (socket) => {
     });
 
     // Relay typing status to everyone else (Instagram-style "X is typing…" indicator)
-    socket.on('typing', ({ username }) => {
+    socket.on('typing', () => {
+        const username = socketUsers.get(socket.id);
         if (!username) return;
         socket.to(socket.data.room || 'general').emit('user-typing', { username });
     });
 
-    socket.on('stop-typing', ({ username }) => {
+    socket.on('stop-typing', () => {
+        const username = socketUsers.get(socket.id);
         if (!username) return;
         socket.to(socket.data.room || 'general').emit('user-stop-typing', { username });
     });
@@ -1015,7 +1142,9 @@ io.on('connection', (socket) => {
     socket.on('delete-message', async ({ msgId, idToken, messageSender }) => {
         const { role, name, isOwner } = await verifyRole(idToken);
         const isStaff = role === 'admin' || role === 'moderator';
-        const isSelf = !!messageSender && !!name && messageSender.toLowerCase() === name.toLowerCase();
+        const stored = recentMessages.get(String(msgId));
+        const isSelf = !!stored && !!name && String(stored.user).toLowerCase() === name.toLowerCase();
+        if (stored) messageSender = stored.user; // never trust the client-sent sender
 
         if (!isSelf && !isStaff) {
             return socket.emit('system-msg', { text: 'You are not allowed to delete this message.', kind: 'error' });
@@ -1039,8 +1168,10 @@ io.on('connection', (socket) => {
     // sent it, we just confirm the requester's identity matches.
     socket.on('edit-message', async ({ msgId, idToken, messageSender, newText }) => {
         const { name } = await verifyRole(idToken);
-        const isSelf = !!messageSender && !!name && messageSender.toLowerCase() === name.toLowerCase();
-        if (!isSelf || !newText || !newText.trim()) return;
+        const stored = recentMessages.get(String(msgId));
+        const isSelf = !!stored && !!name && String(stored.user).toLowerCase() === name.toLowerCase();
+        if (!isSelf || typeof newText !== 'string' || !newText.trim() || stored.mediaType) return;
+        newText = newText.slice(0, MAX_MSG_LEN);
         if (isRateLimited(socket.id)) {
             return socket.emit('system-msg', { text: "You're doing that too fast — slow down a bit.", kind: 'error' });
         }
@@ -1363,8 +1494,11 @@ io.on('connection', (socket) => {
     // ==================================================
     socket.on('dm-message', async ({ to, text, idToken, mediaType, mediaUrl }) => {
         const from = socketUsers.get(socket.id);
+        if (typeof to !== 'string' || to.length > 40) return;
+        text = typeof text === 'string' ? text.slice(0, MAX_MSG_LEN) : '';
         const hasText = !!text && !!text.trim();
         const hasMedia = !!mediaType && !!mediaUrl;
+        if (hasMedia && (!['image', 'video', 'audio'].includes(mediaType) || !isSafeMediaUrl(mediaUrl))) return;
         if (!from || !to || (!hasText && !hasMedia)) return;
         if (isRateLimited(socket.id)) {
             return socket.emit('dm-system-msg', { text: "You're sending messages too fast — slow down a bit.", kind: 'error' });
