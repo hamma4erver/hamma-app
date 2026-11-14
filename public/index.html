@@ -1100,7 +1100,7 @@
                     try {
                         const idToken = await auth.currentUser.getIdToken();
                         window.socket.emit('rename-user', { oldUsername: previousUsername, newUsername: newName, idToken });
-                        window.socket.emit('register-user', { username: newName });
+                        window.socket.emit('register-user', { username: newName, idToken });
                     } catch (e) { /* ignore, best-effort */ }
                 }
 
@@ -1787,9 +1787,9 @@
                 return;
             }
             const label = names.length === 1
-                ? `${names[0]} is typing`
+                ? `${escapeHtml(names[0])} is typing`
                 : names.length === 2
-                    ? `${names[0]} and ${names[1]} are typing`
+                    ? `${escapeHtml(names[0])} and ${escapeHtml(names[1])} are typing`
                     : `${names.length} people are typing`;
             el.innerHTML = `${label}<span class="typing-dots"><span></span><span></span><span></span></span>`;
             el.style.display = 'flex';
@@ -1823,18 +1823,18 @@
 
             const formattedUser = window.formatUsername(user);
             const replyHtml = replyTo
-                ? `<div class="reply-quote" data-jump-id="${replyTo.id}"><i class="fas fa-reply"></i> <strong>${escapeHtml(replyTo.user)}:</strong> ${escapeHtml((replyTo.text || '').slice(0, 80))}</div>`
+                ? `<div class="reply-quote" data-jump-id="${escapeHtml(replyTo.id || '')}"><i class="fas fa-reply"></i> <strong>${escapeHtml(replyTo.user)}:</strong> ${escapeHtml((replyTo.text || '').slice(0, 80))}</div>`
                 : '';
 
             let bodyHtml;
             if (mediaType === 'sticker' && sticker) {
-                bodyHtml = `<span class="msg-content sticker-emoji">${sticker}</span>`;
+                bodyHtml = `<span class="msg-content sticker-emoji">${escapeHtml(sticker)}</span>`;
             } else if (mediaType === 'image' && mediaUrl) {
-                bodyHtml = `<div class="msg-content"><img src="${mediaUrl}" class="chat-media-img" loading="lazy" alt="photo" onclick="event.stopPropagation(); window.open('${mediaUrl}', '_blank')"></div>`;
+                bodyHtml = `<div class="msg-content"><img src="${safeMediaSrc(mediaUrl)}" class="chat-media-img" loading="lazy" alt="photo" onclick="event.stopPropagation(); window.open(this.src, '_blank', 'noopener')"></div>`;
             } else if (mediaType === 'video' && mediaUrl) {
-                bodyHtml = `<div class="msg-content"><video src="${mediaUrl}" class="chat-media-video" controls preload="metadata" onclick="event.stopPropagation()"></video></div>`;
+                bodyHtml = `<div class="msg-content"><video src="${safeMediaSrc(mediaUrl)}" class="chat-media-video" controls preload="metadata" onclick="event.stopPropagation()"></video></div>`;
             } else if (mediaType === 'audio' && mediaUrl) {
-                bodyHtml = `<div class="msg-content voice-msg"><i class="fas fa-microphone"></i><audio src="${mediaUrl}" controls onclick="event.stopPropagation()"></audio></div>`;
+                bodyHtml = `<div class="msg-content voice-msg"><i class="fas fa-microphone"></i><audio src="${safeMediaSrc(mediaUrl)}" controls onclick="event.stopPropagation()"></audio></div>`;
             } else {
                 bodyHtml = `<strong>${formattedUser}:</strong> <span class="msg-content text-content">${escapeHtml(msg)}</span>`;
             }
@@ -1865,7 +1865,7 @@
         // so it's clear which message someone replied to
         function jumpToMessage(id) {
             if (!id) return;
-            const target = chatBox.querySelector(`[data-id="${id}"]`);
+            const target = chatBox.querySelector(`[data-id="${CSS.escape(String(id))}"]`);
             if (!target) return;
             target.scrollIntoView({ behavior: 'smooth', block: 'center' });
             target.classList.remove('highlight-pulse');
@@ -2054,7 +2054,9 @@
             // Register our username with the server right away, so bans apply instantly if needed
             const registerWhenReady = () => {
                 if (window.currentUsername) {
-                    socket.emit('register-user', { username: window.currentUsername });
+                    getIdTokenSafe().then(idToken => {
+                        socket.emit('register-user', { username: window.currentUsername, idToken });
+                    });
                     if (window.isUserModerator && window.firebaseAuth.currentUser) {
                         window.firebaseAuth.currentUser.getIdToken().then(idToken => {
                             socket.emit('get-clear-cooldown', { idToken });
@@ -2522,7 +2524,15 @@
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;');
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+        // Only https URLs are allowed as media sources; anything else renders as an empty string
+        function safeMediaSrc(u) {
+            try {
+                const x = new URL(String(u));
+                return x.protocol === 'https:' ? escapeHtml(x.href) : '';
+            } catch (e) { return ''; }
         }
 
         // ===== Push notifications =====
@@ -2635,11 +2645,11 @@
 
             let bodyHtml;
             if (data.mediaType === 'image' && data.mediaUrl) {
-                bodyHtml = `<div class="msg-content"><img src="${data.mediaUrl}" class="chat-media-img" loading="lazy" alt="photo" onclick="event.stopPropagation(); window.open('${data.mediaUrl}', '_blank')"></div>`;
+                bodyHtml = `<div class="msg-content"><img src="${safeMediaSrc(data.mediaUrl)}" class="chat-media-img" loading="lazy" alt="photo" onclick="event.stopPropagation(); window.open(this.src, '_blank', 'noopener')"></div>`;
             } else if (data.mediaType === 'video' && data.mediaUrl) {
-                bodyHtml = `<div class="msg-content"><video src="${data.mediaUrl}" class="chat-media-video" controls preload="metadata" onclick="event.stopPropagation()"></video></div>`;
+                bodyHtml = `<div class="msg-content"><video src="${safeMediaSrc(data.mediaUrl)}" class="chat-media-video" controls preload="metadata" onclick="event.stopPropagation()"></video></div>`;
             } else if (data.mediaType === 'audio' && data.mediaUrl) {
-                bodyHtml = `<div class="msg-content voice-msg"><i class="fas fa-microphone"></i><audio src="${data.mediaUrl}" controls onclick="event.stopPropagation()"></audio></div>`;
+                bodyHtml = `<div class="msg-content voice-msg"><i class="fas fa-microphone"></i><audio src="${safeMediaSrc(data.mediaUrl)}" controls onclick="event.stopPropagation()"></audio></div>`;
             } else {
                 bodyHtml = `<span class="text-content">${escapeHtml(data.text)}</span>`;
             }
