@@ -229,19 +229,39 @@ function isOwnerIdentity(uid, name) {
     return !!name && OWNER_NAMES.includes(String(name).toLowerCase());
 }
 
+// A brand-new account's ID token has no `name` claim until it is refreshed (the display name is
+// set right AFTER sign-up). Without this fallback, new users hit "Could not verify your identity".
+const nameCache = new Map(); // uid -> { name, at }
+async function resolveDisplayName(decoded) {
+    if (decoded.name) return decoded.name;
+    const hit = nameCache.get(decoded.uid);
+    if (hit && Date.now() - hit.at < 5 * 60 * 1000) return hit.name;
+    let name = null;
+    try { name = (await admin.auth().getUser(decoded.uid)).displayName || null; } catch (e) { /* ignore */ }
+    if (!name && db) {
+        try {
+            const doc = await db.collection('users').doc(decoded.uid).get();
+            if (doc.exists) name = doc.data().username || doc.data().displayName || null;
+        } catch (e) { /* ignore */ }
+    }
+    if (name) nameCache.set(decoded.uid, { name, at: Date.now() });
+    return name;
+}
+
 async function verifyRole(idToken) {
     if (!idToken || !db) return { ok: false, role: null };
     try {
         const decoded = await admin.auth().verifyIdToken(idToken);
+        const resolvedName = await resolveDisplayName(decoded);
         const userDoc = await db.collection('users').doc(decoded.uid).get();
         const dbRole = userDoc.exists ? userDoc.data().role : null;
-        const isOwner = isOwnerIdentity(decoded.uid, decoded.name);
+        const isOwner = isOwnerIdentity(decoded.uid, resolvedName);
 
         let role = null;
         if (isOwner || dbRole === "admin") role = "admin";
         else if (dbRole === "moderator") role = "moderator";
 
-        return { ok: role !== null, role, uid: decoded.uid, name: decoded.name, isOwner };
+        return { ok: role !== null, role, uid: decoded.uid, name: resolvedName, isOwner };
     } catch (e) {
         console.error("Token verification failed:", e.message);
         return { ok: false, role: null };
@@ -261,8 +281,9 @@ async function verifyUser(idToken) {
     if (!idToken || !db) return { ok: false };
     try {
         const decoded = await admin.auth().verifyIdToken(idToken);
-        if (!decoded.name) return { ok: false };
-        return { ok: true, uid: decoded.uid, name: decoded.name };
+        const name = await resolveDisplayName(decoded);
+        if (!name) return { ok: false };
+        return { ok: true, uid: decoded.uid, name };
     } catch (e) {
         return { ok: false };
     }
@@ -384,7 +405,7 @@ const REPORT_REASONS = ['spam', 'harassment', 'hate', 'inappropriate', 'other'];
 
 async function nameFromToken(idToken, claimed) {
     if (idToken && db) {
-        try { return (await admin.auth().verifyIdToken(idToken)).name || null; } catch (e) { return null; }
+        try { return await resolveDisplayName(await admin.auth().verifyIdToken(idToken)); } catch (e) { return null; }
     }
     return /^Guest_\d{4}$/.test(String(claimed || '')) ? claimed : null;
 }
@@ -839,7 +860,7 @@ async function tokenOwnsUsername(idToken, username) {
     if (!idToken || !db || typeof username !== 'string') return false;
     try {
         const d = await admin.auth().verifyIdToken(idToken);
-        if (d.name === username) return true;
+        if (d.name === username || (await resolveDisplayName(d)) === username) return true;
         // Token claims can be stale right after a rename — fall back to the stored profile
         const doc = await db.collection('users').doc(d.uid).get();
         const u = doc.exists ? doc.data() : null;
@@ -920,7 +941,7 @@ io.on('connection', (socket) => {
         // client-sent name — otherwise anyone could post as "Hamma" or dodge a mute/ban.
         let verifiedName = null;
         if (data.idToken && db) {
-            try { verifiedName = (await admin.auth().verifyIdToken(data.idToken)).name || null; } catch (e) { verifiedName = null; }
+            try { verifiedName = await resolveDisplayName(await admin.auth().verifyIdToken(data.idToken)); } catch (e) { verifiedName = null; }
         } else if (/^Guest_\d{4}$/.test(String(data.user || ''))) {
             verifiedName = data.user;
         }
@@ -1026,7 +1047,7 @@ io.on('connection', (socket) => {
         avatarCooldown.set(socket.id, now);
         let name = null, uid = null;
         if (idToken && db) {
-            try { const d = await admin.auth().verifyIdToken(idToken); name = d.name || null; uid = d.uid; } catch (e) {}
+            try { const d = await admin.auth().verifyIdToken(idToken); name = await resolveDisplayName(d); uid = d.uid; } catch (e) {}
         } else if (/^Guest_\d{4}$/.test(String(socketUsers.get(socket.id) || ''))) {
             name = socketUsers.get(socket.id);
         }
