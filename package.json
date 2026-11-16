@@ -9,13 +9,12 @@
   "dependencies": {
     "express": "^4.19.2",
     "firebase-admin": "^12.1.0",
-    "node-fetch": "^3.3.2",
     "nodemailer": "^6.9.14",
     "socket.io": "^4.7.5",
     "web-push": "^3.6.7"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": "22.x"
   },
   "author": "Hamma",
   "license": "ISC"
