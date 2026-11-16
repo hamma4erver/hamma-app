@@ -91,8 +91,39 @@ if (process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS) 
             pass: process.env.EMAIL_PASS
         }
     });
-} else {
-    console.warn("⚠️ Email SMTP env vars are missing! Verification emails will not be sent.");
+}
+
+// HTTPS email relay (e.g. a Google Apps Script web app). Needed on Render's free plan,
+// which blocks outbound SMTP ports (25/465/587). Set EMAIL_RELAY_URL + EMAIL_RELAY_SECRET.
+const EMAIL_RELAY_URL = process.env.EMAIL_RELAY_URL;
+const EMAIL_RELAY_SECRET = process.env.EMAIL_RELAY_SECRET;
+const emailConfigured = !!(mailer || (EMAIL_RELAY_URL && EMAIL_RELAY_SECRET));
+if (!emailConfigured) {
+    console.warn("⚠️ No email transport configured (EMAIL_RELAY_URL/EMAIL_RELAY_SECRET or SMTP vars)! Verification emails will not be sent.");
+}
+async function sendEmail({ to, subject, text, html }) {
+    if (EMAIL_RELAY_URL && EMAIL_RELAY_SECRET) {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 20000);
+        try {
+            const r = await fetch(EMAIL_RELAY_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ secret: EMAIL_RELAY_SECRET, to, subject, text, html }),
+                redirect: 'follow',
+                signal: ctrl.signal
+            });
+            const out = await r.json().catch(() => null);
+            if (!r.ok || !out || !out.ok) throw new Error('relay failed: ' + ((out && out.error) || r.status));
+        } finally {
+            clearTimeout(timer);
+        }
+        return;
+    }
+    if (mailer) {
+        return mailer.sendMail({ from: process.env.EMAIL_FROM || process.env.EMAIL_USER, to, subject, text, html });
+    }
+    throw new Error('no email transport configured');
 }
 
 const verificationCodes = new Map(); // email -> { code, expiresAt }
@@ -123,15 +154,14 @@ app.post('/api/send-verification-code', async (req, res) => {
     if (hitLimit(codeIpLog, req.ip, 3600000, 10) || hitLimit(codeEmailLog, email, 600000, 3)) {
         return res.status(429).json({ success: false, message: 'Too many code requests. Please wait a few minutes and try again.' });
     }
-    if (!mailer) return res.status(500).json({ success: false, message: 'Email service is not configured on the server.' });
+    if (!emailConfigured) return res.status(500).json({ success: false, message: 'Email service is not configured on the server.' });
 
     const code = generateCode();
     const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
     verificationCodes.set(email, { code, expiresAt, attempts: 0 });
 
     try {
-        await mailer.sendMail({
-            from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+        await sendEmail({
             to: email,
             subject: 'Your Hamma Chat verification code',
             text: `Your verification code is: ${code}\nIt expires in 10 minutes.`,
