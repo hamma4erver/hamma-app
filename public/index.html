@@ -825,7 +825,7 @@
             setPersistence, browserLocalPersistence
         } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
         import { 
-            getFirestore, doc, setDoc, getDoc, deleteDoc, collection, updateDoc, onSnapshot, serverTimestamp
+            getFirestore, doc, setDoc, getDoc, deleteDoc, collection, updateDoc, onSnapshot, serverTimestamp, deleteField
         } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -1216,7 +1216,7 @@
                     await setDoc(doc(db, "users", user.uid), {
                         username: username,
                         displayName: username,
-                        email: user.email || null,
+                        email: deleteField(), // never keep emails in a collection every logged-in user can read (also cleans old docs on login)
                         role: existingRole,
                         isOnline: true,
                         lastSeen: serverTimestamp()
