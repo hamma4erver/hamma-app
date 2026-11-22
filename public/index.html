@@ -1356,7 +1356,19 @@
     <script src="/socket.io/socket.io.js"></script>
     <script>
         let socket;
-        try { socket = io(); window.socket = socket; } catch (e) { console.warn("Socket.io fallback mode."); }
+        // Stable per-browser id, sent with the socket handshake so a ban sticks even if the person re-enters as a new Guest
+        function getDeviceId() {
+            try {
+                let id = localStorage.getItem('hamma_device_id');
+                if (!id || !/^[A-Za-z0-9-]{16,64}$/.test(id)) {
+                    id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+                        : (Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2));
+                    localStorage.setItem('hamma_device_id', id);
+                }
+                return id;
+            } catch (e) { return null; }
+        }
+        try { socket = io({ auth: { deviceId: getDeviceId() } }); window.socket = socket; } catch (e) { console.warn("Socket.io fallback mode."); }
 
         const chatBox = document.getElementById('chat-box');
         const aiChatBox = document.getElementById('ai-chat-box');
