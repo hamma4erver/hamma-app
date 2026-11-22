@@ -301,6 +301,10 @@
                 <input type="password" id="login-password" placeholder="Password..." onkeydown="if(event.key === 'Enter') document.getElementById('btn-login').click();">
             </div>
 
+            <p style="text-align: right; margin: -4px 0 12px;">
+                <a href="#" id="link-forgot" style="color: #00c9ff; font-size: 13px; text-decoration: none;">Forgot password?</a>
+            </p>
+
             <p id="auth-error" style="color: #ff4d4d; font-size: 14px; display: none; margin-bottom: 10px;"></p>
 
             <button class="btn-primary" id="btn-login" style="margin-bottom: 10px;">
@@ -450,6 +454,48 @@
             <button class="btn-secondary" id="btn-resend-code">
                 <i class="fas fa-redo"></i> Resend Code
             </button>
+        </div>
+    </div>
+
+    <!-- 2.6 PASSWORD RESET SCREEN (6-digit code) -->
+    <div id="reset-screen" class="login-container" style="display: none;">
+        <div class="login-card" style="background: rgba(20, 20, 30, 0.85); border: 1px solid rgba(0, 201, 255, 0.3);">
+            <div class="logo-area">
+                <h2 style="color: #00c9ff; text-shadow: 0 0 10px rgba(0,201,255,0.5); margin-bottom: 5px;">Reset Password</h2>
+                <p class="subtitle" id="reset-subtitle" style="margin-bottom: 20px;">Enter your email and we'll send you a 6-digit code</p>
+            </div>
+
+            <div id="reset-step-1">
+                <div class="input-group">
+                    <i class="fas fa-envelope input-icon"></i>
+                    <input type="email" id="reset-email" placeholder="Email...">
+                </div>
+                <button class="btn-primary" id="btn-reset-send" style="background: linear-gradient(45deg, #00c9ff, #92fe9d); color: #000; font-weight: bold; margin-bottom: 10px;">
+                    <span>Send Code</span> <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+
+            <div id="reset-step-2" style="display: none;">
+                <div class="input-group">
+                    <i class="fas fa-key input-icon"></i>
+                    <input type="text" id="reset-code" maxlength="6" inputmode="numeric" placeholder="Enter 6-digit code" style="text-align: center; letter-spacing: 8px; font-size: 18px;">
+                </div>
+                <div class="input-group">
+                    <i class="fas fa-lock input-icon"></i>
+                    <input type="password" id="reset-new-password" placeholder="New password (min 8 characters)">
+                </div>
+                <button class="btn-primary" id="btn-reset-confirm" style="background: linear-gradient(45deg, #00c9ff, #92fe9d); color: #000; font-weight: bold; margin-bottom: 10px;">
+                    <span>Change Password</span> <i class="fas fa-check"></i>
+                </button>
+                <button class="btn-secondary" id="btn-reset-resend" style="margin-bottom: 10px;">
+                    <i class="fas fa-redo"></i> Resend Code
+                </button>
+            </div>
+
+            <p id="reset-error" style="color: #ff4d4d; font-size: 14px; display: none; margin-bottom: 10px;"></p>
+            <p id="reset-success" style="color: #92fe9d; font-size: 14px; display: none; margin-bottom: 10px;"></p>
+
+            <button class="btn-secondary" id="btn-reset-back"><i class="fas fa-arrow-left"></i> Back to Login</button>
         </div>
     </div>
 
@@ -949,6 +995,83 @@
             }
         }
 
+        // ===== Forgot password (6-digit code) =====
+        (function () {
+            const $ = (id) => document.getElementById(id);
+            const err = $('reset-error'), ok = $('reset-success');
+            const show = (el, msg) => { err.style.display = 'none'; ok.style.display = 'none'; el.innerText = msg; el.style.display = 'block'; };
+            const clearMsgs = () => { err.style.display = 'none'; ok.style.display = 'none'; };
+
+            $('link-forgot').addEventListener('click', (e) => {
+                e.preventDefault();
+                $('reset-email').value = emailInput.value.trim();
+                $('reset-step-1').style.display = 'block';
+                $('reset-step-2').style.display = 'none';
+                clearMsgs();
+                $('login-screen').style.display = 'none';
+                $('reset-screen').style.display = 'flex';
+            });
+            $('btn-reset-back').addEventListener('click', () => {
+                clearMsgs();
+                $('reset-screen').style.display = 'none';
+                $('login-screen').style.display = 'flex';
+            });
+
+            async function sendResetCode() {
+                const email = $('reset-email').value.trim();
+                if (!email) return show(err, 'Please enter your email.');
+                try {
+                    const res = await fetch('/api/reset-password/request', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        $('reset-step-1').style.display = 'none';
+                        $('reset-step-2').style.display = 'block';
+                        $('reset-subtitle').innerText = 'Enter the code we sent and choose a new password';
+                        show(ok, data.message || 'If an account exists for this email, we sent a 6-digit code.');
+                    } else {
+                        show(err, data.message || 'Could not send the code.');
+                    }
+                } catch (e) { show(err, 'Network error. Please try again.'); }
+            }
+            $('btn-reset-send').addEventListener('click', sendResetCode);
+            $('btn-reset-resend').addEventListener('click', sendResetCode);
+
+            $('btn-reset-confirm').addEventListener('click', async () => {
+                const email = $('reset-email').value.trim();
+                const code = $('reset-code').value.trim();
+                const password = $('reset-new-password').value;
+                if (code.length !== 6) return show(err, 'Please enter the 6-digit code.');
+                if (password.length < 8) return show(err, 'The password must be at least 8 characters.');
+                try {
+                    const res = await fetch('/api/reset-password/confirm', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, code, password })
+                    });
+                    const data = await res.json();
+                    if (!data.success) return show(err, data.message || 'Could not change the password.');
+                    show(ok, 'Password changed! Logging you in...');
+                    $('reset-code').value = '';
+                    $('reset-new-password').value = '';
+                    freshSignInAttempt = true;
+                    try {
+                        await signInWithEmailAndPassword(auth, email, password);
+                        $('reset-screen').style.display = 'none';
+                    } catch (e) {
+                        // Couldn't auto-login: send them back to the normal login form
+                        emailInput.value = email;
+                        $('reset-screen').style.display = 'none';
+                        $('login-screen').style.display = 'flex';
+                        showAuthError('Password changed. Please log in with your new password.');
+                    }
+                } catch (e) { show(err, 'Network error. Please try again.'); }
+            });
+        })();
+
         document.getElementById('btn-resend-code').addEventListener('click', () => {
             if (window.pendingVerificationEmail) sendVerificationCode(window.pendingVerificationEmail);
         });
@@ -1119,7 +1242,13 @@
             const password = passwordInput.value;
             if(!email || !password) return showAuthError("Please enter email and password.");
             freshSignInAttempt = true;
-            signInWithEmailAndPassword(auth, email, password).catch(e => showAuthError("Invalid credentials."));
+            signInWithEmailAndPassword(auth, email, password).catch(e => {
+                if (e && e.code === 'auth/too-many-requests') {
+                    showAuthError("Too many attempts. Wait a few minutes, or use \"Forgot password?\".");
+                } else {
+                    showAuthError("Wrong email or password. If you forgot it, use \"Forgot password?\".");
+                }
+            });
         });
 
         document.getElementById('btn-google').addEventListener('click', () => {
@@ -1191,6 +1320,11 @@
                     document.getElementById('profile-setup-screen').style.display = 'none';
                     document.getElementById('verify-email-display').innerText = user.email;
                     document.getElementById('email-verify-screen').style.display = 'flex';
+                    // Registration already sends its own code; for an existing unverified account logging in, send one now
+                    if (!isRegistering && window.__autoCodeSentFor !== user.email) {
+                        window.__autoCodeSentFor = user.email;
+                        sendVerificationCode(user.email);
+                    }
                     return;
                 }
 
