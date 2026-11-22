@@ -14,6 +14,17 @@ const io = new Server(server);
 app.set('trust proxy', 1); // behind Render's proxy: req.ip = real client IP (needed for rate limiting)
 app.disable('x-powered-by');
 
+// ---- Device identification (used to enforce bans against people who just re-enter as a new guest) ----
+const DEVICE_ID_RE = /^[A-Za-z0-9-]{16,64}$/;
+function parseCookies(header) {
+    const out = {};
+    String(header || '').split(';').forEach(part => {
+        const i = part.indexOf('=');
+        if (i > 0) out[part.slice(0, i).trim()] = part.slice(i + 1).trim();
+    });
+    return out;
+}
+
 // ---- Security: force HTTPS + security headers ----
 // Render terminates TLS and tells us the original protocol in x-forwarded-proto.
 app.use((req, res, next) => {
@@ -40,6 +51,11 @@ app.use((req, res, next) => {
         "base-uri 'self'",
         "object-src 'none'"
     ].join('; '));
+    // Persistent, HttpOnly device cookie: a second device identifier next to the one the page keeps in localStorage
+    if (!DEVICE_ID_RE.test(parseCookies(req.headers.cookie).hdid || '')) {
+        const secure = req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
+        res.append('Set-Cookie', `hdid=${crypto.randomUUID()}; Max-Age=31536000; Path=/; HttpOnly; SameSite=Lax${secure}`);
+    }
     next();
 });
 
@@ -656,7 +672,8 @@ app.post('/api/gemini', async (req, res) => {
     let decoded;
     try { decoded = await admin.auth().verifyIdToken(token); }
     catch (e) { return res.status(401).json({ reply: '🔒 Your session expired — please log in again.' }); }
-    if (decoded.name && blockedUsers.has(decoded.name)) return res.status(403).json({ reply: 'You are banned.' });
+    const reqDevice = parseCookies(req.headers.cookie).hdid;
+    if ((decoded.name && blockedUsers.has(decoded.name)) || (reqDevice && bannedDevices.has(reqDevice))) return res.status(403).json({ reply: 'You are banned.' });
     // 3) input validation (free for us, so it doesn't count against the user's quota)
     const prompt = req.body && typeof req.body.prompt === 'string' ? req.body.prompt.trim() : '';
     if (!prompt) return res.status(400).json({ reply: 'Please type a question.' });
@@ -703,6 +720,47 @@ app.post('/api/gemini', async (req, res) => {
 const mutedUsers = new Map();     // username -> expiresAt (timestamp ms)
 const muteTimers = new Map();     // username -> setTimeout handle
 const blockedUsers = new Set();   // username -> permanently banned
+const bannedDevices = new Map();  // deviceId -> { name, at } — stops a banned person re-entering as a new guest
+
+// Bans are saved in Firestore (serverState/bans, server-only) so a Render restart doesn't unban everybody
+let bansSaveTimer = null;
+function saveBans() {
+    if (!db) return;
+    clearTimeout(bansSaveTimer);
+    bansSaveTimer = setTimeout(() => {
+        db.collection('serverState').doc('bans').set({
+            users: [...blockedUsers].slice(0, 5000),
+            devices: Object.fromEntries([...bannedDevices].slice(0, 5000)),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }).catch(e => console.error('Could not save bans:', e.message));
+    }, 500);
+}
+async function loadBans() {
+    if (!db) return;
+    try {
+        const snap = await db.collection('serverState').doc('bans').get();
+        if (snap.exists) {
+            const d = snap.data();
+            (d.users || []).forEach(u => blockedUsers.add(u));
+            Object.entries(d.devices || {}).forEach(([id, v]) => bannedDevices.set(id, v));
+            console.log(`🔨 Bans loaded: ${blockedUsers.size} names, ${bannedDevices.size} devices`);
+        }
+    } catch (e) { console.error('Could not load bans:', e.message); }
+}
+loadBans();
+
+function deviceIdsFromSocket(socket) {
+    const ids = new Set();
+    const fromPage = socket.handshake.auth && socket.handshake.auth.deviceId;
+    if (typeof fromPage === 'string' && DEVICE_ID_RE.test(fromPage)) ids.add(fromPage);
+    const fromCookie = parseCookies(socket.handshake.headers.cookie).hdid;
+    if (fromCookie && DEVICE_ID_RE.test(fromCookie)) ids.add(fromCookie);
+    return [...ids];
+}
+function isDeviceBanned(ids) { return ids.some(id => bannedDevices.has(id)); }
+function banDevices(ids, name) {
+    ids.forEach(id => bannedDevices.set(id, { name, at: Date.now() }));
+}
 const socketUsers = new Map();    // socket.id -> username
 const usernameSockets = new Map(); // username -> Set of socket.id (supports multiple tabs/devices)
 let onlineUsersCount = 0;
@@ -869,6 +927,12 @@ async function tokenOwnsUsername(idToken, username) {
 }
 
 io.on('connection', (socket) => {
+    socket.data.deviceIds = deviceIdsFromSocket(socket);
+    if (isDeviceBanned(socket.data.deviceIds)) {
+        socket.emit('you-are-banned', { reason: 'You are banned from this chat.' });
+        socket.disconnect(true);
+        return;
+    }
     socket.data.room = 'general';
     socket.join('general');
     socket.emit('rooms', ROOMS);
@@ -889,6 +953,8 @@ io.on('connection', (socket) => {
         const isGuestName = /^Guest_\d{4}$/.test(username);
         if (!isGuestName && !(await tokenOwnsUsername(idToken, username))) return;
         if (blockedUsers.has(username)) {
+            banDevices(socket.data.deviceIds || [], username);
+            saveBans();
             socket.emit('you-are-banned', { reason: 'You are banned from this chat.' });
             socket.disconnect(true);
             return;
@@ -912,6 +978,8 @@ io.on('connection', (socket) => {
         if (blockedUsers.has(oldUsername)) {
             blockedUsers.delete(oldUsername);
             blockedUsers.add(newUsername);
+            for (const v of bannedDevices.values()) if (v && v.name === oldUsername) v.name = newUsername;
+            saveBans();
         }
 
         if (mutedUsers.has(oldUsername)) {
@@ -1307,6 +1375,13 @@ io.on('connection', (socket) => {
         }
 
         blockedUsers.add(username);
+        // Ban the device(s) this person is using right now, so a new Guest_#### name doesn't get them back in
+        for (const [sid, uname] of socketUsers.entries()) {
+            if (uname !== username) continue;
+            const target = io.sockets.sockets.get(sid);
+            if (target) banDevices(target.data.deviceIds || [], username);
+        }
+        saveBans();
         audit('ban', name, username);
         io.emit('system-msg', { text: `🚫 ${username} has been banned from the chat.`, kind: 'ban' });
         kickUserSockets(username, 'You have been banned by an admin.');
@@ -1318,6 +1393,8 @@ io.on('connection', (socket) => {
         if (!ok || role !== 'admin') return socket.emit('system-msg', { text: 'You are not allowed to unban users.', kind: 'error' });
 
         blockedUsers.delete(username);
+        for (const [id, v] of bannedDevices.entries()) if (v && v.name === username) bannedDevices.delete(id);
+        saveBans();
         audit('unban', name, username);
         io.emit('system-msg', { text: `✅ ${username} has been unbanned.`, kind: 'info' });
         broadcastStatusLists();
