@@ -190,6 +190,87 @@ app.post('/api/send-verification-code', async (req, res) => {
     }
 });
 
+// ==================================================
+// Forgot password (6-digit code by email — no links)
+// ==================================================
+const resetCodes = new Map(); // email -> { code, expiresAt, attempts }
+const resetIpLog = new Map(), resetEmailLog = new Map(), resetConfirmIpLog = new Map();
+setInterval(() => {
+    const now = Date.now();
+    for (const [k, v] of resetCodes) if (now > v.expiresAt) resetCodes.delete(k);
+    for (const [m, win] of [[resetIpLog, 3600000], [resetEmailLog, 600000], [resetConfirmIpLog, 600000]]) {
+        for (const [k, arr] of m) { if (!arr.length || now - arr[arr.length - 1] > win) m.delete(k); }
+    }
+}, 5 * 60 * 1000);
+
+app.post('/api/reset-password/request', async (req, res) => {
+    const email = String((req.body && req.body.email) || '').trim().toLowerCase();
+    if (!email || email.length > 254 || !EMAIL_RE.test(email)) {
+        return res.status(400).json({ success: false, message: 'Please enter a valid email address.' });
+    }
+    if (hitLimit(resetIpLog, req.ip, 3600000, 10) || hitLimit(resetEmailLog, email, 600000, 3)) {
+        return res.status(429).json({ success: false, message: 'Too many requests. Please wait a few minutes and try again.' });
+    }
+    if (!emailConfigured || !db) return res.status(500).json({ success: false, message: 'Email service is not configured on the server.' });
+
+    // Same answer whether or not the email has an account, so this can't be used to find out who is registered
+    res.json({ success: true, message: 'If an account exists for this email, we sent a 6-digit code.' });
+
+    try {
+        const user = await admin.auth().getUserByEmail(email);
+        if (!user.providerData.some(p => p.providerId === 'password')) return; // Google-only accounts have no password to reset
+        const code = generateCode();
+        resetCodes.set(email, { code, expiresAt: Date.now() + 10 * 60 * 1000, attempts: 0 });
+        await sendEmail({
+            to: email,
+            subject: 'Your Hamma Chat password reset code',
+            text: `Your password reset code is: ${code}\nIt expires in 10 minutes. If you didn't ask for this, ignore this email.`,
+            html: `<p>Your password reset code is:</p><h2 style="letter-spacing:6px;">${code}</h2><p>It expires in 10 minutes. If you didn't ask for this, ignore this email.</p>`
+        });
+    } catch (e) {
+        if (e && e.code !== 'auth/user-not-found') console.error('Password reset request failed:', e.message);
+    }
+});
+
+app.post('/api/reset-password/confirm', async (req, res) => {
+    const email = String((req.body && req.body.email) || '').trim().toLowerCase();
+    const code = String((req.body && req.body.code) || '').trim();
+    const password = req.body && req.body.password;
+    if (!email || !code || typeof password !== 'string') {
+        return res.status(400).json({ success: false, message: 'Email, code and new password are required.' });
+    }
+    if (password.length < 8 || password.length > 128) {
+        return res.status(400).json({ success: false, message: 'The password must be between 8 and 128 characters.' });
+    }
+    if (hitLimit(resetConfirmIpLog, req.ip, 600000, 30)) {
+        return res.status(429).json({ success: false, message: 'Too many attempts. Please wait a few minutes.' });
+    }
+    const entry = resetCodes.get(email);
+    if (!entry || Date.now() > entry.expiresAt) {
+        resetCodes.delete(email);
+        return res.status(400).json({ success: false, message: 'This code is invalid or has expired. Please request a new one.' });
+    }
+    entry.attempts = (entry.attempts || 0) + 1;
+    if (entry.attempts > 5) {
+        resetCodes.delete(email);
+        return res.status(429).json({ success: false, message: 'Too many wrong attempts. Please request a new code.' });
+    }
+    if (!safeEqual(entry.code, code)) {
+        return res.status(400).json({ success: false, message: 'Incorrect code.' });
+    }
+    resetCodes.delete(email);
+    try {
+        const user = await admin.auth().getUserByEmail(email);
+        // Proving access to the inbox also proves the email, so the account becomes verified too
+        await admin.auth().updateUser(user.uid, { password, emailVerified: true });
+        await admin.auth().revokeRefreshTokens(user.uid); // log out every other session
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Password reset failed:', e.message);
+        res.status(500).json({ success: false, message: 'Could not reset the password. Please try again.' });
+    }
+});
+
 app.post('/api/verify-code', async (req, res) => {
     const email = String((req.body && req.body.email) || '').trim().toLowerCase();
     const code = req.body && req.body.code;
