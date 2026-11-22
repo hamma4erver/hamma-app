@@ -761,6 +761,25 @@ function isDeviceBanned(ids) { return ids.some(id => bannedDevices.has(id)); }
 function banDevices(ids, name) {
     ids.forEach(id => bannedDevices.set(id, { name, at: Date.now() }));
 }
+
+// Mutes follow the browser too (not only the name), otherwise re-entering as a new Guest_#### ends the mute
+const mutedDevices = new Map(); // deviceId -> { name, expiresAt }
+function muteDevices(ids, name, expiresAt) { ids.forEach(id => mutedDevices.set(id, { name, expiresAt })); }
+function unmuteDevicesOf(name) {
+    for (const [id, m] of mutedDevices.entries()) if (m.name === name) mutedDevices.delete(id);
+}
+// Latest mute expiry that applies to this name OR to this socket's device (0 = not muted)
+function muteExpiryFor(name, socket) {
+    const now = Date.now();
+    let exp = mutedUsers.get(name) || 0;
+    for (const id of (socket && socket.data && socket.data.deviceIds) || []) {
+        const m = mutedDevices.get(id);
+        if (!m) continue;
+        if (m.expiresAt <= now) { mutedDevices.delete(id); continue; }
+        if (m.expiresAt > exp) exp = m.expiresAt;
+    }
+    return exp > now ? exp : 0;
+}
 const socketUsers = new Map();    // socket.id -> username
 const usernameSockets = new Map(); // username -> Set of socket.id (supports multiple tabs/devices)
 let onlineUsersCount = 0;
@@ -838,6 +857,7 @@ function scheduleAutoUnmute(username, ms) {
     if (muteTimers.has(username)) clearTimeout(muteTimers.get(username));
     const timer = setTimeout(() => {
         mutedUsers.delete(username);
+        unmuteDevicesOf(username);
         muteTimers.delete(username);
         io.emit('system-msg', { text: `Mute expired for: ${username}`, kind: 'info' });
         broadcastStatusLists();
@@ -986,6 +1006,7 @@ io.on('connection', (socket) => {
             const expiresAt = mutedUsers.get(oldUsername);
             mutedUsers.delete(oldUsername);
             mutedUsers.set(newUsername, expiresAt);
+            for (const m of mutedDevices.values()) if (m.name === oldUsername) m.name = newUsername;
             const remainingMs = expiresAt - Date.now();
             if (remainingMs > 0) scheduleAutoUnmute(newUsername, remainingMs);
         }
@@ -1028,7 +1049,7 @@ io.on('connection', (socket) => {
         if (blockedUsers.has(data.user)) {
             return socket.emit('system-msg', { text: 'You are banned from sending messages.', kind: 'error' });
         }
-        const expiresAt = mutedUsers.get(data.user);
+        const expiresAt = muteExpiryFor(data.user, socket);
         if (expiresAt && expiresAt > Date.now()) {
             const remaining = Math.ceil((expiresAt - Date.now()) / 60000);
             return socket.emit('system-msg', { text: `You are muted, try again in ${remaining} minute(s).`, kind: 'error' });
@@ -1162,7 +1183,7 @@ io.on('connection', (socket) => {
         const user = await nameFromToken(idToken, socketUsers.get(socket.id));
         if (!user) return;
         if (blockedUsers.has(user)) return;
-        const exp = mutedUsers.get(user);
+        const exp = muteExpiryFor(user, socket);
         if (exp && exp > now) return; // muted people can't react either
         const key = String(msgId);
         if (!recentMessages.has(key)) return; // only messages the server actually saw
@@ -1326,6 +1347,11 @@ io.on('connection', (socket) => {
         }
 
         mutedUsers.set(target, expiresAt);
+        for (const [sid, uname] of socketUsers.entries()) {
+            if (uname !== target) continue;
+            const targetSocket = io.sockets.sockets.get(sid);
+            if (targetSocket) muteDevices(targetSocket.data.deviceIds || [], target, expiresAt);
+        }
         audit('mute', name, target, duration + 'm' + (backfired ? ' (backfired)' : ''));
         scheduleAutoUnmute(target, ms);
 
@@ -1354,6 +1380,7 @@ io.on('connection', (socket) => {
         }
 
         mutedUsers.delete(username);
+        unmuteDevicesOf(username);
         audit('unmute', name, username);
         if (muteTimers.has(username)) {
             clearTimeout(muteTimers.get(username));
@@ -1634,7 +1661,7 @@ io.on('connection', (socket) => {
         if (blockedUsers.has(from)) {
             return socket.emit('dm-system-msg', { text: 'You are banned from sending messages.', kind: 'error' });
         }
-        const expiresAt = mutedUsers.get(from);
+        const expiresAt = muteExpiryFor(from, socket);
         if (expiresAt && expiresAt > Date.now()) {
             const remaining = Math.ceil((expiresAt - Date.now()) / 60000);
             return socket.emit('dm-system-msg', { text: `You are muted, try again in ${remaining} minute(s).`, kind: 'error' });
