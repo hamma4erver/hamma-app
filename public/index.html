@@ -256,6 +256,47 @@
             0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
             30% { transform: translateY(-4px); opacity: 1; }
         }
+
+        /* ===== Private welcome effect (shown only after the server confirms the access-code login) ===== */
+        #welcome-fx { position: fixed; inset: 0; z-index: 100000; pointer-events: none; overflow: hidden; }
+        #welcome-fx .wfx-glow {
+            position: absolute; inset: 0; border-radius: 0;
+            box-shadow: inset 0 0 60px 14px rgba(120, 190, 255, 0.55), inset 0 0 140px 30px rgba(190, 140, 255, 0.35);
+            animation: wfxGlow 6s ease-in-out forwards;
+        }
+        @keyframes wfxGlow {
+            0% { opacity: 0; } 15% { opacity: 1; } 50% { opacity: 0.55; } 70% { opacity: 1; } 100% { opacity: 0; }
+        }
+        #welcome-fx .wfx-p {
+            position: absolute; bottom: -40px; font-size: 22px; opacity: 0;
+            animation: wfxFloat linear forwards; will-change: transform, opacity;
+            filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.6));
+        }
+        @keyframes wfxFloat {
+            0% { transform: translate3d(0, 0, 0) scale(0.6); opacity: 0; }
+            10% { opacity: 1; }
+            85% { opacity: 0.9; }
+            100% { transform: translate3d(var(--dx, 0px), -110vh, 0) scale(1.1) rotate(var(--rot, 0deg)); opacity: 0; }
+        }
+        #welcome-fx .wfx-msg {
+            position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%);
+            max-width: min(86vw, 520px); padding: 22px 26px; text-align: center;
+            font-size: 22px; line-height: 1.6; font-weight: 700; color: #fff; direction: auto;
+            background: rgba(10, 14, 30, 0.55); border: 1px solid rgba(160, 200, 255, 0.35);
+            border-radius: 20px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+            text-shadow: 0 0 10px rgba(140, 200, 255, 0.95), 0 0 24px rgba(170, 130, 255, 0.7);
+            opacity: 0; animation: wfxMsg 7s ease-in-out forwards;
+        }
+        @keyframes wfxMsg {
+            0% { opacity: 0; transform: translate(-50%, -46%) scale(0.96); }
+            12% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            85% { opacity: 1; }
+            100% { opacity: 0; transform: translate(-50%, -54%) scale(1.02); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #welcome-fx .wfx-p { display: none; }
+            #welcome-fx .wfx-glow { animation-duration: 4s; }
+        }
     </style>
     <script>
     // Theme is applied before first paint (no dark flash): saved choice, else the device setting
@@ -1546,6 +1587,50 @@
             proceedToChat(`Guest_${randomID}`);
         }
 
+        // Private welcome effect: glow + floating stars/hearts + a note from the owner.
+        // Called only with data that the SERVER returned after verifying name + code, and the note is
+        // inserted with textContent (never innerHTML), so it can't inject anything.
+        window.playWelcomeEffect = function (welcome) {
+            try {
+                const old = document.getElementById('welcome-fx');
+                if (old) old.remove();
+                const root = document.createElement('div');
+                root.id = 'welcome-fx';
+                root.setAttribute('aria-hidden', 'true');
+
+                const glow = document.createElement('div');
+                glow.className = 'wfx-glow';
+                root.appendChild(glow);
+
+                const icons = ['✨', '💙', '⭐', '✨', '💫'];
+                const small = window.innerWidth < 600;
+                const count = small ? 18 : 30;
+                for (let i = 0; i < count; i++) {
+                    const el = document.createElement('span');
+                    el.className = 'wfx-p';
+                    el.textContent = icons[i % icons.length];
+                    el.style.left = (Math.random() * 96 + 2) + '%';
+                    el.style.fontSize = (16 + Math.random() * 20) + 'px';
+                    el.style.setProperty('--dx', (Math.random() * 120 - 60) + 'px');
+                    el.style.setProperty('--rot', (Math.random() * 60 - 30) + 'deg');
+                    el.style.animationDuration = (4 + Math.random() * 3) + 's';
+                    el.style.animationDelay = (Math.random() * 2.5) + 's';
+                    root.appendChild(el);
+                }
+
+                const text = welcome && typeof welcome.message === 'string' ? welcome.message.trim() : '';
+                if (text) {
+                    const msg = document.createElement('div');
+                    msg.className = 'wfx-msg';
+                    msg.textContent = text;
+                    root.appendChild(msg);
+                }
+
+                document.body.appendChild(root);
+                setTimeout(() => { if (root.parentNode) root.remove(); }, 10500);
+            } catch (e) { /* the effect is decoration: never break the login because of it */ }
+        };
+
         // Name in the email box + secret code in the password box (see /api/code-login on the server).
         // Returns { ok, message }; the login form shows the message if it fails.
         window.loginWithAccessCode = async function (name, code) {
@@ -1568,6 +1653,7 @@
                 document.getElementById('btn-clear-chat').style.display = 'flex';
                 if (data.role === 'admin') document.getElementById('btn-lock-chat').style.display = 'flex';
                 proceedToChat(data.name);
+                setTimeout(() => window.playWelcomeEffect(data.welcome), 500); // after the chat screen is shown
                 return { ok: true };
             } catch (e) {
                 return { ok: false, message: 'Network error. Please try again.' };
