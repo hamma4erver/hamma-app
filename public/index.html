@@ -293,10 +293,6 @@
             85% { opacity: 1; }
             100% { opacity: 0; transform: translate(-50%, -54%) scale(1.02); }
         }
-        @media (prefers-reduced-motion: reduce) {
-            #welcome-fx .wfx-p { display: none; }
-            #welcome-fx .wfx-glow { animation-duration: 4s; }
-        }
     </style>
     <script>
     // Theme is applied before first paint (no dark flash): saved choice, else the device setting
@@ -1744,7 +1740,9 @@
             document.getElementById('chat-rules-modal').style.display = 'none';
         }
 
-        document.getElementById('message').addEventListener('focus', maybeShowWeeklyChatRules, { once: false });
+        // Disabled: the weekly rules card no longer pops up when tapping the message bar.
+        // To bring it back, uncomment the next line.
+        // document.getElementById('message').addEventListener('focus', maybeShowWeeklyChatRules, { once: false });
 
         document.getElementById('user-display-tag').addEventListener('click', async () => {
             document.getElementById('profilePanel').classList.add('open');
