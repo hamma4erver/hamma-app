@@ -47,6 +47,7 @@ app.use((req, res, next) => {
         "img-src 'self' data: blob: https://res.cloudinary.com https:",
         "media-src 'self' blob: https://res.cloudinary.com",
         "connect-src 'self' wss: https://*.googleapis.com https://*.firebaseio.com https://api.cloudinary.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com",
+        "frame-src 'self' https://*.firebaseapp.com https://accounts.google.com",
         "frame-ancestors 'self'",
         "base-uri 'self'",
         "object-src 'none'"
@@ -57,6 +58,34 @@ app.use((req, res, next) => {
         res.append('Set-Cookie', `hdid=${crypto.randomUUID()}; Max-Age=31536000; Path=/; HttpOnly; SameSite=Lax${secure}`);
     }
     next();
+});
+
+// ---- Firebase Auth reverse proxy ----
+// Serves Firebase's sign-in helper pages from OUR domain (/__/auth/* and /__/firebase/init.json),
+// so the Google login popup works on browsers that block third-party storage (Brave, Safari, Chrome...).
+// Fixes "The requested action is invalid" on hamma-1a466.firebaseapp.com/__/auth/handler.
+const FIREBASE_AUTH_HOST = 'https://hamma-1a466.firebaseapp.com';
+app.use(['/__/auth', '/__/firebase'], async (req, res) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'POST') return res.sendStatus(405);
+    try {
+        const headers = { 'User-Agent': req.headers['user-agent'] || 'hamma-proxy', 'Accept': req.headers['accept'] || '*/*' };
+        if (req.headers['accept-language']) headers['Accept-Language'] = req.headers['accept-language'];
+        const init = { method: req.method, headers, redirect: 'manual' };
+        if (req.method === 'POST') {
+            headers['Content-Type'] = req.headers['content-type'] || 'application/json';
+            init.body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {});
+        }
+        const upstream = await fetch(FIREBASE_AUTH_HOST + req.baseUrl + req.url, init);
+        res.status(upstream.status);
+        ['content-type', 'cache-control', 'location'].forEach(h => {
+            const v = upstream.headers.get(h);
+            if (v) res.setHeader(h, v);
+        });
+        res.send(Buffer.from(await upstream.arrayBuffer()));
+    } catch (e) {
+        console.error('Firebase auth proxy error:', e.message);
+        res.status(502).send('Auth proxy error');
+    }
 });
 
 app.use(express.json({ limit: '100kb' }));
