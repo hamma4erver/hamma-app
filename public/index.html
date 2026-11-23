@@ -1704,6 +1704,14 @@
             return null;
         }
 
+        // Same as getIdTokenSafe, but throws when nobody is signed in (callers show "You must be signed in")
+        // Works for both Firebase accounts and access-code sessions.
+        async function requireIdToken() {
+            const t = await getIdTokenSafe();
+            if (!t) throw new Error('not signed in');
+            return t;
+        }
+
         function isGuestUser() {
             return !(window.firebaseAuth && window.firebaseAuth.currentUser);
         }
@@ -2240,9 +2248,9 @@
                     getIdTokenSafe().then(idToken => {
                         socket.emit('register-user', { username: window.currentUsername, idToken });
                     });
-                    if (window.isUserModerator && window.firebaseAuth.currentUser) {
-                        window.firebaseAuth.currentUser.getIdToken().then(idToken => {
-                            socket.emit('get-clear-cooldown', { idToken });
+                    if (window.isUserModerator) {
+                        getIdTokenSafe().then(idToken => {
+                            if (idToken) socket.emit('get-clear-cooldown', { idToken });
                         }).catch(() => {});
                     }
                 } else {
@@ -2333,7 +2341,7 @@
 
         async function unpinMessage() {
             try {
-                const idToken = await window.firebaseAuth.currentUser.getIdToken();
+                const idToken = await requireIdToken();
                 socket.emit('unpin-message', { idToken });
             } catch (e) { appendSystemMessage('You must be logged in.', 'error'); }
         }
@@ -2574,7 +2582,7 @@
             if (!selectedMsgElem) return;
             const msgId = selectedMsgElem.dataset.id;
             try {
-                const idToken = await window.firebaseAuth.currentUser.getIdToken();
+                const idToken = await requireIdToken();
                 if (socket && socket.connected) {
                     socket.emit('edit-message', { msgId, idToken, messageSender: selectedSenderName, newText });
                 }
@@ -2589,7 +2597,7 @@
             if (!selectedMsgElem) return;
             const msgId = selectedMsgElem.dataset.id;
             try {
-                const idToken = await window.firebaseAuth.currentUser.getIdToken();
+                const idToken = await requireIdToken();
                 if (socket && socket.connected) {
                     socket.emit('delete-message', { msgId, idToken, messageSender: selectedSenderName });
                 } else {
@@ -2607,7 +2615,7 @@
                 if (!selectedSenderName) return;
                 const minutes = parseInt(btn.dataset.minutes, 10);
                 try {
-                    const idToken = await window.firebaseAuth.currentUser.getIdToken();
+                    const idToken = await requireIdToken();
                     socket.emit('mute-user', { username: selectedSenderName, idToken, minutes });
                 } catch (e) { appendSystemMessage('You must be signed in.', 'error'); }
                 closeMsgModal();
@@ -2618,7 +2626,7 @@
         document.getElementById('btn-msg-unmute').addEventListener('click', async () => {
             if (!selectedSenderName) return;
             try {
-                const idToken = await window.firebaseAuth.currentUser.getIdToken();
+                const idToken = await requireIdToken();
                 socket.emit('unmute-user', { username: selectedSenderName, idToken });
             } catch (e) { appendSystemMessage('You must be signed in.', 'error'); }
             closeMsgModal();
@@ -2628,7 +2636,7 @@
         document.getElementById('btn-msg-ban').addEventListener('click', async () => {
             if (!selectedSenderName) return;
             try {
-                const idToken = await window.firebaseAuth.currentUser.getIdToken();
+                const idToken = await requireIdToken();
                 const isBanned = window.bannedSet && window.bannedSet.has(selectedSenderName);
                 socket.emit(isBanned ? 'unblock-user' : 'block-user', { username: selectedSenderName, idToken });
             } catch (e) { appendSystemMessage('You must be signed in.', 'error'); }
@@ -2640,7 +2648,7 @@
             if (!selectedMsgElem) return;
             const msgId = selectedMsgElem.dataset.id;
             try {
-                const idToken = await window.firebaseAuth.currentUser.getIdToken();
+                const idToken = await requireIdToken();
                 socket.emit('pin-message', { msgId, user: selectedSenderName, text: selectedMsgText, idToken });
             } catch (e) { appendSystemMessage('You must be signed in.', 'error'); }
             closeMsgModal();
@@ -2650,7 +2658,7 @@
         document.getElementById('btn-clear-chat').addEventListener('click', async () => {
             if (!confirm('Clear the whole chat for everyone?')) return;
             try {
-                const idToken = await window.firebaseAuth.currentUser.getIdToken();
+                const idToken = await requireIdToken();
                 socket.emit('clear-chat', { idToken });
             } catch (e) { appendSystemMessage('You must be signed in.', 'error'); }
         });
@@ -2658,7 +2666,7 @@
         // Lock/unlock the chat so only admins/mods can send messages (admins only)
         document.getElementById('btn-lock-chat').addEventListener('click', async () => {
             try {
-                const idToken = await window.firebaseAuth.currentUser.getIdToken();
+                const idToken = await requireIdToken();
                 socket.emit(window.isChatLocked ? 'unlock-chat' : 'lock-chat', { idToken });
             } catch (e) { appendSystemMessage('You must be signed in.', 'error'); }
         });
