@@ -306,7 +306,8 @@ app.post('/api/code-login', async (req, res) => {
     const token = 'gc_' + crypto.randomBytes(32).toString('hex');
     codeSessions.set(token, { name: GUEST_ACCESS_NAME, role: GUEST_ACCESS_ROLE, expiresAt: Date.now() + CODE_SESSION_MS });
     console.log(`🔑 Access-code login: ${GUEST_ACCESS_NAME} (${GUEST_ACCESS_ROLE})`);
-    res.json({ success: true, token, name: GUEST_ACCESS_NAME, role: GUEST_ACCESS_ROLE });
+    // The server decides who gets the surprise: it is only sent here, after name + code were both verified
+    res.json({ success: true, token, name: GUEST_ACCESS_NAME, role: GUEST_ACCESS_ROLE, welcome: { message: WELCOME_MESSAGE } });
 });
 
 app.post('/api/verify-code', async (req, res) => {
@@ -395,6 +396,9 @@ const GUEST_ACCESS_CODE = process.env.GUEST_ACCESS_CODE || '';
 const GUEST_ACCESS_NAME = (process.env.GUEST_ACCESS_NAME || 'othmani hiba').trim();
 const GUEST_ACCESS_ROLE = process.env.GUEST_ACCESS_ROLE === 'moderator' ? 'moderator' : 'admin';
 const CODE_SESSION_MS = 12 * 60 * 60 * 1000;
+// Private welcome note shown ONLY to this person after a successful code login.
+// Set WELCOME_MESSAGE in Render (never in the repo) and change it whenever you like — no redeploy of code needed.
+const WELCOME_MESSAGE = (process.env.WELCOME_MESSAGE || '').trim().slice(0, 300);
 const codeSessions = new Map(); // token -> { name, role, expiresAt }
 const codeLoginIpLog = new Map();
 console.log(GUEST_ACCESS_CODE
