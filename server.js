@@ -271,6 +271,41 @@ app.post('/api/reset-password/confirm', async (req, res) => {
     }
 });
 
+app.post('/api/code-login', async (req, res) => {
+    // Every failure looks the same, so nobody can tell whether the feature exists or which part was wrong
+    const deny = () => res.status(401).json({ success: false, message: 'Wrong email or password.' });
+    if (!GUEST_ACCESS_CODE || !GUEST_ACCESS_NAME) return deny();
+    if (hitLimit(codeLoginIpLog, req.ip, 900000, 8)) {
+        return res.status(429).json({ success: false, message: 'Too many attempts. Please wait a few minutes.' });
+    }
+    const name = String((req.body && req.body.name) || '').trim();
+    const code = String((req.body && req.body.code) || '');
+    if (name.length > 60 || code.length > 200) return deny();
+    const nameOk = name.toLowerCase() === GUEST_ACCESS_NAME.toLowerCase();
+    const codeOk = safeEqual(code, GUEST_ACCESS_CODE);
+    if (!(nameOk && codeOk)) {
+        console.warn(`Access-code login failed from ${req.ip}`);
+        return deny();
+    }
+    if (blockedUsers.has(GUEST_ACCESS_NAME)) return deny();
+    // If a real account already owns this name, don't let a code session impersonate it
+    if (db) {
+        try {
+            const taken = await db.collection('usernames').doc(GUEST_ACCESS_NAME.toLowerCase()).get();
+            if (taken.exists) {
+                return res.status(409).json({ success: false, message: 'This name belongs to a registered account — please log in with that account.' });
+            }
+        } catch (e) { /* if the check can't run, continue */ }
+    }
+    // keep at most 10 live sessions for this name (oldest dropped)
+    const live = [...codeSessions.entries()].filter(([, v]) => v.name === GUEST_ACCESS_NAME).sort((a, b) => a[1].expiresAt - b[1].expiresAt);
+    while (live.length >= 10) codeSessions.delete(live.shift()[0]);
+    const token = 'gc_' + crypto.randomBytes(32).toString('hex');
+    codeSessions.set(token, { name: GUEST_ACCESS_NAME, role: GUEST_ACCESS_ROLE, expiresAt: Date.now() + CODE_SESSION_MS });
+    console.log(`🔑 Access-code login: ${GUEST_ACCESS_NAME} (${GUEST_ACCESS_ROLE})`);
+    res.json({ success: true, token, name: GUEST_ACCESS_NAME, role: GUEST_ACCESS_ROLE });
+});
+
 app.post('/api/verify-code', async (req, res) => {
     const email = String((req.body && req.body.email) || '').trim().toLowerCase();
     const code = req.body && req.body.code;
@@ -345,7 +380,38 @@ async function resolveDisplayName(decoded) {
     return name;
 }
 
+// ==================================================
+// Access-code login (no account needed): one trusted person types their NAME in the email box and a
+// secret CODE in the password box. The code lives ONLY in Render's environment variables — never in
+// the code or the repo. A leaked code can only ever unlock that one name, never the owner role.
+//   GUEST_ACCESS_CODE = the secret code      GUEST_ACCESS_NAME = the one name allowed
+//   GUEST_ACCESS_ROLE = "admin" or "moderator" (default: moderator)
+// ==================================================
+const GUEST_ACCESS_CODE = process.env.GUEST_ACCESS_CODE || '';
+const GUEST_ACCESS_NAME = (process.env.GUEST_ACCESS_NAME || '').trim();
+const GUEST_ACCESS_ROLE = process.env.GUEST_ACCESS_ROLE === 'admin' ? 'admin' : 'moderator';
+const CODE_SESSION_MS = 12 * 60 * 60 * 1000;
+const codeSessions = new Map(); // token -> { name, role, expiresAt }
+const codeLoginIpLog = new Map();
+if (GUEST_ACCESS_CODE && !GUEST_ACCESS_NAME) {
+    console.warn('⚠️ GUEST_ACCESS_CODE is set but GUEST_ACCESS_NAME is missing — access-code login stays disabled.');
+}
+setInterval(() => {
+    const now = Date.now();
+    for (const [t, v] of codeSessions) if (now > v.expiresAt) codeSessions.delete(t);
+    for (const [k, arr] of codeLoginIpLog) { if (!arr.length || now - arr[arr.length - 1] > 900000) codeLoginIpLog.delete(k); }
+}, 10 * 60 * 1000);
+function getCodeSession(token) {
+    if (typeof token !== 'string' || !token.startsWith('gc_')) return null;
+    const sess = codeSessions.get(token);
+    if (!sess) return null;
+    if (Date.now() > sess.expiresAt) { codeSessions.delete(token); return null; }
+    return sess;
+}
+
 async function verifyRole(idToken) {
+    const codeSess = getCodeSession(idToken);
+    if (codeSess) return { ok: true, role: codeSess.role, uid: 'code:' + codeSess.name, name: codeSess.name, isOwner: false };
     if (!idToken || !db) return { ok: false, role: null };
     try {
         const decoded = await admin.auth().verifyIdToken(idToken);
@@ -501,6 +567,8 @@ const reportLog = new Map();      // socket.id -> timestamps (anti report-spam)
 const REPORT_REASONS = ['spam', 'harassment', 'hate', 'inappropriate', 'other'];
 
 async function nameFromToken(idToken, claimed) {
+    const codeSess = getCodeSession(idToken);
+    if (codeSess) return codeSess.name;
     if (idToken && db) {
         try { return await resolveDisplayName(await admin.auth().verifyIdToken(idToken)); } catch (e) { return null; }
     }
@@ -1016,6 +1084,8 @@ function sanitizeChatPayload(d) {
 }
 // A socket may only act as a username it proved it owns (verified token), or a Guest_#### name.
 async function tokenOwnsUsername(idToken, username) {
+    const codeSess = getCodeSession(idToken);
+    if (codeSess) return codeSess.name === username;
     if (!idToken || !db || typeof username !== 'string') return false;
     try {
         const d = await admin.auth().verifyIdToken(idToken);
@@ -1110,7 +1180,10 @@ io.on('connection', (socket) => {
         // Identity comes from the verified token (or the Guest_#### pattern), never from the
         // client-sent name — otherwise anyone could post as "Hamma" or dodge a mute/ban.
         let verifiedName = null;
-        if (data.idToken && db) {
+        const codeSess = getCodeSession(data.idToken);
+        if (codeSess) {
+            verifiedName = codeSess.name;
+        } else if (data.idToken && db) {
             try { verifiedName = await resolveDisplayName(await admin.auth().verifyIdToken(data.idToken)); } catch (e) { verifiedName = null; }
         } else if (/^Guest_\d{4}$/.test(String(data.user || ''))) {
             verifiedName = data.user;
