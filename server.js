@@ -274,7 +274,10 @@ app.post('/api/reset-password/confirm', async (req, res) => {
 app.post('/api/code-login', async (req, res) => {
     // Every failure looks the same, so nobody can tell whether the feature exists or which part was wrong
     const deny = () => res.status(401).json({ success: false, message: 'Wrong email or password.' });
-    if (!GUEST_ACCESS_CODE || !GUEST_ACCESS_NAME) return deny();
+    if (!GUEST_ACCESS_CODE || !GUEST_ACCESS_NAME) {
+        console.warn('Access-code login attempt, but GUEST_ACCESS_CODE is not set on the server');
+        return deny();
+    }
     if (hitLimit(codeLoginIpLog, req.ip, 900000, 8)) {
         return res.status(429).json({ success: false, message: 'Too many attempts. Please wait a few minutes.' });
     }
@@ -284,7 +287,7 @@ app.post('/api/code-login', async (req, res) => {
     const nameOk = name.toLowerCase() === GUEST_ACCESS_NAME.toLowerCase();
     const codeOk = safeEqual(code, GUEST_ACCESS_CODE);
     if (!(nameOk && codeOk)) {
-        console.warn(`Access-code login failed from ${req.ip}`);
+        console.warn(`Access-code login failed from ${req.ip}: ${nameOk ? 'wrong code' : 'name does not match'}`);
         return deny();
     }
     if (blockedUsers.has(GUEST_ACCESS_NAME)) return deny();
@@ -384,18 +387,19 @@ async function resolveDisplayName(decoded) {
 // Access-code login (no account needed): one trusted person types their NAME in the email box and a
 // secret CODE in the password box. The code lives ONLY in Render's environment variables — never in
 // the code or the repo. A leaked code can only ever unlock that one name, never the owner role.
-//   GUEST_ACCESS_CODE = the secret code      GUEST_ACCESS_NAME = the one name allowed
-//   GUEST_ACCESS_ROLE = "admin" or "moderator" (default: moderator)
+//   GUEST_ACCESS_CODE = the secret code (the ONLY variable you must set in Render)
+//   GUEST_ACCESS_NAME = the one name allowed (default: othmani hiba)
+//   GUEST_ACCESS_ROLE = "admin" (default) or "moderator"
 // ==================================================
 const GUEST_ACCESS_CODE = process.env.GUEST_ACCESS_CODE || '';
-const GUEST_ACCESS_NAME = (process.env.GUEST_ACCESS_NAME || '').trim();
-const GUEST_ACCESS_ROLE = process.env.GUEST_ACCESS_ROLE === 'admin' ? 'admin' : 'moderator';
+const GUEST_ACCESS_NAME = (process.env.GUEST_ACCESS_NAME || 'othmani hiba').trim();
+const GUEST_ACCESS_ROLE = process.env.GUEST_ACCESS_ROLE === 'moderator' ? 'moderator' : 'admin';
 const CODE_SESSION_MS = 12 * 60 * 60 * 1000;
 const codeSessions = new Map(); // token -> { name, role, expiresAt }
 const codeLoginIpLog = new Map();
-if (GUEST_ACCESS_CODE && !GUEST_ACCESS_NAME) {
-    console.warn('⚠️ GUEST_ACCESS_CODE is set but GUEST_ACCESS_NAME is missing — access-code login stays disabled.');
-}
+console.log(GUEST_ACCESS_CODE
+    ? `🔑 Access-code login is ON for "${GUEST_ACCESS_NAME}" (${GUEST_ACCESS_ROLE})`
+    : 'ℹ️ Access-code login is OFF (set GUEST_ACCESS_CODE in Render to turn it on)');
 setInterval(() => {
     const now = Date.now();
     for (const [t, v] of codeSessions) if (now > v.expiresAt) codeSessions.delete(t);
