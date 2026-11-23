@@ -1241,6 +1241,11 @@
             const email = emailInput.value.trim();
             const password = passwordInput.value;
             if(!email || !password) return showAuthError("Please enter email and password.");
+            // No "@": it's a name + access code, not an email login
+            if (!email.includes('@')) {
+                window.loginWithAccessCode(email, password).then(r => { if (!r.ok) showAuthError(r.message); });
+                return;
+            }
             freshSignInAttempt = true;
             signInWithEmailAndPassword(auth, email, password).catch(e => {
                 if (e && e.code === 'auth/too-many-requests') {
@@ -1541,6 +1546,34 @@
             proceedToChat(`Guest_${randomID}`);
         }
 
+        // Name in the email box + secret code in the password box (see /api/code-login on the server).
+        // Returns { ok, message }; the login form shows the message if it fails.
+        window.loginWithAccessCode = async function (name, code) {
+            try {
+                const res = await fetch('/api/code-login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, code })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.success) return { ok: false, message: data.message || 'Wrong email or password.' };
+                window.codeSession = { token: data.token, name: data.name, role: data.role };
+                isGuest = true; // no Firebase account: friends & account features stay off
+                window.currentUserRole = data.role;
+                window.isUserAdmin = data.role === 'admin';
+                window.isUserModerator = data.role === 'moderator';
+                window.isUserAdminOrMod = true;
+                // Moderation tools in the chat run through the server. The account dashboard needs a real
+                // Firebase login, so its button stays hidden for access-code sessions.
+                document.getElementById('btn-clear-chat').style.display = 'flex';
+                if (data.role === 'admin') document.getElementById('btn-lock-chat').style.display = 'flex';
+                proceedToChat(data.name);
+                return { ok: true };
+            } catch (e) {
+                return { ok: false, message: 'Network error. Please try again.' };
+            }
+        };
+
         window.formatUsername = function(username) {
             const safeUsername = escapeHtml(username || '');
             const lower = (username || '').toLowerCase();
@@ -1659,6 +1692,10 @@
         });
 
         async function getIdTokenSafe() {
+            // Access-code session (no Firebase account): the server-issued session token plays the same role
+            if (window.codeSession && window.codeSession.token && !(window.firebaseAuth && window.firebaseAuth.currentUser)) {
+                return window.codeSession.token;
+            }
             try {
                 if (window.firebaseAuth && window.firebaseAuth.currentUser) {
                     return await window.firebaseAuth.currentUser.getIdToken();
