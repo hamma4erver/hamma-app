@@ -913,7 +913,7 @@
 
         const firebaseConfig = {
             apiKey: "AIzaSyA91YpdPs7LcvOfcidq_AhH2aKfAmJbWQ0",
-            authDomain: "hamma-1a466.firebaseapp.com",
+            authDomain: (location.protocol === "https:" ? location.host : "hamma-1a466.firebaseapp.com"), // served via /__/auth proxy in server.js
             projectId: "hamma-1a466",
             storageBucket: "hamma-1a466.firebasestorage.app",
             messagingSenderId: "997995104735",
