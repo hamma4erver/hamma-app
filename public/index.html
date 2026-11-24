@@ -491,6 +491,9 @@
             <button class="btn-secondary" id="btn-resend-code">
                 <i class="fas fa-redo"></i> Resend Code
             </button>
+            <button class="btn-secondary" id="btn-verify-back" style="margin-top: 10px;">
+                <i class="fas fa-arrow-left"></i> Back to login
+            </button>
         </div>
     </div>
 
@@ -1111,6 +1114,14 @@
 
         document.getElementById('btn-resend-code').addEventListener('click', () => {
             if (window.pendingVerificationEmail) sendVerificationCode(window.pendingVerificationEmail);
+        });
+
+        // Lets someone leave the "verify your email" screen (e.g. wrong email) instead of being stuck on it after every refresh
+        document.getElementById('btn-verify-back').addEventListener('click', async () => {
+            window.pendingVerificationEmail = null;
+            localStorage.removeItem('hamma_last_active');
+            try { await signOut(auth); } catch (e) { /* ignore */ }
+            location.reload();
         });
 
         document.getElementById('btn-verify-code').addEventListener('click', async () => {
