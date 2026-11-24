@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hamma-chat-v1';
+const CACHE_NAME = 'hamma-chat-v2';
 const CORE_ASSETS = [
     '/',
     '/index.html',
@@ -35,6 +35,8 @@ self.addEventListener('fetch', (event) => {
     if (event.request.method !== 'GET') return;
     // Never intercept the live socket.io connection
     if (event.request.url.includes('/socket.io/')) return;
+    // Never intercept Firebase sign-in pages (/__/auth/*, /__/firebase/*): they must go straight to the network
+    if (new URL(event.request.url).pathname.startsWith('/__/')) return;
 
     event.respondWith(
         fetch(event.request).catch(() => caches.match(event.request))
