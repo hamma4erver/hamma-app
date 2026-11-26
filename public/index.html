@@ -304,6 +304,9 @@
         } catch (e) {}
     })();
     </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
 </head>
 <body>
 
@@ -324,18 +327,18 @@
         <div class="login-card">
             <div class="logo-area">
                 <div class="glow-orb"></div>
-                <h1>WELCOME</h1>
-                <p class="subtitle">Connect to the Future</p>
+                <h1>Welcome back</h1>
+                <p class="subtitle">Sign in to your account</p>
             </div>
 
             <div class="input-group">
                 <i class="fas fa-envelope input-icon"></i>
-                <input type="email" id="login-email" placeholder="Email...">
+                <input type="email" id="login-email" placeholder="Email address" autocomplete="email">
             </div>
             
             <div class="input-group">
                 <i class="fas fa-lock input-icon"></i>
-                <input type="password" id="login-password" placeholder="Password..." onkeydown="if(event.key === 'Enter') document.getElementById('btn-login').click();">
+                <input type="password" id="login-password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key === 'Enter') document.getElementById('btn-login').click();">
             </div>
 
             <p style="text-align: right; margin: -4px 0 12px;">
@@ -348,16 +351,16 @@
                 <span>Login</span> <i class="fas fa-sign-in-alt"></i>
             </button>
 
-            <button class="btn-primary" id="btn-register" style="background: #28a745; margin-bottom: 15px;">
+            <button class="btn-secondary" id="btn-register">
                 <span>Register</span> <i class="fas fa-user-plus"></i>
             </button>
 
-            <button class="btn-secondary" onclick="loginAsGuest()">
-                <i class="fas fa-user-secret"></i> Enter as Guest
+            <button class="btn-secondary btn-guest" onclick="loginAsGuest()">
+                Continue as guest
             </button>
 
             <div class="divider">
-                <span>OR CONNECT WITH</span>
+                <span>or continue with</span>
             </div>
 
             <div class="social-login">
