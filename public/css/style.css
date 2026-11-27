@@ -1782,3 +1782,34 @@ button:active, .bg-btn:active { transform: scale(.97); }
     #btn-voice.recording, .recording-dot, .fb-face { animation: none !important; }
     .hm-panel.open::before { animation: none; }
 }
+
+/* =====================================================================
+   MOTION — EXTRA POLISH (desktop hover effects + list entrances)
+   Hover effects only on devices with a real mouse; touch screens skip them.
+   ===================================================================== */
+.social-btn { transition: background .2s ease, transform .2s var(--ease-out), border-color .2s ease, box-shadow .2s ease; }
+.rp-item, .st-kpi { transition: transform .25s var(--ease-out), box-shadow .25s ease, border-color .25s ease; }
+.react-chip { transition: transform .2s var(--ease-out), background .2s ease; }
+.input-icon { transition: color .2s ease; }
+.send-btn i { transition: transform .22s var(--ease-out); }
+
+/* inputs: the icon lights up while you type */
+.input-group:focus-within .input-icon { color: #00f2fe; }
+
+/* lists enter one after another (30-40ms apart) */
+.rp-item:nth-child(2), .st-kpi:nth-child(2) { animation-delay: .04s; }
+.rp-item:nth-child(3), .st-kpi:nth-child(3) { animation-delay: .08s; }
+.rp-item:nth-child(4), .st-kpi:nth-child(4) { animation-delay: .12s; }
+.rp-item:nth-child(5), .st-kpi:nth-child(5) { animation-delay: .16s; }
+.rp-item:nth-child(n+6), .st-kpi:nth-child(n+6) { animation-delay: .2s; }
+
+@media (hover: hover) and (pointer: fine) {
+    .msg:hover { box-shadow: 0 6px 18px rgba(0, 0, 0, .28); }
+    .room-chip:hover { transform: translateY(-1px); color: #fff; box-shadow: 0 4px 14px rgba(0, 242, 254, .18); }
+    .social-btn:hover { transform: translateY(-2px); border-color: rgba(0, 242, 254, .45); box-shadow: 0 6px 16px rgba(0, 0, 0, .25); }
+    .rp-item:hover, .st-kpi:hover { transform: translateY(-2px); border-color: rgba(0, 242, 254, .35); box-shadow: 0 8px 22px rgba(0, 0, 0, .3); }
+    .av:hover { transform: scale(1.1); }
+    .react-chip:hover { transform: scale(1.06); }
+    .bg-btn:hover { box-shadow: 0 0 14px rgba(0, 242, 254, .35); }
+    .send-btn:hover i { transform: translate(2px, -2px); }
+}
