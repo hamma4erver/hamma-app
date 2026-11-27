@@ -298,15 +298,10 @@
     // Theme is applied before first paint (no dark flash): saved choice, else the device setting
     (function () {
         try {
-            var t = localStorage.getItem('hamma_theme') || 'auto';
-            var light = t === 'light' || (t === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches);
-            document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark');
+            document.documentElement.setAttribute('data-theme', 'dark'); // dark mode only
         } catch (e) {}
     })();
     </script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
 </head>
 <body>
 
@@ -327,18 +322,18 @@
         <div class="login-card">
             <div class="logo-area">
                 <div class="glow-orb"></div>
-                <h1>Welcome back</h1>
-                <p class="subtitle">Sign in to your account</p>
+                <h1>WELCOME</h1>
+                <p class="subtitle">Connect to the Future</p>
             </div>
 
             <div class="input-group">
                 <i class="fas fa-envelope input-icon"></i>
-                <input type="email" id="login-email" placeholder="Email address" autocomplete="email">
+                <input type="email" id="login-email" placeholder="Email...">
             </div>
             
             <div class="input-group">
                 <i class="fas fa-lock input-icon"></i>
-                <input type="password" id="login-password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key === 'Enter') document.getElementById('btn-login').click();">
+                <input type="password" id="login-password" placeholder="Password..." onkeydown="if(event.key === 'Enter') document.getElementById('btn-login').click();">
             </div>
 
             <p style="text-align: right; margin: -4px 0 12px;">
@@ -351,16 +346,16 @@
                 <span>Login</span> <i class="fas fa-sign-in-alt"></i>
             </button>
 
-            <button class="btn-secondary" id="btn-register">
+            <button class="btn-primary" id="btn-register" style="background: #28a745; margin-bottom: 15px;">
                 <span>Register</span> <i class="fas fa-user-plus"></i>
             </button>
 
-            <button class="btn-secondary btn-guest" onclick="loginAsGuest()">
-                Continue as guest
+            <button class="btn-secondary" onclick="loginAsGuest()">
+                <i class="fas fa-user-secret"></i> Enter as Guest
             </button>
 
             <div class="divider">
-                <span>or continue with</span>
+                <span>OR CONNECT WITH</span>
             </div>
 
             <div class="social-login">
@@ -3946,35 +3941,8 @@
     </script>
 
     <script>
-    // ===== Light / Dark / Auto =====
-    (function () {
-        const KEY = 'hamma_theme';
-        const get = () => { try { return localStorage.getItem(KEY) || 'auto'; } catch (e) { return 'auto'; } };
-        const mq = window.matchMedia ? matchMedia('(prefers-color-scheme: light)') : null;
-        const ICON = { auto: 'fa-circle-half-stroke', light: 'fa-sun', dark: 'fa-moon' };
-        const LABEL = { auto: 'Theme: Auto', light: 'Theme: Light', dark: 'Theme: Dark' };
-        const row = document.createElement('div');
-        row.className = 'ai-btn'; row.id = 'btn-theme';
-        row.style.cssText = 'background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);';
-        function apply() {
-            const t = get();
-            const light = t === 'light' || (t === 'auto' && mq && mq.matches);
-            document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark');
-            const meta = document.querySelector('meta[name="theme-color"]');
-            if (meta) meta.setAttribute('content', light ? '#f2f2f7' : '#000000');
-            row.title = LABEL[t];
-            row.innerHTML = '<i class="fas ' + ICON[t] + '"></i>';
-        }
-        row.addEventListener('click', () => {
-            const next = { auto: 'light', light: 'dark', dark: 'auto' }[get()];
-            try { localStorage.setItem(KEY, next); } catch (e) {}
-            apply();
-        });
-        if (mq && mq.addEventListener) mq.addEventListener('change', () => { if (get() === 'auto') apply(); });
-        const menu = document.getElementById('menu-panel');
-        if (menu) menu.insertBefore(row, document.getElementById('btn-logout') || null);
-        apply();
-    })();
+    // Dark mode only (theme button removed)
+    document.documentElement.setAttribute('data-theme', 'dark');
     </script>
 
     <script>
