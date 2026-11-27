@@ -295,6 +295,11 @@
         }
     </style>
     <script>
+    // Phone/tablet-with-touch flag: used to skip the heavy desktop-only effects
+    window.HAMMA_PHONE = !!(window.matchMedia && matchMedia('(pointer: coarse) and (max-width: 900px)').matches);
+    if (window.HAMMA_PHONE) document.documentElement.classList.add('is-phone');
+    </script>
+    <script>
     // Theme is applied before first paint (no dark flash): saved choice, else the device setting
     (function () {
         try {
@@ -4253,6 +4258,7 @@
     window.addEventListener('DOMContentLoaded', function () {
         // ---------- Aurora ----------
         (function () {
+            if (window.HAMMA_PHONE) return; // phones: static background (saves battery/GPU)
             const cv = document.createElement('canvas');
             cv.id = 'aurora-canvas';
             const gl = cv.getContext('webgl', { premultipliedAlpha: true, alpha: true, antialias: false });
@@ -4447,6 +4453,7 @@
     <script>
     // ===== WELCOME — scroll-driven experience (GSAP + ScrollTrigger + Lenis, Aurora backdrop, Spotlight, Click Spark) =====
     window.addEventListener('DOMContentLoaded', function () {
+        if (window.HAMMA_PHONE) return; // phones: no welcome tour (too heavy)
         const KEY = 'hamma_welcome_v2';
         const $ = (id) => document.getElementById(id);
         const sparkles = '<span>✦</span>';
