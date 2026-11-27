@@ -4122,7 +4122,7 @@
                 if (!nodes.length || nodes.length > 8) return; // history load: no flood of animations
                 nodes.forEach(n => {
                     g.from(n, {
-                        opacity: 0, y: 16, scale: .9, duration: .6, ease: 'back.out(1.7)',
+                        opacity: 0, y: 8, scale: .97, duration: .22, ease: 'power3.out',
                         transformOrigin: n.classList.contains('my-msg') ? 'right bottom' : 'left bottom',
                         onStart: () => { n.style.transition = 'none'; },
                         onComplete: () => { n.style.transition = ''; g.set(n, { clearProps: 'opacity,transform,transformOrigin' }); }
@@ -4139,8 +4139,8 @@
                 const now = modal.classList.contains('modal-visible');
                 const c = card();
                 if (c && !isReduced()) {
-                    if (now && !visible) g.fromTo(c, { y: 44, scale: .9, opacity: 0 }, { y: 0, scale: 1, opacity: 1, duration: .6, ease: 'back.out(1.5)', overwrite: true, clearProps: 'transform,opacity' });
-                    else if (!now && visible) g.to(c, { y: 22, scale: .96, opacity: 0, duration: .25, ease: 'power2.in', overwrite: true, onComplete: () => g.set(c, { clearProps: 'transform,opacity' }) });
+                    if (now && !visible) g.fromTo(c, { y: 24, scale: .96, opacity: 0 }, { y: 0, scale: 1, opacity: 1, duration: .35, ease: 'expo.out', overwrite: true, clearProps: 'transform,opacity' });
+                    else if (!now && visible) g.to(c, { y: 12, scale: .98, opacity: 0, duration: .2, ease: 'power2.out', overwrite: true, onComplete: () => g.set(c, { clearProps: 'transform,opacity' }) });
                 }
                 visible = now;
             }).observe(modal, { attributes: true, attributeFilter: ['class'] });
@@ -4149,8 +4149,8 @@
         // أزرار: hover مرن على الكمبيوتر
         if (window.matchMedia && matchMedia('(hover: hover)').matches) {
             document.querySelectorAll('.login-container .btn-primary, .send-btn').forEach(b => {
-                b.addEventListener('mouseenter', () => { if (!isReduced()) g.to(b, { scale: 1.05, duration: .35, ease: 'back.out(2)' }); });
-                b.addEventListener('mouseleave', () => { if (!isReduced()) g.to(b, { scale: 1, duration: .35, clearProps: 'transform' }); });
+                b.addEventListener('mouseenter', () => { if (!isReduced()) g.to(b, { scale: 1.03, duration: .18, ease: 'power2.out' }); });
+                b.addEventListener('mouseleave', () => { if (!isReduced()) g.to(b, { scale: 1, duration: .18, ease: 'power2.out', clearProps: 'transform' }); });
             });
         }
 
