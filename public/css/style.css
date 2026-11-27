@@ -1832,3 +1832,61 @@ button:active, .bg-btn:active { transform: scale(.97); }
     .social-btn:hover { transform: translateY(-1px); }
     .send-btn:hover i { transform: translate(1px, -1px); }
 }
+
+/* =====================================================================
+   PHONE — lighter and cleaner (html.is-phone is set by a tiny script:
+   touch device with a narrow screen). Desktop is not affected.
+   ===================================================================== */
+/* --- performance: no endless background animation, no heavy blur layers --- */
+html.is-phone body { animation: none !important; }
+html.is-phone .parallax-bg,
+html.is-phone .login-container::before,
+html.is-phone .glow-orb { display: none !important; }
+html.is-phone .login-container {
+    background:
+        radial-gradient(110% 60% at 50% 0%, rgba(0, 201, 255, .20), transparent 62%),
+        radial-gradient(90% 55% at 100% 100%, rgba(124, 58, 237, .16), transparent 60%),
+        #05060c !important;
+}
+html.is-phone .login-card {
+    animation: none !important;
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+    background: rgba(16, 20, 32, .92) !important;
+}
+html.is-phone .shiny { animation: none !important; }
+html.is-phone .hm-panel, html.is-phone .ai-chat-modal { -webkit-backdrop-filter: blur(10px) saturate(150%); backdrop-filter: blur(10px) saturate(150%); }
+
+/* --- layout: respect the notch / home bar, use the whole screen width --- */
+html.is-phone .login-container { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); box-sizing: border-box; }
+html.is-phone .main-layout {
+    padding: max(6px, env(safe-area-inset-top)) 0 max(8px, env(safe-area-inset-bottom));
+}
+html.is-phone .chat-container { padding: 4px 12px 0; border-radius: 0; }
+html.is-phone #chat-box-wrapper { margin-bottom: 8px; }
+html.is-phone #chat-box {
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    padding: 6px 0 !important;
+}
+
+/* --- messages: smaller text, wider bubbles, tighter rhythm --- */
+html.is-phone .msg {
+    max-width: 82%;
+    font-size: 15.5px;
+    line-height: 1.38;
+    padding: 8px 12px;
+    margin-bottom: 4px;
+    border-radius: 18px;
+}
+html.is-phone .my-msg { border-bottom-right-radius: 6px; }
+html.is-phone .other-msg { border-bottom-left-radius: 6px; }
+
+/* --- input row: round send button with an arrow instead of the "Enter ↵" text --- */
+html.is-phone .input-area { padding: 0 0 2px; align-items: center; }
+html.is-phone #chat-send-btn {
+    font-size: 0; width: 44px; height: 44px; padding: 0; flex-shrink: 0;
+    border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+}
+html.is-phone #chat-send-btn::after { content: "\2191"; font-size: 22px; font-weight: 600; line-height: 1; }
+html.is-phone .chat-title { text-shadow: none; }
