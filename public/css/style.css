@@ -1699,3 +1699,86 @@ html[data-theme="light"] .fb-star.on { color: #f5a800; text-shadow: 0 0 14px rgb
 html[data-theme="light"] #fb-comment { background: rgba(30,40,60,.06); border-color: rgba(30,40,60,.16); }
 html[data-theme="light"] .fb-x { background: rgba(30,40,60,.08); }
 .fb-x { z-index: 3; }
+
+/* =====================================================================
+   MOBILE-NATIVE FEEL + MOTION SAFETY (no visual redesign)
+   ===================================================================== */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { overscroll-behavior-y: none; }
+
+/* no 300ms tap delay / double-tap zoom on controls */
+button, a, input, textarea, select, label, [role="button"],
+.ai-btn, .bg-btn, .icon-btn, .modal-btn, .social-btn, .send-btn { touch-action: manipulation; }
+
+/* iOS zooms the page when an input is focused with font-size < 16px */
+@media (pointer: coarse) {
+    input, textarea, select, .input-group input, #message { font-size: 16px; }
+}
+
+/* touch screens have no real hover: stop buttons/cards "sticking" in a hovered state after a tap */
+@media (hover: none) {
+    .btn-primary:hover, .btn-secondary:hover, .social-btn:hover, .modal-btn:hover,
+    .icon-btn:hover, .send-btn:hover, .ai-btn:hover, .bg-btn:hover {
+        transform: none !important;
+        box-shadow: none;
+    }
+}
+
+/* full-screen fixed layers: dynamic viewport height avoids gaps under mobile browser bars */
+#spark-canvas, #aurora-canvas { height: 100dvh; }
+
+/* =====================================================================
+   MOTION — based on Emil Kowalski's animation rules
+   - ease-out for anything entering/exiting (never ease-in on UI)
+   - frequent things (chat messages, menus, hovers) are short: 150-260ms
+   - nothing appears from scale(0); press feedback is subtle (0.96-0.97)
+   - stagger 20-40ms, origin-aware menu
+   ===================================================================== */
+:root {
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+    --t-fast: .16s;
+}
+
+/* chat messages appear dozens of times a day: quick and quiet */
+.msg { animation: msgFadeIn .18s var(--ease-out); }
+@keyframes msgFadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+/* menu panel: opens from its corner, settles in ~0.25s (was ~1s) */
+.hm-panel {
+    transform: perspective(700px) rotateX(-8deg) translateY(12px) scale(.94);
+    filter: none;
+    transition: transform .26s var(--ease-out), opacity .18s ease, clip-path .26s var(--ease-out), visibility 0s linear .26s;
+}
+.hm-panel.open > * { animation: hmItemIn .26s var(--ease-out) both; }
+.hm-panel.open > *:nth-child(1) { animation-delay: .02s; }
+.hm-panel.open > *:nth-child(2) { animation-delay: .055s; }
+.hm-panel.open > *:nth-child(3) { animation-delay: .09s; }
+.hm-panel.open > *:nth-child(4) { animation-delay: .125s; }
+.hm-panel.open > *:nth-child(5) { animation-delay: .16s; }
+.hm-panel.open > *:nth-child(6) { animation-delay: .195s; }
+.hm-panel.open > *:nth-child(7) { animation-delay: .23s; }
+.hm-panel.open > *:nth-child(8) { animation-delay: .265s; }
+.hm-panel.open > *:nth-child(9) { animation-delay: .30s; }
+@keyframes hmItemIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+.hm-panel.open::before { animation: hmScan .45s ease-out .02s 1; }
+
+/* AI chat window: ease-out entrance */
+.ai-chat-modal { animation: aiSlideUp .22s var(--ease-out); }
+
+/* press feedback: subtle (0.95-0.98) */
+button:active, .bg-btn:active { transform: scale(.97); }
+.icon-btn:active { transform: scale(.96); }
+.send-btn:active { transform: scale(.96); }
+
+/* checkmark: never from scale(0) */
+.hm-check-box i { transform: scale(.6); opacity: 0; transition: transform .2s var(--ease-out), opacity .15s ease; }
+.hm-check input:checked + .hm-check-box i { transform: scale(1); opacity: 1; }
+
+/* reduce motion = fewer, gentler animations (not zero): keep short fades, stop endless decorative loops */
+@media (prefers-reduced-motion: reduce) {
+    .login-card, .login-container::before, .parallax-blob, .glow-orb,
+    .shiny, .online-pill i, .wl-eyebrow i, .wl-hint i,
+    #btn-voice.recording, .recording-dot, .fb-face { animation: none !important; }
+    .hm-panel.open::before { animation: none; }
+}
