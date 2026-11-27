@@ -1813,3 +1813,22 @@ button:active, .bg-btn:active { transform: scale(.97); }
     .bg-btn:hover { box-shadow: 0 0 14px rgba(0, 242, 254, .35); }
     .send-btn:hover i { transform: translate(2px, -2px); }
 }
+
+/* =====================================================================
+   CALMER ICON HOVER — small, smooth, professional
+   ===================================================================== */
+.bg-btn, .icon-btn, .ai-btn, .sticker-option, .react-picker button, .av, .react-chip {
+    transition: transform .22s var(--ease-out), background .2s ease, color .2s ease, box-shadow .22s ease, border-color .2s ease;
+}
+@media (hover: hover) and (pointer: fine) {
+    .bg-btn:hover { transform: scale(1.06); }
+    .icon-btn:hover { transform: translateY(-1px); }
+    .ai-btn:hover { transform: scale(1.03); }
+    .hm-panel .ai-btn:hover { transform: none; }          /* menu rows: no scaling */
+    .sticker-option:hover { transform: scale(1.08); }
+    .react-picker button:hover { transform: scale(1.15) translateY(-2px); }
+    .av:hover { transform: scale(1.05); }
+    .react-chip:hover { transform: scale(1.04); }
+    .social-btn:hover { transform: translateY(-1px); }
+    .send-btn:hover i { transform: translate(1px, -1px); }
+}
