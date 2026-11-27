@@ -1842,12 +1842,26 @@ html.is-phone body { animation: none !important; }
 html.is-phone .parallax-bg,
 html.is-phone .login-container::before,
 html.is-phone .glow-orb { display: none !important; }
-html.is-phone .login-container {
+/* soft moving glow: ONE fixed layer, animated with transform only (GPU, no blur filters, no WebGL) */
+html.is-phone .login-container { background: transparent !important; }
+html.is-phone::before {
+    content: ""; position: fixed; inset: -25%; z-index: -1; pointer-events: none;
     background:
-        radial-gradient(110% 60% at 50% 0%, rgba(0, 201, 255, .20), transparent 62%),
-        radial-gradient(90% 55% at 100% 100%, rgba(124, 58, 237, .16), transparent 60%),
-        #05060c !important;
+        radial-gradient(40% 32% at 22% 18%, rgba(0, 201, 255, .36), transparent 70%),
+        radial-gradient(38% 30% at 82% 78%, rgba(124, 58, 237, .30), transparent 70%),
+        radial-gradient(30% 26% at 70% 24%, rgba(146, 254, 157, .18), transparent 70%);
+    opacity: .85;
+    animation: phoneGlow 22s ease-in-out infinite alternate;
+    will-change: transform;
 }
+@keyframes phoneGlow {
+    from { transform: translate3d(-3%, -2%, 0) rotate(0deg) scale(1); }
+    to   { transform: translate3d(3%, 3%, 0) rotate(8deg) scale(1.08); }
+}
+/* screen change: no blur filter (very heavy on phones) */
+@keyframes screenInPhone { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+html.is-phone .main-layout, html.is-phone .login-container { animation: screenInPhone .3s var(--ease-out) both; }
+@media (prefers-reduced-motion: reduce) { html.is-phone::before { animation: none; } }
 html.is-phone .login-card {
     animation: none !important;
     -webkit-backdrop-filter: none; backdrop-filter: none;
