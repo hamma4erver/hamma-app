@@ -4082,7 +4082,7 @@
         g.defaults({ ease: 'power3.out' });
 
         // الخلفية تتنفّس (الـlogin)
-        g.to('.parallax-bg', { rotation: 7, scale: 1.08, duration: 14, ease: 'sine.inOut', yoyo: true, repeat: -1, transformOrigin: '50% 50%' });
+        if (!window.HAMMA_PHONE) g.to('.parallax-bg', { rotation: 7, scale: 1.08, duration: 14, ease: 'sine.inOut', yoyo: true, repeat: -1, transformOrigin: '50% 50%' });
 
         // دخول شاشات الـlogin / البروفايل / التفعيل
         function enterLogin(screen) {
